@@ -303,3 +303,8 @@ async def upload_user_list(admin: dict = Depends(get_current_admin_user), file: 
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"파일 처리 중 오류 발생: {e}")
     finally:
         file.file.close()
+
+@app.get("/time")
+async def get_current_server_time():
+    # UTC 기준 현재 시간을 ISO 8601 형식 문자열로 반환
+    return {"server_time": datetime.now(timezone.utc).isoformat()}
