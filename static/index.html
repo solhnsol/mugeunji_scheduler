@@ -314,10 +314,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!timeRes.ok || !scheduleRes.ok) throw new Error('Server not ready');
             const timeData = await timeRes.json();
             const scheduleData = await scheduleRes.json();
+            
+            // 서버에서 받은 시간을 UTC Date 객체로 생성
             const serverNow = new Date(timeData.server_time);
             const openTime = new Date(scheduleData.open_datetime);
+            
             state.reservationOpenTime = openTime;
-            startCountdown(openTime - serverNow);
+            
+            // 예약이 이미 시작했는지 확인
+            state.isReservationOpen = serverNow >= openTime;
+            
+            // 예약이 시작하지 않았으면 카운트다운 시작
+            if (!state.isReservationOpen) {
+                startCountdown(openTime - serverNow);
+            } else {
+                // 예약이 이미 시작했으면 바로 버튼 활성화
+                countdownWrapper.classList.add('hidden');
+                reserveButton.classList.remove('hidden');
+            }
+
         } catch (error) {
             console.error("Failed to sync time with server:", error);
             countdownDisplay.textContent = "서버 연결 오류";

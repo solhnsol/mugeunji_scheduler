@@ -189,23 +189,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     scheduleButton.addEventListener('click', async () => {
-        const dtValue = scheduleDatetimeInput.value;
-        if (!dtValue) {
-            setStatusMessage('날짜와 시간을 선택하세요.', 'yellow', scheduleStatus);
-            return;
-        }
-        try {
-            const datetimeWithSeconds = dtValue + ':00';
-            const timezoneOffset = getOffsetString(new Date());
-            const finalIsoString = datetimeWithSeconds + timezoneOffset;
+    const dtValue = scheduleDatetimeInput.value;
+    if (!dtValue) {
+        setStatusMessage('날짜와 시간을 선택하세요.', 'yellow', scheduleStatus);
+        return;
+    }
+    try {
+        // 사용자의 로컬 시간 입력값을 Date 객체로 변환
+        const localDate = new Date(dtValue);
 
-            const result = await apiCall('/admin/schedule', 'POST', { open_datetime: finalIsoString });
-            currentScheduleDisplay.textContent = new Date(result.open_time).toLocaleString();
-            setStatusMessage(`성공! 예약이 ${new Date(result.reset_time).toLocaleString()}에 초기화됩니다.`, 'green', scheduleStatus);
-        } catch (error) {
-            setStatusMessage(`스케줄 설정 실패: ${error.message}`, 'red', scheduleStatus);
-        }
-    });
+        // 로컬 시간을 UTC 기반의 ISO 문자열로 변환하여 서버로 전송
+        const utcIsoString = localDate.toISOString();
+
+        const result = await apiCall('/admin/schedule', 'POST', { open_datetime: utcIsoString });
+
+    // 서버가 보내준 UTC 시간을 사용자의 로컬 시간으로 다시 변환해 보여줍니다.
+    currentScheduleDisplay.textContent = new Date(result.open_time).toLocaleString();
+    setStatusMessage(`성공! 예약이 ${new Date(result.reset_time).toLocaleString()}에 초기화됩니다.`, 'green', scheduleStatus);
+    } catch (error) {
+    setStatusMessage(`스케줄 설정 실패: ${error.message}`, 'red', scheduleStatus);
+    }
+});
 
     uploadButton.addEventListener('click', async () => {
         const file = userFileInput.files[0];
