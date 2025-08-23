@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>묵은지 작업실</title>
+    <link rel="stylesheet" href="/static/general/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>묵은지 작업실 예약하기</h1>
+        
+        <section id="login-section">
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">사용자명:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">비밀번호:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit">로그인</button>
+            </form>
+            <p style="text-align: center; margin-top: 20px;">
+                <button onclick="window.location.href='/admin'" class="btn-admin">관리자 로그인</button>
+            </p>
+        </section>
+
+        <section id="reservation-section" class="hidden">
+            <div id="user-info">
+                <p><strong id="welcome-message"></strong>님, 안녕하세요!</p>
+                <p>예약 가능 시간: <strong id="allowed-hours"></strong> 시간</p>
+                <button id="logout-button">로그아웃</button>
+            </div>
+            
+            <h2>시간 예약하기</h2>
+            <p>예약할 시간대를 클릭하세요. 다시 클릭하면 선택이 취소됩니다.</p>
+            <div id="reservation-grid-container">
+                </div>
+            <button id="submit-reservation-button">선택한 시간으로 예약하기</button>
+        </section>
+
+        <div id="message-area"></div>
+    </div>
+
+    <script src="/static/general/script.js"></script>
+</body>
+</html>
