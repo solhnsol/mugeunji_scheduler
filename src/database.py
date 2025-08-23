@@ -27,5 +27,19 @@ async def setup_database(conn: aiosqlite.Connection):
             UNIQUE(reservation_day, time_index)
         );
     """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY NOT NULL,
+            value TEXT
+        );
+    """)
+    await cursor.execute(
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
+        ('reservation_enabled', 'true')
+    )
+    await cursor.execute(
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
+        ('reservation_opens_at', None)
+    )
     await conn.commit()
     await cursor.close()

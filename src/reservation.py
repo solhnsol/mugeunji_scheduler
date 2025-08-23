@@ -1,13 +1,56 @@
 import aiosqlite
 from typing import List, Dict, Tuple
+from datetime import datetime, timezone, timedelta
 
 class ReservationManager:
     def __init__(self, conn: aiosqlite.Connection):
         self.conn = conn
 
-    async def create_reservation(self, username: str, reserve_times: List[Dict]) -> Tuple[bool, str]:
-        cursor = await self.conn.cursor()
+    async def get_system_settings(self) -> Dict:
+            cursor = await self.conn.cursor()
+            await cursor.execute("SELECT key, value FROM system_settings")
+            settings = await cursor.fetchall()
+            await cursor.close()
+            return {row['key']: row['value'] for row in settings}
 
+    async def check_reservation_availability(self) -> Tuple[bool, str]:
+        settings = await self.get_system_settings()
+        opens_at_str = settings.get('reservation_opens_at')
+
+        # 대한민국 표준시(KST)를 정의합니다. (UTC+9)
+        KST = timezone(timedelta(hours=9))
+        now_kst = datetime.now(KST)
+
+        if opens_at_str:
+            try:
+                opens_at_dt_kst = datetime.fromisoformat(opens_at_str).astimezone(KST)
+                
+                if now_kst < opens_at_dt_kst:
+                    opens_at_local = opens_at_dt_kst.strftime('%Y년 %m월 %d일 %H시 %M분')
+                    return False, f"예약은 {opens_at_local}부터 가능합니다."
+                else:
+                    cursor = await self.conn.cursor()
+                    await cursor.execute("UPDATE system_settings SET value = 'true' WHERE key = 'reservation_enabled'")
+                    await cursor.execute("UPDATE system_settings SET value = NULL WHERE key = 'reservation_opens_at'")
+                    await self.conn.commit()
+                    await cursor.close()
+
+            except (ValueError, TypeError):
+                return False, "예약 오픈 시간 설정에 오류가 있습니다. 관리자에게 문의하세요."
+
+        final_settings = await self.get_system_settings()
+        if final_settings.get('reservation_enabled') != 'true':
+            return False, "현재 예약이 불가능합니다. 관리자에게 문의하세요."
+            
+        return True, "예약 가능"
+        
+    async def create_reservation(self, username: str, reserve_times: List[Dict]) -> Tuple[bool, str]:
+
+        is_available, message = await self.check_reservation_availability()
+        if not is_available:
+            return False, message
+
+        cursor = await self.conn.cursor()
         try:
             await cursor.execute("SELECT allowed_hours FROM users WHERE username = ?", (username,))
             user_data = await cursor.fetchone()
@@ -53,6 +96,44 @@ class ReservationManager:
             return False, f"실패: {str(e)}"
         finally:
             await cursor.close()
+
+    async def delete_reservations(self, reserve_times: List[Dict]) -> Tuple[bool, str]:
+        cursor = await self.conn.cursor()
+        try:
+            await cursor.execute("BEGIN TRANSACTION")
+            for time_slot in reserve_times:
+                await cursor.execute(
+                    "DELETE FROM reservations WHERE reservation_day = ? AND time_index = ?",
+                    (time_slot['day'], time_slot['time_index'])
+                )
+            await self.conn.commit()
+            return True, f"{len(reserve_times)}개의 예약을 삭제했습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"삭제 중 오류 발생: {str(e)}"
+        finally:
+            await cursor.close()
+
+    async def force_create_reservation(self, target_username: str, reserve_times: List[Dict]) -> Tuple[bool, str]:
+            cursor = await self.conn.cursor()
+            try:
+                await cursor.execute("BEGIN TRANSACTION")
+                for time_slot in reserve_times:
+                    await cursor.execute(
+                        "DELETE FROM reservations WHERE reservation_day = ? AND time_index = ?",
+                        (time_slot['day'], time_slot['time_index'])
+                    )
+                    await cursor.execute(
+                        "INSERT INTO reservations (username, reservation_day, time_index) VALUES (?, ?, ?)",
+                        (target_username, time_slot['day'], time_slot['time_index'])
+                    )
+                await self.conn.commit()
+                return True, f"'{target_username}'의 이름으로 {len(reserve_times)}개의 예약을 강제 등록했습니다."
+            except Exception as e:
+                await self.conn.rollback()
+                return False, f"강제 등록 중 오류 발생: {str(e)}"
+            finally:
+                await cursor.close()
 
     async def get_all_reservations(self) -> List[dict]:
         cursor = await self.conn.cursor()

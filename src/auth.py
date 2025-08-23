@@ -49,3 +49,10 @@ class AuthManager:
             return False, f"실패: {str(e)}"
         finally:
             await cursor.close()
+
+    async def get_all_users(self) -> List[Dict]:
+        cursor = await self.conn.cursor()
+        await cursor.execute("SELECT username, allowed_hours, role FROM users")
+        users = await cursor.fetchall()
+        await cursor.close()
+        return [dict(row) for row in users]
