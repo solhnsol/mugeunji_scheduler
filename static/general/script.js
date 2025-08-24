@@ -66,7 +66,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const reservations = Array.from(selectedSlots).map(slot => ({
+        // 1. 'reservations' 변수명을 'reservationDetails' 등으로 명확하게 변경 (권장)
+        const reservationDetails = Array.from(selectedSlots).map(slot => ({
             day: slot.dataset.day,
             time_index: parseInt(slot.dataset.timeIndex, 10)
         }));
@@ -80,7 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ reservations })
+                // 2. 서버 요구사항에 맞게 reservationDetails를 'reservations' 키로 감싸서 전송
+                body: JSON.stringify({ reservations: reservationDetails })
             });
 
             const data = await response.json();
@@ -89,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             showMessage(data.message, 'success');
-            // 예약 성공 후 선택된 슬롯들 초기화
+            // 예약 성공 후 선택된 슬롯들 초기화 (이 부분은 원래 코드에도 잘 되어 있습니다)
             selectedSlots.forEach(slot => slot.classList.remove('selected'));
 
         } catch (error) {
@@ -100,12 +102,46 @@ document.addEventListener('DOMContentLoaded', () => {
     // 로그인 상태에 따라 UI를 변경하는 함수
     function updateUI() {
         const token = localStorage.getItem('accessToken');
+        const noticeDiv = document.getElementById('reservation-notice');
         if (token) {
             loginSection.classList.add('hidden');
             reservationSection.classList.remove('hidden');
             welcomeMessage.textContent = localStorage.getItem('username');
             allowedHoursElem.textContent = localStorage.getItem('allowedHours');
+            fetch(`${API_BASE_URL}/settings`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.reservation_opens_at) {
+                        const opensAt = new Date(data.reservation_opens_at);
+                        const options = {
+                            year: 'numeric', month: 'long', day: 'numeric',
+                            hour: '2-digit', minute: '2-digit', hour12: false
+                        };
+                        const formattedTime = opensAt.toLocaleString('ko-KR', options);
+                        
+                        // 스타일과 메시지 설정
+                        noticeDiv.className = 'message-success'; 
+                        noticeDiv.textContent = `📢 다음 예약은 ${formattedTime}부터 가능합니다.`;
+                        noticeDiv.style.display = 'block';
 
+                    } else if (data.reservation_enabled) {
+                        // 스타일과 메시지 설정
+                        noticeDiv.className = 'message-success';
+                        noticeDiv.textContent = '✅ 현재 예약이 가능합니다.';
+                        noticeDiv.style.display = 'block';
+
+                    } else {
+                        // 스타일과 메시지 설정
+                        noticeDiv.className = 'message-error'; // 에러 스타일 적용
+                        noticeDiv.textContent = '❌ 현재 예약이 불가능합니다.';
+                        noticeDiv.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('설정 정보를 가져오는 데 실패했습니다:', error);
+                    noticeDiv.textContent = '';
+                    noticeDiv.style.display = 'none';
+                });
             if(!socket){
                 socket = new WebSocket(WS_URL)
 

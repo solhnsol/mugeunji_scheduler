@@ -1,0 +1,234 @@
+/* admin.css - 독립적인 관리자 페이지 스타일 */
+
+:root {
+    --bg-main: #2c3e50;
+    --bg-secondary: #34495e;
+    --bg-panel: #283747;
+    --text-primary: #ecf0f1;
+    --text-secondary: #bdc3c7;
+    --border-color: #4a6572;
+    --accent-color: #3498db;
+    --danger-color: #e74c3c;
+    --success-color: #2ecc71;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Malgun Gothic', sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+}
+
+.hidden { display: none !important; }
+
+/* 로그인 페이지 */
+.page-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+.login-box {
+    width: 100%;
+    max-width: 400px;
+    padding: 40px;
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+/* 메인 대시보드 */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 30px;
+    background-color: var(--bg-secondary);
+    border-bottom: 2px solid var(--border-color);
+}
+#welcome-message { font-weight: bold; }
+
+main {
+    display: flex;
+    padding: 20px;
+    gap: 20px;
+}
+
+#grid-panel { flex: 2; }
+#control-panel {
+    flex: 1;
+    background-color: var(--bg-panel);
+    padding: 20px;
+    border-radius: 8px;
+    height: fit-content;
+}
+
+h1, h2, h3 { margin-bottom: 20px; text-align: center; }
+h3 { margin-top: 10px; text-align: left; }
+p { color: var(--text-secondary); margin-bottom: 15px; font-size: 14px; }
+
+/* 폼 & 버튼 스타일 */
+.form-group { margin-bottom: 15px; }
+label { display: block; margin-bottom: 5px; font-size: 14px; }
+input[type="text"], input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+button {
+    width: 100%;
+    padding: 12px;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: opacity 0.2s;
+}
+button:hover { opacity: 0.8; }
+.btn-danger { background-color: var(--danger-color); }
+#logout-button {width: 10% }
+
+/* 컨트롤 패널 */
+.control-group { background-color: var(--bg-secondary); padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+#control-panel #target-username { margin-bottom: 10px; }
+
+.button-group {
+    display: flex;
+    gap: 10px;
+}
+
+.button-group button {
+    width: auto;
+    flex: 1;
+}
+
+/* 예약 그리드 */
+#reservation-grid-container { overflow-x: auto; }
+.reservation-table { width: 100%; border-collapse: collapse; text-align: center; table-layout: fixed;}
+.reservation-table th, .reservation-table td { border: 1px solid var(--border-color); padding: 6px; font-size: 14px; }
+.reservation-table th { background-color: var(--bg-panel); }
+.time-header { font-weight: bold; background-color: var(--bg-panel); }
+.time-slot { cursor: pointer; transition: background-color 0.2s; box-sizing: border-box; height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.time-slot:hover { background-color: #556b82; }
+.time-slot.selected { outline: 2px solid #ecf0f1; outline-offset: -1px; }
+.time-slot.reserved { background-color: #7f8c8d; color: #333; cursor: pointer; font-weight: bold; }
+.time-slot.mine { background-color: var(--success-color); color: #333; cursor: pointer; font-weight: bold; }
+.time-slot.reserved.selected { outline: 2px solid #ecf0f1; outline-offset: -1px; }
+.time-slot.mine.selected { outline: 2px solid #ecf0f1; outline-offset: -1px; }
+
+/* 메시지 영역 */
+footer { position: fixed; bottom: 0; width: 100%; }
+#message-area { padding: 15px; text-align: center; font-weight: bold; }
+.message-success { background-color: var(--success-color); color: #333; }
+.message-error { background-color: var(--danger-color); color: var(--text-primary); }
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+/* 체크박스 크기 조절 */
+#setting-reservation-enabled {
+    width: 20px;
+    height: 20px;
+}
+
+/* 날짜/시간 입력 필드 스타일 조정 */
+#setting-opens-at {
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 8px;
+    border-radius: 4px;
+    color-scheme: dark; /* 브라우저 내장 달력 UI를 다크모드로 */
+}
+
+#csv-file-input {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+}
+#csv-file-input::file-selector-button { /* 파일 선택 버튼 스타일 */
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.btn-link { /* 목록 확인 버튼 등 */
+    background-color: var(--bg-secondary);
+    margin-top: 10px;
+}
+
+/* 모달 스타일 */
+.modal {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.modal-content {
+    background-color: var(--bg-secondary);
+    padding: 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+.modal-close-button {
+    color: var(--text-secondary);
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.modal-close-button:hover { color: var(--text-primary); }
+
+/* 모달 안의 사용자 목록 테이블 */
+.user-list-table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: collapse;
+}
+.user-list-table th, .user-list-table td {
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    text-align: left;
+}
+.user-list-table th { background-color: var(--bg-panel); }
+
+#clear-all-reservations-button {
+    margin-top: 10px;
+    width: 100%;
+    background-color: #a1281a; /* 기존 danger 색상보다 조금 더 어둡게 */
+}
+
+#clear-all-reservations-button:hover {
+    background-color: var(--danger-color); /* 호버 시에는 원래 danger 색상으로 */
+}

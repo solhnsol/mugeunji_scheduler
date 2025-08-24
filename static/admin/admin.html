@@ -4,38 +4,91 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>묵은지 관리자 페이지</title>
-    <link rel="stylesheet" href="/static/general/style.css">
+    <link rel="stylesheet" href="/static/admin/admin.css">
 </head>
-<body class="admin-page">
-    <div class="container">
-        <h1>묵은지 관리자 로그인</h1>
-
-        <section id="admin-login-section">
+<body>
+    <section id="login-section" class="page-container">
+        <div class="login-box">
+            <h1>관리자 로그인</h1>
             <form id="admin-login-form">
                 <div class="form-group">
-                    <label for="username">사용자명:</label>
+                    <label for="username">사용자명</label>
                     <input type="text" id="username" name="username" required>
                 </div>
                 <div class="form-group">
-                    <label for="password">비밀번호:</label>
+                    <label for="password">비밀번호</label>
                     <input type="password" id="password" name="password" required>
                 </div>
-                <button type="submit">관리자로 로그인</button>
+                <button type="submit">로그인</button>
             </form>
             <p style="text-align: center; margin-top: 20px;">
-                <button onclick="window.location.href='/'" class="btn-admin">예약 페이지로 돌아가기</button>
+                <button onclick="window.location.href='/'" class="btn-danger">돌아가기</button>
             </p>
-        </section>
- 
-        <section id="admin-dashboard" class="hidden">
-            <h2>관리자 대시보드</h2>
-            <p><strong id="welcome-message"></strong>님, 환영합니다.</p>
-            <button id="admin-logout-button">로그아웃</button>
-            <hr>
-            </section>
+        </div>
+    </section>
 
-        <div id="message-area"></div>
-    </div>
+    <section id="main-section" class="hidden">
+        <header>
+            <div id="welcome-message"></div>
+            <button id="logout-button" class="btn-danger">로그아웃</button>
+        </header>
+
+        <main>
+            <div id="grid-panel">
+                <h2>실시간 신청 현황</h2>
+                <div id="reservation-grid-container">
+                    </div>
+            </div>
+
+            <div id="control-panel">
+                <div class="control-group">
+                    <h3>선택 시간 관리</h3>
+                    <input type="text" id="target-username" placeholder="신청자 이름 입력 (신청 시)">
+                    <div class="button-group">
+                        <button id='delete-reservation-button' class="btn-danger">선택 시간 삭제</button>
+                        <button id="force-reserve-button">선택 시간 신청</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <h3>설정</h3>
+                    <div class="setting-item">
+                        <label for="setting-reservation-enabled">신청 활성화</label>
+                        <input type="checkbox" id="setting-reservation-enabled">
+                    </div>
+                    <div class="setting-item">
+                        <label for="setting-opens-at">신청 시작 예약</label>
+                        <input type="datetime-local" id="setting-opens-at">
+                    </div>
+                    <button id="save-settings-button">설정 저장</button>
+                </div>
+                <div class="control-group">
+                    <h3>사용자 관리</h3>
+                    <input type="file" id="csv-file-input" accept=".csv">
+                    <div class="button-group">
+                        <button id="upload-csv-button">CSV 업로드</button>
+                        <button id="view-users-button" class="btn-link">사용자 목록 확인</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <button id="clear-all-reservations-button" class="btn-danger">시간표 전체 초기화</button>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div id="message-area"></div>
+        </footer>
+    </section>
+
     <script src="/static/admin/admin.js"></script>
+
+    <div id="user-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close-button">&times;</span>
+            <h2>전체 사용자 목록</h2>
+            <div id="user-list-container">
+                </div>
+        </div>
+    </div>
 </body>
 </html>

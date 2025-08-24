@@ -69,13 +69,23 @@ button:hover {
     background-color: #5ba8dc;
 }
 
-#logout-button {
+/* 위험 버튼 (로그아웃, 삭제 등) */
+.btn-danger {
     background-color: #e74c3c;
 }
 
-#logout-button:hover {
+.btn-danger:hover {
     background-color: #c0392b;
 }
+
+/* 페이지 이동 버튼 */
+.btn-link {
+    background-color: #95a5a6;
+}
+.btn-link:hover {
+    background-color: #7f8c8d;
+}
+
 
 /* 유틸리티 클래스 */
 .hidden {
@@ -135,6 +145,11 @@ button:hover {
     font-weight: bold;
 }
 
+.time-slot.selected:hover {
+    background-color: #2980b9;
+}
+
+
 .time-slot.reserved {
     background-color: #bdc3c7;
     color: #7f8c8d;
@@ -150,11 +165,11 @@ button:hover {
 
 .time-slot.reserved,
 .time-slot.mine {
-    font-size: 14px; /* 글자 크기 살짝 줄이기 */
-    overflow: hidden; /* 칸을 넘어가는 텍스트 숨기기 */
-    text-overflow: ellipsis; /* 넘어가는 텍스트는 ...으로 표시 */
-    white-space: nowrap; /* 긴 텍스트라도 줄바꿈 방지 */
-    vertical-align: middle; /* 텍스트 세로 중앙 정렬 */
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
 }
 
 /* 메시지 영역 스타일 */
@@ -171,47 +186,5 @@ button:hover {
 }
 .message-error {
     color: #e74c3c;
-    background-color: #fbe N2e4;
-}
-
-body.admin-page {
-    background-color: #333; /* 어두운 회색 */
-    color: #eee; /* 밝은 회색 <- 글자가 보이도록 수정했습니다. */
-}
-
-.admin-page .container {
-    background-color: #444; /* 좀 더 밝은 회색 */
-    border: 1px solid #555;
-}
-
-.admin-page h1,
-.admin-page h2,
-.admin-page label,
-.admin-page p {
-    color: #eee;
-}
-
-.admin-page input {
-    background-color: #555;
-    color: #eee;
-    border: 1px solid #777;
-}
-
-.admin-page button {
-    background-color: #555;
-    color: #eee;
-    border: 1px solid #888;
-    cursor: pointer;
-}
-
-.admin-page button:hover {
-    background-color: #777;
-}
-
-button.btn-admin {
-    background-color: #b71c1c; /* 일반 페이지에서는 다시 붉은색으로 보이도록 수정 */
-}
-
-button.btn-admin:hover {
-    background-color: #d32f2f; /* 더 어두운 붉은 계열 */
+    background-color: #fbe2e4;
 }

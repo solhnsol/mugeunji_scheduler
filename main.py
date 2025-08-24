@@ -105,6 +105,7 @@ async def get_current_admin_user(token: str = Depends(oauth2_scheme)):
 async def websocket_endpoint(websocket: WebSocket):
     reserve_manager: ReservationManager = websocket.app.state.reserve_manager
     await connection_manager.connect(websocket)
+    await reserve_manager.check_reservation_availability()
     try:
         reservations = await reserve_manager.get_all_reservations()
         await websocket.send_json({
@@ -172,6 +173,19 @@ async def reserve_time(
 async def read_index():
     return FileResponse("./static/general/index.html")
 
+@app.get("/settings", response_model=SettingsResponse)
+async def get_public_settings(request: Request):
+    """일반 사용자가 예약 관련 설정을 조회하는 엔드포인트"""
+    settings_manager: SettingsManager = request.app.state.settings_manager
+    settings = await settings_manager.get_settings()
+    
+    opens_at = settings.get('reservation_opens_at')
+    
+    return {
+        "reservation_enabled": settings.get('reservation_enabled') == 'true',
+        "reservation_opens_at": datetime.fromisoformat(opens_at) if opens_at else None
+    }
+
 @app.post('/admin/login')
 async def admin_login_for_access_token(request: Request, login_info: LoginInfo):
     auth_manager: AuthManager = request.app.state.auth_manager
@@ -232,6 +246,27 @@ async def delete_reservations_by_admin(
     
     is_success, message = await reserve_manager.delete_reservations(reserve_times_list)
     
+    if is_success:
+        all_reservations = await reserve_manager.get_all_reservations()
+        await connection_manager.broadcast_json({
+            "type": "RESERVATION_UPDATE",
+            "data": all_reservations
+        })
+        return {"status": "success", "message": message}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message
+        )
+
+@app.get("/admin/reservations/clear")
+async def clear_reservations_by_admin(
+    request: Request,
+    admin_user: dict = Depends(get_current_admin_user)
+):
+    reserve_manager: ReservationManager = request.app.state.reserve_manager
+    is_success, message = await reserve_manager.clear_reservations()
+
     if is_success:
         all_reservations = await reserve_manager.get_all_reservations()
         await connection_manager.broadcast_json({
@@ -350,18 +385,3 @@ async def update_settings_by_admin(
 @app.get('/admin')
 async def read_admin_index():
     return FileResponse("./static/admin/admin.html")
-
-@app.get('/test')
-async def test(request: Request):
-    auth_manager: AuthManager = request.app.state.auth_manager
-    reserve_manager: ReservationManager = request.app.state.reserve_manager
-    await auth_manager.update_users(
-        [
-            {'username':'정한솔', 'password':'0000', 'allowed_hours': 8, 'role': 'admin'},
-            {'username':'허영은', 'password':'0000', 'allowed_hours': 8, 'role': 'admin'},
-        ]
-    )
-    await reserve_manager.clear_reservations()
-
-    return RedirectResponse(url='/')
-

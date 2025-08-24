@@ -41,5 +41,9 @@ async def setup_database(conn: aiosqlite.Connection):
         "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
         ('reservation_opens_at', None)
     )
+    await cursor.execute(
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
+        ('last_cleared_for', None) 
+    )
     await conn.commit()
     await cursor.close()

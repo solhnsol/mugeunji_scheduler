@@ -23,19 +23,20 @@
                 <button type="submit">로그인</button>
             </form>
             <p style="text-align: center; margin-top: 20px;">
-                <button onclick="window.location.href='/admin'" class="btn-admin">관리자 로그인</button>
+                <button onclick="window.location.href='/admin'" class="btn-link">관리자 로그인</button>
             </p>
         </section>
 
         <section id="reservation-section" class="hidden">
+            
             <div id="user-info">
                 <p><strong id="welcome-message"></strong>님, 안녕하세요!</p>
                 <p>예약 가능 시간: <strong id="allowed-hours"></strong> 시간</p>
-                <button id="logout-button">로그아웃</button>
+                <button id="logout-button" class="btn-danger">로그아웃</button>
             </div>
             
             <h2>시간 예약하기</h2>
-            <p>예약할 시간대를 클릭하세요. 다시 클릭하면 선택이 취소됩니다.</p>
+            <div id="reservation-notice" class="message-success" style="margin-bottom: 20px; text-align: center; padding: 10px; border-radius: 5px;"></div>
             <div id="reservation-grid-container">
                 </div>
             <button id="submit-reservation-button">선택한 시간으로 예약하기</button>

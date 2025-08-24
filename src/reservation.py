@@ -16,6 +16,8 @@ class ReservationManager:
     async def check_reservation_availability(self) -> Tuple[bool, str]:
         settings = await self.get_system_settings()
         opens_at_str = settings.get('reservation_opens_at')
+        last_cleared_for = settings.get('last_cleared_for')
+
 
         # 대한민국 표준시(KST)를 정의합니다. (UTC+9)
         KST = timezone(timedelta(hours=9))
@@ -24,7 +26,24 @@ class ReservationManager:
         if opens_at_str:
             try:
                 opens_at_dt_kst = datetime.fromisoformat(opens_at_str).astimezone(KST)
-                
+                clear_trigger_time = opens_at_dt_kst - timedelta(minutes=20)
+                if clear_trigger_time <= now_kst < opens_at_dt_kst and last_cleared_for != opens_at_str:
+                    
+                    # 모든 예약 초기화
+                    await self.clear_reservations()
+                    
+                    # 초기화가 실행되었음을 기록 (중복 실행 방지)
+                    cursor = await self.conn.cursor()
+                    await cursor.execute(
+                        "UPDATE system_settings SET value = ? WHERE key = 'last_cleared_for'",
+                        (opens_at_str,)
+                    )
+                    await self.conn.commit()
+                    await cursor.close()
+                    
+                    opens_at_local = opens_at_dt_kst.strftime('%Y년 %m월 %d일 %H시 %M분')
+                    return False, f"예약자 명단이 초기화되었습니다. 예약은 {opens_at_local}부터 가능합니다."
+
                 if now_kst < opens_at_dt_kst:
                     opens_at_local = opens_at_dt_kst.strftime('%Y년 %m월 %d일 %H시 %M분')
                     return False, f"예약은 {opens_at_local}부터 가능합니다."
@@ -37,6 +56,8 @@ class ReservationManager:
 
             except (ValueError, TypeError):
                 return False, "예약 오픈 시간 설정에 오류가 있습니다. 관리자에게 문의하세요."
+            finally:
+                cursor.close()
 
         final_settings = await self.get_system_settings()
         if final_settings.get('reservation_enabled') != 'true':
@@ -88,7 +109,7 @@ class ReservationManager:
     async def clear_reservations(self) -> Tuple[bool, str]:
         cursor = await self.conn.cursor()
         try:
-            await cursor.execute("DELETE FROM reservations")
+            await cursor.execute("DELETE FROM reservations WHERE time_index >= 7")
             await self.conn.commit()
             return True, "성공"
         except Exception as e:
