@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const API_BASE_URL = 'https://mugeunji-scheduler.onrender.com';
-    const WS_URL = `wss://mugeunji-scheduler.onrender.com/wss`;
+    const WS_URL = `wss://mugeunji-scheduler.onrender.com/ws`;
 
     const loginSection = document.getElementById('login-section');
     const reservationSection = document.getElementById('reservation-section');
