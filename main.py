@@ -297,7 +297,7 @@ async def upload_users_csv(
     new_users = []
 
     try:
-        df = pd.read_csv(file.file)
+        df = pd.read_csv(file.file, dtype={'password': str})
 
         for i, row in df.iterrows():
             user_data = {

