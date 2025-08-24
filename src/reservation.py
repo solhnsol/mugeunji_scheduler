@@ -39,7 +39,6 @@ class ReservationManager:
                         (opens_at_str,)
                     )
                     await self.conn.commit()
-                    await cursor.close()
                     
                     opens_at_local = opens_at_dt_kst.strftime('%Y년 %m월 %d일 %H시 %M분')
                     return False, f"예약자 명단이 초기화되었습니다. 예약은 {opens_at_local}부터 가능합니다."
@@ -52,7 +51,6 @@ class ReservationManager:
                     await cursor.execute("UPDATE system_settings SET value = 'true' WHERE key = 'reservation_enabled'")
                     await cursor.execute("UPDATE system_settings SET value = NULL WHERE key = 'reservation_opens_at'")
                     await self.conn.commit()
-                    await cursor.close()
 
             except (ValueError, TypeError):
                 return False, "예약 오픈 시간 설정에 오류가 있습니다. 관리자에게 문의하세요."
