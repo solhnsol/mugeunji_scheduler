@@ -9,6 +9,7 @@ import os, csv, io
 from typing import List, Literal, Optional
 from contextlib import asynccontextmanager
 from jose import JWTError
+import pandas as pd
 
 from src.auth import AuthManager
 from src.database import get_db_connection, setup_database
@@ -296,11 +297,9 @@ async def upload_users_csv(
     new_users = []
 
     try:
-        contents = await file.read()
-        decoded_content = contents.decode('utf-8')
-        csv_reader = csv.DictReader(io.StringIO(decoded_content))
+        df = pd.read_csv(file.file)
 
-        for row in csv_reader:
+        for i, row in df.iterrows():
             user_data = {
                 'username': row['username'],
                 'password': row['password'],
@@ -317,7 +316,7 @@ async def upload_users_csv(
     except Exception as e:
          raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"파일 처리 중 오류 발생: {e}"
+            detail=f"파일 처리 중 오류 발생: {file}"
         )
 
     if not new_users:
