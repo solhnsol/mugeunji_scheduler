@@ -1,18 +1,20 @@
 from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Request, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from jose import jwt
 from datetime import datetime, timedelta, timezone
-import os, csv, io
-from typing import List, Literal, Optional
+import os
+import pandas as pd
+from typing import List, Literal, Optional, AsyncGenerator
 from contextlib import asynccontextmanager
 from jose import JWTError
-import pandas as pd
+from dotenv import load_dotenv
+import asyncpg
 
 from src.auth import AuthManager
-from src.database import get_db_connection, setup_database
+from src.database import create_db_pool
 from src.reservation import ReservationManager
 from src.settings import SettingsManager
 
@@ -21,15 +23,14 @@ SECRET_KEY = os.getenv("SECRET_KEY", "mugeunjistudio")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+load_dotenv()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    conn = await get_db_connection()
-    await setup_database(conn)
-    app.state.auth_manager = AuthManager(conn)
-    app.state.reserve_manager = ReservationManager(conn)
-    app.state.settings_manager = SettingsManager(conn)
+    pool = await create_db_pool()
+    app.state.db_pool = pool
     yield
-    await conn.close()
+    await app.state.db_pool.close()
 
 class LoginInfo(BaseModel):
     username: str
@@ -102,25 +103,34 @@ async def get_current_admin_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return {"username": username, "role": role}
 
+async def get_db_conn(request: Request) -> AsyncGenerator[asyncpg.Connection, None]:
+    async with request.app.state.db_pool.acquire() as connection:
+        yield connection
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    reserve_manager: ReservationManager = websocket.app.state.reserve_manager
-    await connection_manager.connect(websocket)
-    await reserve_manager.check_reservation_availability()
-    try:
-        reservations = await reserve_manager.get_all_reservations()
-        await websocket.send_json({
-            "type": "RESERVATION_UPDATE",
-            "data": reservations
-        })
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        connection_manager.disconnect(websocket)
+    pool = websocket.app.state.db_pool
+    async with pool.acquire() as conn:
+        reserve_manager = ReservationManager(conn)
+        await connection_manager.connect(websocket)
+        await reserve_manager.check_reservation_availability()
+        try:
+            reservations = await reserve_manager.get_all_reservations()
+            await websocket.send_json({
+                "type": "RESERVATION_UPDATE",
+                "data": reservations
+            })
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            connection_manager.disconnect(websocket)
 
 @app.post('/login')
-async def login_for_access_token(request: Request, login_info: LoginInfo):
-    auth_manager: AuthManager = request.app.state.auth_manager
+async def login_for_access_token(
+    login_info: LoginInfo,
+    conn: asyncpg.Connection = Depends(get_db_conn)
+):
+    auth_manager = AuthManager(conn)
     user_data = await auth_manager.login(login_info.username, login_info.password)
     if not user_data:
         raise HTTPException(
@@ -143,11 +153,11 @@ async def login_for_access_token(request: Request, login_info: LoginInfo):
 
 @app.post('/reserve')
 async def reserve_time(
-    request: Request,
     data: ReservationList,
-    token: str = Depends(oauth2_scheme)
+    token: str = Depends(oauth2_scheme),
+    conn: asyncpg.Connection = Depends(get_db_conn)
 ):
-    reserve_manager: ReservationManager = request.app.state.reserve_manager
+    reserve_manager = ReservationManager(conn)
     payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     username = payload.get("sub")
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
@@ -175,9 +185,11 @@ async def read_index():
     return FileResponse("./static/general/index.html")
 
 @app.get("/settings", response_model=SettingsResponse)
-async def get_public_settings(request: Request):
+async def get_public_settings(
+    conn: asyncpg.Connection = Depends(get_db_conn)
+):
     """일반 사용자가 예약 관련 설정을 조회하는 엔드포인트"""
-    settings_manager: SettingsManager = request.app.state.settings_manager
+    settings_manager = SettingsManager(conn)
     settings = await settings_manager.get_settings()
     
     opens_at = settings.get('reservation_opens_at')
@@ -188,8 +200,11 @@ async def get_public_settings(request: Request):
     }
 
 @app.post('/admin/login')
-async def admin_login_for_access_token(request: Request, login_info: LoginInfo):
-    auth_manager: AuthManager = request.app.state.auth_manager
+async def admin_login_for_access_token(
+    login_info: LoginInfo,
+    conn: asyncpg.Connection = Depends(get_db_conn)
+):
+    auth_manager = AuthManager(conn)
     user_data = await auth_manager.admin_login(login_info.username, login_info.password)
     if not user_data:
         raise HTTPException(
@@ -211,11 +226,11 @@ async def admin_login_for_access_token(request: Request, login_info: LoginInfo):
 
 @app.post('/admin/reservations/create')
 async def create_reservations_by_admin(
-    request: Request,
     data: AdminReservationRequest,
-    admin_user: dict = Depends(get_current_admin_user)
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: asyncpg.Connection = Depends(get_db_conn)
 ):
-    reserve_manager: ReservationManager = request.app.state.reserve_manager
+    reserve_manager = ReservationManager(conn)
     target_username = data.target_username
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     
@@ -238,11 +253,11 @@ async def create_reservations_by_admin(
 
 @app.post('/admin/reservations/delete')
 async def delete_reservations_by_admin(
-    request: Request,
     data: ReservationList,
-    admin_user: dict = Depends(get_current_admin_user)
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: asyncpg.Connection = Depends(get_db_conn)
 ):
-    reserve_manager: ReservationManager = request.app.state.reserve_manager
+    reserve_manager = ReservationManager(conn)
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     
     is_success, message = await reserve_manager.delete_reservations(reserve_times_list)
@@ -262,10 +277,10 @@ async def delete_reservations_by_admin(
 
 @app.get("/admin/reservations/clear")
 async def clear_reservations_by_admin(
-    request: Request,
-    admin_user: dict = Depends(get_current_admin_user)
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: asyncpg.Connection = Depends(get_db_conn)
 ):
-    reserve_manager: ReservationManager = request.app.state.reserve_manager
+    reserve_manager = ReservationManager(conn)
     is_success, message = await reserve_manager.clear_reservations()
 
     if is_success:
@@ -281,11 +296,12 @@ async def clear_reservations_by_admin(
             detail=message
         )
 
+
 @app.post("/admin/users/upload-csv")
 async def upload_users_csv(
-    request: Request,
     file: UploadFile = File(...),
-    admin_user: dict = Depends(get_current_admin_user)
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: asyncpg.Connection = Depends(get_db_conn)
 ):
     if not file.filename.endswith('.csv'):
         raise HTTPException(
@@ -293,7 +309,7 @@ async def upload_users_csv(
             detail="CSV 파일만 업로드할 수 있습니다."
         )
 
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = AuthManager(conn)
     new_users = []
 
     try:
@@ -336,23 +352,21 @@ async def upload_users_csv(
 
 @app.get("/admin/users", response_model=List[UserInfoResponse])
 async def get_all_users_by_admin(
-    request: Request,
-    admin_user: dict = Depends(get_current_admin_user)
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: asyncpg.Connection = Depends(get_db_conn)
 ):
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = AuthManager(conn)
     users = await auth_manager.get_all_users()
     return users
 
 @app.get("/admin/settings", response_model=SettingsResponse)
 async def get_settings_by_admin(
-    request: Request,
-    admin_user: dict = Depends(get_current_admin_user)
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: asyncpg.Connection = Depends(get_db_conn)
 ):
-    settings_manager: SettingsManager = request.app.state.settings_manager
+    settings_manager = SettingsManager(conn)
     settings = await settings_manager.get_settings()
-    
     opens_at = settings.get('reservation_opens_at')
-    
     return {
         "reservation_enabled": settings.get('reservation_enabled') == 'true',
         "reservation_opens_at": datetime.fromisoformat(opens_at) if opens_at else None
@@ -360,19 +374,16 @@ async def get_settings_by_admin(
 
 @app.put("/admin/settings")
 async def update_settings_by_admin(
-    request: Request,
     data: UpdateSettingsRequest,
-    admin_user: dict = Depends(get_current_admin_user)
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: asyncpg.Connection = Depends(get_db_conn)
 ):
-    settings_manager: SettingsManager = request.app.state.settings_manager
-
+    settings_manager = SettingsManager(conn)
     new_settings = {
         "reservation_enabled": str(data.reservation_enabled).lower(),
         "reservation_opens_at": data.reservation_opens_at
     }
-
     is_success, message = await settings_manager.update_settings(new_settings)
-
     if is_success:
         return {"status": "success", "message": message}
     else:
