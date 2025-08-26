@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let socket = null;
 
-    // --- [수정] 인증이 필요한 fetch를 위한 래퍼 함수 ---
     async function fetchWithAuth(endpoint, options = {}) {
         const token = localStorage.getItem('accessToken');
         const headers = {
@@ -50,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.clear();
         showMessage(message, 'success');
         // UI를 즉시 갱신하거나, 페이지를 새로고침하여 로그인 화면으로 이동
-        setTimeout(() => window.location.reload(), 1500);
+        setTimeout(() => window.location.reload(), 500);
     }
 
 
@@ -196,7 +195,12 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let time = 0; time < 24; time++) {
             tableHTML += `<tr><td class="time-header">${time}시`;
             days.forEach(day => {
-                tableHTML += `<td class="time-slot" data-day="${day}" data-time-index="${time}"></td>`;
+                // 0시부터 4시까지의 시간대에 'data-group' 속성 추가
+                let groupAttribute = '';
+                if (time >= 0 && time <= 3) {
+                    groupAttribute = `data-group="${day}-0-4"`;
+                }
+                tableHTML += `<td class="time-slot" data-day="${day}" data-time-index="${time}" ${groupAttribute}></td>`;
             });
             tableHTML += '</tr>';
         }
@@ -207,7 +211,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (slot.classList.contains('reserved') || slot.classList.contains('mine')) {
                     return;
                 }
-                slot.classList.toggle('selected');
+                const group = slot.dataset.group;
+                if (group) {
+                    const isSelected = slot.classList.contains('selected');
+                    document.querySelectorAll(`.time-slot[data-group="${group}"]`).forEach(groupSlot => {
+                        if (groupSlot.classList.contains('reserved') || groupSlot.classList.contains('mine')) {
+                            return;
+                        }
+                        if (isSelected) {
+                            groupSlot.classList.remove('selected');
+                        } else {
+                            groupSlot.classList.add('selected');
+                        }
+                    });
+                } else {
+                    slot.classList.toggle('selected');
+                }
             });
         });
     }

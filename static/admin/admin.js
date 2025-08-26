@@ -68,13 +68,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showMessage(error.message, 'error'); }
     }
 
-    // --- [수정] 로그아웃 함수 수정 ---
     function handleLogout(message = '로그아웃 되었습니다.') {
         if (socket) socket.close();
         localStorage.removeItem('adminAccessToken');
         localStorage.removeItem('adminUsername');
         showMessage(message, 'success');
-        setTimeout(() => window.location.reload(), 1500);
+        setTimeout(() => window.location.reload(), 500);
     }
 
     async function handleClearAllReservations() {
@@ -223,13 +222,33 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let time = 0; time < 24; time++) {
             tableHTML += `<tr><td class="time-header">${time}:00</td>`;
             days.forEach(day => {
-                tableHTML += `<td class="time-slot" data-day="${day}" data-time-index="${time}"></td>`;
+                let groupAttribute = '';
+                if (time >= 0 && time <= 3) {
+                    groupAttribute = `data-group="${day}-0-3"`;
+                }
+                tableHTML += `<td class="time-slot" data-day="${day}" data-time-index="${time}" ${groupAttribute}></td>`;
             });
             tableHTML += '</tr>';
         }
         gridContainer.innerHTML = tableHTML + '</tbody></table>';
+
         gridContainer.querySelectorAll('.time-slot').forEach(slot => {
-            slot.addEventListener('click', () => slot.classList.toggle('selected'));
+            slot.addEventListener('click', () => {
+                const group = slot.dataset.group;
+                if (group) {
+                    const isSelected = slot.classList.contains('selected');
+                    document.querySelectorAll(`.time-slot[data-group="${group}"]`).forEach(groupSlot => {
+                        if (isSelected) {
+                            slot.classList.remove('selected');
+                        } else {
+                            groupSlot.classList.add('selected');
+                        }
+                    });
+                } else {
+                    // 그룹이 없는 경우 기존 로직 유지
+                    slot.classList.toggle('selected');
+                }
+            });
         });
     }
 

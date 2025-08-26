@@ -65,6 +65,15 @@ class ReservationManager:
                 existing_reservations_count = await self.conn.fetchval(
                     "SELECT COUNT(*) FROM reservations WHERE username = $1", username
                 )
+                
+                time_indices = {slot['time_index'] for slot in reserve_times}
+                group_to_check = {0, 1, 2, 3}
+                
+                # 0, 1, 2, 3이 포함된 예약이 있는 경우
+                if not group_to_check.isdisjoint(time_indices):
+                    # 0, 1, 2, 3이 모두 포함되어 있지 않으면 오류 반환
+                    if not group_to_check.issubset(time_indices):
+                        return False, "0시, 1시, 2시, 3시 예약은 한꺼번에만 신청할 수 있습니다."
 
                 if existing_reservations_count + len(reserve_times) > user_allowed_hours:
                     return False, f"예약 가능 시간({user_allowed_hours}시간)을 초과합니다."
@@ -83,7 +92,7 @@ class ReservationManager:
 
     async def clear_reservations(self) -> Tuple[bool, str]:
         try:
-            await self.conn.execute("DELETE FROM reservations WHERE time_index >= 7")
+            await self.conn.execute("DELETE FROM reservations WHERE time_index >= 7 OR reservation_day NOT IN ('Saturday', 'Sunday')")
             return True, "성공"
         except Exception as e:
             return False, f"실패: {str(e)}"
