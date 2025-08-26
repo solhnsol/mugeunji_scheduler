@@ -195,10 +195,9 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let time = 0; time < 24; time++) {
             tableHTML += `<tr><td class="time-header">${time}시`;
             days.forEach(day => {
-                // 0시부터 4시까지의 시간대에 'data-group' 속성 추가
                 let groupAttribute = '';
-                if (time >= 0 && time <= 3) {
-                    groupAttribute = `data-group="${day}-0-4"`;
+                if (time >= 0 && time <= 5) {
+                    groupAttribute = `data-group="${day}-group"`;
                 }
                 tableHTML += `<td class="time-slot" data-day="${day}" data-time-index="${time}" ${groupAttribute}></td>`;
             });

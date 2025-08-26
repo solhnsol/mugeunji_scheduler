@@ -67,7 +67,7 @@ class ReservationManager:
                 )
                 
                 time_indices = {slot['time_index'] for slot in reserve_times}
-                group_to_check = {0, 1, 2, 3}
+                group_to_check = {0, 1, 2, 3, 4, 5}
                 
                 # 0, 1, 2, 3이 포함된 예약이 있는 경우
                 if not group_to_check.isdisjoint(time_indices):
@@ -92,7 +92,7 @@ class ReservationManager:
 
     async def clear_reservations(self) -> Tuple[bool, str]:
         try:
-            await self.conn.execute("DELETE FROM reservations WHERE time_index >= 7 OR reservation_day NOT IN ('Saturday', 'Sunday')")
+            await self.conn.execute("DELETE FROM reservations WHERE time_index >= 6 OR reservation_day NOT IN ('Saturday', 'Sunday')")
             return True, "성공"
         except Exception as e:
             return False, f"실패: {str(e)}"

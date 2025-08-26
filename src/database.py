@@ -2,13 +2,7 @@
 import asyncpg
 import os
 from dotenv import load_dotenv
-
-# async def get_db_connection():
-#     db_url = os.getenv("DATABASE_URL")
-#     if not db_url:
-#         raise ValueError("DATABASE_URL 환경 변수가 설정되지 않았습니다.")
-#     conn = await asyncpg.connect(db_url)
-#     return conn
+import bcrypt
 
 async def create_db_pool():
     load_dotenv()
@@ -53,12 +47,15 @@ async def setup_database(conn: asyncpg.Connection):
         );
     """)
 
+    admin_password = os.getenv("ADMIN_PASSWORD")
+    if not admin_password:
+        return False, "실패: ADMIN_PASSWORD 환경 변수가 설정되지 않았습니다."
+
+    hashed_admin_password = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
     await conn.execute(
-        """
-        INSERT INTO users (username, password, allowed_hours, role)
-        VALUES ('admin', 'adminpw', 999, 'admin')
-        ON CONFLICT (username) DO NOTHING
-        """
+        "INSERT INTO users (username, password, allowed_hours, role) VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING",
+        "admin", hashed_admin_password, 0, "admin"
     )
     
     await conn.execute(
