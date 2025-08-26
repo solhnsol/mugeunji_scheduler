@@ -56,24 +56,28 @@ class ReservationManager:
 
         try:
             async with self.conn.transaction():
-                user_allowed_hours = await self.conn.fetchval(
-                    "SELECT allowed_hours FROM users WHERE username = $1", username
+                user_data = await self.conn.fetchrow(
+                    "SELECT allowed_hours, role FROM users WHERE username = $1", username
                 )
-                if user_allowed_hours is None:
+                if user_data is None:
                     return False, "사용자 정보를 찾을 수 없습니다."
+                user_allowed_hours = user_data['allowed_hours']
+                user_role = user_data['role']
 
                 existing_reservations_count = await self.conn.fetchval(
                     "SELECT COUNT(*) FROM reservations WHERE username = $1", username
                 )
                 
                 time_indices = {slot['time_index'] for slot in reserve_times}
-                group_to_check = {0, 1, 2, 3, 4, 5}
+                group_to_check = {0, 1, 2, 3}
                 
                 # 0, 1, 2, 3이 포함된 예약이 있는 경우
                 if not group_to_check.isdisjoint(time_indices):
+                    if user_role != 'admin' and user_role != 'free':
+                        return False, "새벽 예약은 자유이용권 사용자만 신청할 수 있습니다."
                     # 0, 1, 2, 3이 모두 포함되어 있지 않으면 오류 반환
                     if not group_to_check.issubset(time_indices):
-                        return False, "0시, 1시, 2시, 3시 예약은 한꺼번에만 신청할 수 있습니다."
+                        return False, "새벽 예약은 한꺼번에만 신청할 수 있습니다."
 
                 if existing_reservations_count + len(reserve_times) > user_allowed_hours:
                     return False, f"예약 가능 시간({user_allowed_hours}시간)을 초과합니다."
@@ -92,7 +96,7 @@ class ReservationManager:
 
     async def clear_reservations(self) -> Tuple[bool, str]:
         try:
-            await self.conn.execute("DELETE FROM reservations WHERE time_index >= 6 OR reservation_day NOT IN ('Saturday', 'Sunday')")
+            await self.conn.execute("DELETE FROM reservations WHERE username NOT IN ('신청불가')")
             return True, "성공"
         except Exception as e:
             return False, f"실패: {str(e)}"

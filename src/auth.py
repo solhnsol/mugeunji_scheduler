@@ -57,14 +57,15 @@ class AuthManager:
                 
                 if not new_users: # new_users가 비어있을 경우 바로 성공 처리
                     return True, "성공: 관리자 계정만 생성되었습니다."
-
+                
+                
                 users_to_insert = [
                     (
                         u['username'],
                         # 각 사용자의 비밀번호를 해시 처리
                         bcrypt.hashpw(u['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
                         u['allowed_hours'],
-                        u['role']
+                        'admin' if u['role'] == 'admin' else 'free' if u['allowed_hours'] > 4 else 'user'  # allowed_hours가 4 초과면 'free', 아니면 'user'
                     ) for u in new_users
                 ]
 

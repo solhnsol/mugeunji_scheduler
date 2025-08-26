@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tableHTML += `<tr><td class="time-header">${time}시`;
             days.forEach(day => {
                 let groupAttribute = '';
-                if (time >= 0 && time <= 5) {
+                if (time >= 0 && time <= 3) {
                     groupAttribute = `data-group="${day}-group"`;
                 }
                 tableHTML += `<td class="time-slot" data-day="${day}" data-time-index="${time}" ${groupAttribute}></td>`;
