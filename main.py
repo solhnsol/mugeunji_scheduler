@@ -209,7 +209,8 @@ async def admin_login_for_access_token(
     if not user_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="사용자 이름/비밀번호가 틀렸거나 관리자 권한이 없습니다.",
+            detail='''로그인 정보가 틀렸거나
+            관리자 권한이 없습니다.''',
             headers={"WWW-Authenticate": "Bearer"},
         )
     

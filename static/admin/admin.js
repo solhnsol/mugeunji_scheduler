@@ -1,5 +1,3 @@
-// static/admin/admin.js (아래 내용으로 전체 교체)
-
 document.addEventListener('DOMContentLoaded', () => {
     // --- 상수 및 변수 선언 ---
     const API_BASE_URL = 'https://mugeunji-scheduler.onrender.com';
@@ -11,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginSection = document.getElementById('login-section');
     const mainSection = document.getElementById('main-section');
     const messageArea = document.getElementById('message-area');
+    const loginMessageArea = document.getElementById('login-message-area');
     const welcomeMessage = document.getElementById('welcome-message');
     const gridContainer = document.getElementById('reservation-grid-container');
 
@@ -37,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 이벤트 리스너 ---
     updateUI();
     loginForm.addEventListener('submit', handleLogin);
-    logoutButton.addEventListener('click', handleLogout);
+    logoutButton.addEventListener('click', () => handleLogout()); // 인자 이 호출
     deleteReservationButton.addEventListener('click', handleDeleteReservation);
     forceReserveButton.addEventListener('click', handleForceReservation);
     saveSettingsButton.addEventListener('click', handleSaveSettings);
@@ -45,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     viewUsersButton.addEventListener('click', handleViewUsers);
     modalCloseButton.addEventListener('click', () => userModal.classList.add('hidden'));
     clearAllReservationsButton.addEventListener('click', handleClearAllReservations);
-    userModal.addEventListener('click', (e) => { // 모달 바깥 클릭 시 닫기
+    userModal.addEventListener('click', (e) => {
         if (e.target === userModal) userModal.classList.add('hidden');
     });
 
@@ -69,23 +68,22 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showMessage(error.message, 'error'); }
     }
 
-    function handleLogout() {
+    // --- [수정] 로그아웃 함수 수정 ---
+    function handleLogout(message = '로그아웃 되었습니다.') {
         if (socket) socket.close();
         localStorage.removeItem('adminAccessToken');
         localStorage.removeItem('adminUsername');
-        showMessage('로그아웃 되었습니다.', 'success');
-        updateUI();
+        showMessage(message, 'success');
+        setTimeout(() => window.location.reload(), 1500);
     }
 
     async function handleClearAllReservations() {
-        const isConfirmed = confirm('정말로 모든 신청 기록을 삭제하고 시간표를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.');
-
-        if (isConfirmed) {
+        if (confirm('정말로 모든 신청 기록을 삭제하고 시간표를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
             try {
                 const response = await fetchWithAuth('/admin/reservations/clear');
                 showMessage(response.message, 'success');
             } catch (error) {
-                showMessage(error.message, 'error');
+                if (error.message !== '세션 만료') showMessage(error.message, 'error');
             }
         } else {
             showMessage('초기화 작업이 취소되었습니다.');
@@ -106,7 +104,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             showMessage(response.message, 'success');
             document.querySelectorAll('.time-slot.selected').forEach(s => s.classList.remove('selected'));
-        } catch (error) { showMessage(error.message, 'error'); }
+        } catch (error) {
+            if (error.message !== '세션 만료') showMessage(error.message, 'error');
+        }
     }
 
     async function handleForceReservation() {
@@ -124,7 +124,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showMessage(response.message, 'success');
             document.querySelectorAll('.time-slot.selected').forEach(s => s.classList.remove('selected'));
             document.getElementById('target-username').value = '';
-        } catch (error) { showMessage(error.message, 'error'); }
+        } catch (error) {
+            if (error.message !== '세션 만료') showMessage(error.message, 'error');
+        }
     }
 
     async function handleSaveSettings() {
@@ -136,28 +138,37 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetchWithAuth('/admin/settings', { method: 'PUT', body: JSON.stringify(payload) });
             showMessage(response.message, 'success');
-        } catch (error) { showMessage(error.message, 'error'); }
+        } catch (error) {
+            if (error.message !== '세션 만료') showMessage(error.message, 'error');
+        }
     }
 
     async function handleCsvUpload() {
         const file = csvFileInput.files[0];
         if (!file) return showMessage('업로드할 CSV 파일을 선택해주세요.', 'error');
-
         const formData = new FormData();
         formData.append('file', file);
-        
         try {
+            // 이 요청은 fetchWithAuth를 사용하지 않으므로 직접 헤더를 설정합니다.
             const token = localStorage.getItem('adminAccessToken');
             const response = await fetch(`${API_BASE_URL}/admin/users/upload-csv`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
+                headers: { 'Authorization': `Bearer ${token}` }, // JSON 타입이 아니므로 Content-Type 생략
                 body: formData
             });
+
+            if (response.status === 401 || response.status === 403) {
+                 handleLogout('세션이 만료되어 자동으로 로그아웃됩니다.');
+                 return;
+            }
+
             const data = await response.json();
             if (!response.ok) throw new Error(data.detail || 'CSV 업로드 실패');
             showMessage(data.message, 'success');
-            csvFileInput.value = ''; // 파일 선택 초기화
-        } catch (error) { showMessage(error.message, 'error'); }
+            csvFileInput.value = '';
+        } catch (error) {
+            showMessage(error.message, 'error');
+        }
     }
 
     async function handleViewUsers() {
@@ -165,15 +176,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const users = await fetchWithAuth('/admin/users');
             let tableHTML = `<table class="user-list-table">
                 <thead><tr><th>사용자명</th><th>허용시간</th><th>역할</th></tr></thead><tbody>`;
-            
             users.forEach(user => {
                 tableHTML += `<tr><td>${user.username}</td><td>${user.allowed_hours}</td><td>${user.role}</td></tr>`;
             });
-
             tableHTML += '</tbody></table>';
             userListContainer.innerHTML = tableHTML;
             userModal.classList.remove('hidden');
-        } catch (error) { showMessage(error.message, 'error'); }
+        } catch (error) {
+            if (error.message !== '세션 만료') showMessage(error.message, 'error');
+        }
     }
 
     // --- 헬퍼 및 기타 함수 ---
@@ -253,23 +264,37 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 reservationOpensAtInput.value = '';
             }
-        } catch (error) { showMessage('설정 정보를 불러오는 데 실패했습니다.', 'error'); }
+        } catch (error) {
+            if (error.message !== '세션 만료') showMessage('설정 정보를 불러오는 데 실패했습니다.', 'error');
+        }
     }
     
     function getSelectedSlots() { return Array.from(document.querySelectorAll('.time-slot.selected')); }
 
     function showMessage(message, type = 'info') {
+        loginMessageArea.textContent = message;
+        loginMessageArea.className = type === 'success' ? 'message-success' : 'message-error';
         messageArea.textContent = message;
         messageArea.className = type === 'success' ? 'message-success' : 'message-error';
         setTimeout(() => { messageArea.textContent = ''; messageArea.className = ''; }, 4000);
+        setTimeout(() => { loginMessageArea.textContent = ''; loginMessageArea.className = ''; }, 4000);
     }
 
+    // --- [수정] fetchWithAuth 함수 수정 ---
     async function fetchWithAuth(endpoint, options = {}) {
         const token = localStorage.getItem('adminAccessToken');
-        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...options.headers, };
+        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...options.headers };
         const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+
+        if (response.status === 401 || response.status === 403) {
+            handleLogout('세션이 만료되어 자동으로 로그아웃됩니다. 다시 로그인해주세요.');
+            throw new Error('세션 만료');
+        }
+        
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || '요청 처리 중 오류 발생');
+        if (!response.ok) {
+            throw new Error(data.detail || '요청 처리 중 오류 발생');
+        }
         return data;
     }
 });

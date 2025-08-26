@@ -35,7 +35,7 @@ body {
 }
 .login-box {
     width: 100%;
-    max-width: 800px;
+    max-width: 500px;
     padding: 40px;
     background-color: var(--bg-secondary);
     border-radius: 8px;
@@ -129,6 +129,7 @@ button:hover { opacity: 0.8; }
 /* 메시지 영역 */
 footer { position: fixed; bottom: 0; width: 100%; }
 #message-area { padding: 15px; text-align: center; font-weight: bold; }
+#login-message-area { padding: 15px; text-align: center; font-weight: bold; width: 100%; align-self: center; margin: 0 auto; border-radius: 4px; opacity: 80%;}
 .message-success { background-color: var(--success-color); color: #333; }
 .message-error { background-color: var(--danger-color); color: var(--text-primary); }
 
