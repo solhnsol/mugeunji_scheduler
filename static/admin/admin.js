@@ -61,8 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.detail || '로그인 실패');
-            localStorage.setItem('adminAccessToken', data.access_token);
-            localStorage.setItem('adminUsername', username);
+            sessionStorage.setItem('adminAccessToken', data.access_token);
+            sessionStorage.setItem('adminUsername', username);
             showMessage('관리자 로그인 성공!', 'success');
             updateUI();
         } catch (error) { showMessage(error.message, 'error'); }
@@ -70,8 +70,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleLogout(message = '로그아웃 되었습니다.') {
         if (socket) socket.close();
-        localStorage.removeItem('adminAccessToken');
-        localStorage.removeItem('adminUsername');
+        sessionStorage.removeItem('adminAccessToken');
+        sessionStorage.removeItem('adminUsername');
         showMessage(message, 'success');
         setTimeout(() => window.location.reload(), 500);
     }
@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('file', file);
         try {
             // 이 요청은 fetchWithAuth를 사용하지 않으므로 직접 헤더를 설정합니다.
-            const token = localStorage.getItem('adminAccessToken');
+            const token = sessionStorage.getItem('adminAccessToken');
             const response = await fetch(`${API_BASE_URL}/admin/users/upload-csv`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }, // JSON 타입이 아니므로 Content-Type 생략
@@ -188,11 +188,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 헬퍼 및 기타 함수 ---
     function updateUI() {
-        const token = localStorage.getItem('adminAccessToken');
+        const token = sessionStorage.getItem('adminAccessToken');
         if (token) {
             loginSection.classList.add('hidden');
             mainSection.classList.remove('hidden');
-            welcomeMessage.textContent = `${localStorage.getItem('adminUsername')}님, 환영합니다.`;
+            welcomeMessage.textContent = `${sessionStorage.getItem('adminUsername')}님, 환영합니다.`;
             connectWebSocket();
             generateReservationGrid();
             loadAdminSettings();
@@ -263,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const slot = document.querySelector(`td[data-day="${res.reservation_day}"][data-time-index="${res.time_index}"]`);
             if (slot) {
                 slot.textContent = res.username;
-                slot.classList.add(res.username === localStorage.getItem('adminUsername') ? 'mine' : 'reserved');
+                slot.classList.add(res.username === sessionStorage.getItem('adminUsername') ? 'mine' : 'reserved');
             }
         });
     }
@@ -301,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- [수정] fetchWithAuth 함수 수정 ---
     async function fetchWithAuth(endpoint, options = {}) {
-        const token = localStorage.getItem('adminAccessToken');
+        const token = sessionStorage.getItem('adminAccessToken');
         const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...options.headers };
         const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
 

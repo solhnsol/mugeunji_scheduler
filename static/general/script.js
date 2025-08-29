@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let socket = null;
 
     async function fetchWithAuth(endpoint, options = {}) {
-        const token = localStorage.getItem('accessToken');
+        const token = sessionStorage.getItem('accessToken');
         const headers = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             socket.close();
             socket = null;
         }
-        localStorage.clear();
+        sessionStorage.clear();
         showMessage(message, 'success');
         // UI를 즉시 갱신하거나, 페이지를 새로고침하여 로그인 화면으로 이동
         setTimeout(() => window.location.reload(), 500);
@@ -73,9 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.detail || '로그인에 실패했습니다.');
             }
 
-            localStorage.setItem('accessToken', data.access_token);
-            localStorage.setItem('username', username);
-            localStorage.setItem('allowedHours', data.allowed_hours);
+            sessionStorage.setItem('accessToken', data.access_token);
+            sessionStorage.setItem('username', username);
+            sessionStorage.setItem('allowedHours', data.allowed_hours);
 
             showMessage('로그인 성공!', 'success');
             updateUI();
@@ -118,13 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function updateUI() {
-        const token = localStorage.getItem('accessToken');
+        const token = sessionStorage.getItem('accessToken');
         const noticeDiv = document.getElementById('reservation-notice');
         if (token) {
             loginSection.classList.add('hidden');
             reservationSection.classList.remove('hidden');
-            welcomeMessage.textContent = localStorage.getItem('username');
-            allowedHoursElem.textContent = localStorage.getItem('allowedHours');
+            welcomeMessage.textContent = sessionStorage.getItem('username');
+            allowedHoursElem.textContent = sessionStorage.getItem('allowedHours');
             fetch(`${API_BASE_URL}/settings`)
                 .then(response => response.json())
                 .then(data => {
@@ -236,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const uniqueId = `${slot.dataset.day}-${slot.dataset.timeIndex}`;
             selectedSlotsBeforeUpdate.add(uniqueId);
         });
-        const currentUser = localStorage.getItem('username');
+        const currentUser = sessionStorage.getItem('username');
         document.querySelectorAll('.time-slot').forEach(slot => {
             slot.textContent = '';
             slot.classList.remove('reserved', 'mine', 'selected');
