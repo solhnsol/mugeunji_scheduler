@@ -13,8 +13,10 @@ async def create_db_pool():
     # 여러 개의 연결을 관리하는 '풀'을 생성합니다.
     pool = await asyncpg.create_pool(
         db_url,
-        statement_cache_size=0
-        )
+        statement_cache_size=0,
+        command_timeout=5,  # 5초로 변경
+        timeout=5           # 5초로 변경
+    )
     if not pool:
         raise RuntimeError("데이터베이스 풀을 생성하는 데 실패했습니다.")
         
