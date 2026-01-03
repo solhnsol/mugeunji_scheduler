@@ -11,7 +11,10 @@ async def create_db_pool():
         raise ValueError("DATABASE_URL 환경 변수가 설정되지 않았습니다.")
     
     # 여러 개의 연결을 관리하는 '풀'을 생성합니다.
-    pool = await asyncpg.create_pool(db_url)
+    pool = await asyncpg.create_pool(
+        db_url,
+        statement_cache_size=0
+        )
     if not pool:
         raise RuntimeError("데이터베이스 풀을 생성하는 데 실패했습니다.")
         
