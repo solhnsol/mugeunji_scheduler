@@ -210,3 +210,4 @@ __marimo__/
 __pycache__
 
 debug.py
+reservation.db

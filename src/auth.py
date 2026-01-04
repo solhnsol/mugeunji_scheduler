@@ -1,83 +1,95 @@
-# auth.py
-import asyncpg
+import aiosqlite
 import bcrypt
 from typing import Optional, Dict, List, Tuple
 from dotenv import load_dotenv
 import os
+import asyncio
+from functools import partial
 
 class AuthManager:
-    def __init__(self, conn: asyncpg.Connection):
+    def __init__(self, conn: aiosqlite.Connection):
         load_dotenv()
         self.conn = conn
 
+    async def _run_sync(self, func, *args, **kwargs):
+        """동기 함수(bcrypt 등)를 별도 스레드에서 실행하여 이벤트 루프 차단 방지"""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, partial(func, *args, **kwargs))
+
     async def _validate_user(self, username: str, password: str) -> Optional[Dict]:
-        """사용자 이름으로 데이터를 가져와 비밀번호를 검증하는 내부 헬퍼 함수"""
-        user_data = await self.conn.fetchrow(
-            "SELECT * FROM users WHERE username = $1", username
-        )
+        async with self.conn.execute("SELECT * FROM users WHERE username = ?", (username,)) as cursor:
+            user_data = await cursor.fetchone()
 
         if user_data:
-            # Bcrypt 해시 검증
             stored_hash = user_data['password'].encode('utf-8')
             password_bytes = password.encode('utf-8')
-            if bcrypt.checkpw(password_bytes, stored_hash):
+            
+            # bcrypt 검증을 비동기 스타일로 실행
+            is_valid = await self._run_sync(bcrypt.checkpw, password_bytes, stored_hash)
+            if is_valid:
                 return dict(user_data)
         return None
 
     async def login(self, username: str, password: str) -> Optional[Dict]:
-        """일반 사용자 로그인"""
         user_data = await self._validate_user(username, password)
-        # 특별한 역할 제한 없이 로그인 성공 시 사용자 데이터 반환
         return user_data
 
     async def admin_login(self, username: str, password: str) -> Optional[Dict]:
-        """관리자 사용자 로그인"""
         user_data = await self._validate_user(username, password)
-        # 로그인 성공 후, 역할이 'admin'인지 추가로 확인
         if user_data and user_data.get('role') == 'admin':
             return user_data
         return None
 
     async def update_users(self, new_users: List[Dict]) -> Tuple[bool, str]:
         try:
-            async with self.conn.transaction():
-                await self.conn.execute("DELETE FROM users")
-                
-                admin_password = os.getenv("ADMIN_PASSWORD")
-                if not admin_password:
-                    # 환경 변수가 설정되지 않았을 경우에 대한 예외 처리
-                    return False, "실패: ADMIN_PASSWORD 환경 변수가 설정되지 않았습니다."
+            # [수정] async with self.conn 제거 -> 명시적 트랜잭션 사용
+            await self.conn.execute("DELETE FROM users")
+            
+            admin_password = os.getenv("ADMIN_PASSWORD")
+            if not admin_password:
+                return False, "실패: ADMIN_PASSWORD 환경 변수가 설정되지 않았습니다."
 
-                hashed_admin_password = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            # 관리자 비번 해싱 (별도 스레드)
+            hashed_admin_password_bytes = await self._run_sync(
+                bcrypt.hashpw, admin_password.encode('utf-8'), bcrypt.gensalt()
+            )
+            hashed_admin_password = hashed_admin_password_bytes.decode('utf-8')
 
-                await self.conn.execute(
-                    "INSERT INTO users (username, password, allowed_hours, role) VALUES ($1, $2, $3, $4)",
-                    "admin", hashed_admin_password, 0, "admin"
+            await self.conn.execute(
+                "INSERT INTO users (username, password, allowed_hours, role) VALUES (?, ?, ?, ?)",
+                ("admin", hashed_admin_password, 0, "admin")
+            )
+            
+            if not new_users:
+                await self.conn.commit()
+                return True, "성공: 관리자 계정만 생성되었습니다."
+            
+            users_to_insert = []
+            for u in new_users:
+                # 사용자 비번 해싱 (별도 스레드) - 반복문 내에서 await 사용
+                pw_hash_bytes = await self._run_sync(
+                    bcrypt.hashpw, u['password'].encode('utf-8'), bcrypt.gensalt()
                 )
+                pw_hash = pw_hash_bytes.decode('utf-8')
                 
-                if not new_users: # new_users가 비어있을 경우 바로 성공 처리
-                    return True, "성공: 관리자 계정만 생성되었습니다."
-                
-                
-                users_to_insert = [
-                    (
-                        u['username'],
-                        # 각 사용자의 비밀번호를 해시 처리
-                        bcrypt.hashpw(u['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
-                        u['allowed_hours'],
-                        'admin' if u['role'] == 'admin' else 'free' if u['allowed_hours'] > 4 else 'user'  # allowed_hours가 4 초과면 'free', 아니면 'user'
-                    ) for u in new_users
-                ]
+                role = 'admin' if u['role'] == 'admin' else 'free' if u['allowed_hours'] > 4 else 'user'
+                users_to_insert.append((u['username'], pw_hash, u['allowed_hours'], role))
 
-                await self.conn.executemany(
-                    "INSERT INTO users (username, password, allowed_hours, role) VALUES ($1, $2, $3, $4)",
-                    users_to_insert
-                )
+            await self.conn.executemany(
+                "INSERT INTO users (username, password, allowed_hours, role) VALUES (?, ?, ?, ?)",
+                users_to_insert
+            )
+            
+            # [중요] 모든 작업이 끝나면 커밋
+            await self.conn.commit()
             return True, f"성공: 관리자를 포함하여 총 {len(new_users) + 1}명의 사용자로 목록을 교체했습니다."
         
         except Exception as e:
+            # 오류 발생 시 롤백
+            await self.conn.rollback()
             return False, f"실패: {str(e)}"
 
     async def get_all_users(self) -> List[Dict]:
-        users = await self.conn.fetch("SELECT username, allowed_hours, role FROM users")
+        async with self.conn.execute("SELECT username, allowed_hours, role FROM users") as cursor:
+            users = await cursor.fetchall()
         return [dict(row) for row in users]
