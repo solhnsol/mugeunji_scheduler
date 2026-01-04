@@ -1,9 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- 상수 및 변수 선언 ---
-    const API_BASE_URL = 'https://mugeunji-scheduler.onrender.com';
-    const WS_URL = `wss://mugeunji-scheduler.onrender.com/ws`;
-    // const API_BASE_URL = 'http://127.0.0.1:5000';
-    // const WS_URL = `ws://127.0.0.1:5000/ws`;
+    // const API_BASE_URL = 'https://mugeunji-scheduler.onrender.com';
+    // const WS_URL = `wss://mugeunji-scheduler.onrender.com/ws`;
+    const API_BASE_URL = 'http://127.0.0.1:5000';
+    const WS_URL = `ws://127.0.0.1:5000/ws`;
 
     // 섹션 및 공통 요소
     const loginSection = document.getElementById('login-section');
