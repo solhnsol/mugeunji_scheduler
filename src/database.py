@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 import bcrypt
 
-async def init_db(db_path: str = "reservation.db"):
+async def init_db(db_path: str = "data/reservation.db"):
     load_dotenv()
     
     # SQLite 연결 생성 및 Row 팩토리 설정
