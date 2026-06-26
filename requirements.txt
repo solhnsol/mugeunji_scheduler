@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+aiosqlite
+bcrypt
+python-jose[cryptography]
+python-multipart
+python-dotenv

@@ -1,0 +1,8 @@
+.env
+__pycache__/
+data/
+
+static/dist/
+frontend/node_modules/
+
+debug.py

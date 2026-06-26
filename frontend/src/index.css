@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+  --color-cream: #f5f4f0;
+  --color-cream-dark: #ebe9e3;
+  --color-ink: #141414;
+  --color-ink-muted: #5c5c5c;
+  --color-ink-faint: #949494;
+  --color-sage: #3a5248;
+  --color-sage-light: #4a6659;
+  --color-sage-muted: #e8eeeb;
+  --color-line: #e3e0d8;
+  --color-slot-mine: #3a5248;
+  --color-slot-taken: #ddd9d0;
+  --color-slot-pick: #5b7f96;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-cream text-ink font-sans antialiased;
+  min-height: 100dvh;
+}
+
+.card {
+  @apply bg-white rounded-2xl border border-line/80 shadow-[0_1px_3px_rgba(20,20,20,0.04)];
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-full bg-sage text-white font-medium
+    py-3 px-6 min-h-[48px] w-full
+    hover:bg-sage-light active:scale-[0.98] transition-all
+    disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-full border border-line bg-white text-ink
+    font-medium py-2.5 px-4 min-h-[44px]
+    hover:bg-cream active:scale-[0.98] transition-all;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-full text-ink-muted font-medium
+    py-2 px-3 min-h-[44px] text-sm hover:bg-cream-dark/60 transition-colors;
+}
+
+.btn-danger {
+  @apply inline-flex items-center justify-center rounded-full bg-[#c45c5c] text-white font-medium
+    py-3 px-6 min-h-[48px] w-full hover:bg-[#b34f4f] active:scale-[0.98] transition-all;
+}
+
+.input {
+  @apply w-full rounded-2xl border border-line bg-white px-4 py-3.5 text-ink text-base
+    placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/40
+    transition-shadow;
+}
+
+.label {
+  @apply block text-sm font-medium text-ink-muted mb-2;
+}
+
+.badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+
+.badge-open {
+  @apply bg-sage-muted text-sage;
+}
+
+.badge-wait {
+  @apply bg-amber-50 text-amber-800;
+}
+
+.badge-closed {
+  @apply bg-cream-dark text-ink-muted;
+}
+
+.grid-scroll {
+  @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.grid-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.grid-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 999px;
+}
