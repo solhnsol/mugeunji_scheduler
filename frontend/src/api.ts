@@ -88,6 +88,22 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
+  async cancelPlan(token: string) {
+    const res = await fetch('/plans/cancel', {
+      method: 'POST',
+      headers: authHeaders(token),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async revokePlanCancellation(token: string) {
+    const res = await fetch('/plans/cancel/revoke', {
+      method: 'POST',
+      headers: authHeaders(token),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
   async reserve(token: string, reservations: { day: string; time_index: number }[]) {
     const res = await fetch('/reserve', {
       method: 'POST',
@@ -100,6 +116,25 @@ export const api = {
   async getSettings() {
     const res = await fetch('/settings');
     return parseResponse<{ reservation_enabled: boolean; reservation_opens_at?: string }>(res);
+  },
+
+  async getFreeWeeklyUsage(token: string) {
+    const res = await fetch('/free/weekly-usage', { headers: authHeaders(token) });
+    return parseResponse<import('./types').WeeklyUsage>(res);
+  },
+
+  async getFreeSchedule(token: string) {
+    const res = await fetch('/free/schedule', { headers: authHeaders(token) });
+    return parseResponse<import('./types').FreeScheduleMeta>(res);
+  },
+
+  async reserveFree(token: string, reservations: { day: string; time_index: number }[]) {
+    const res = await fetch('/free/reserve', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ reservations }),
+    });
+    return parseResponse<{ message: string }>(res);
   },
 
   async getSettlement(token: string, period?: string) {
@@ -169,6 +204,20 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
+  async getAdminAutomation(token: string) {
+    const res = await fetch('/admin/automation', { headers: authHeaders(token) });
+    return parseResponse<import('./types').AutomationSettings>(res);
+  },
+
+  async updateAdminAutomation(token: string, body: Record<string, unknown>) {
+    const res = await fetch('/admin/automation', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<import('./types').AutomationSettings & { message: string }>(res);
+  },
+
   async getAdminSettings(token: string) {
     const res = await fetch('/admin/settings', { headers: authHeaders(token) });
     return parseResponse<{ reservation_enabled: boolean; reservation_opens_at?: string }>(res);
@@ -183,6 +232,36 @@ export const api = {
       headers: authHeaders(token),
       body: JSON.stringify(body),
     });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminForceReserve(
+    token: string,
+    targetUsername: string,
+    reservations: { day: string; time_index: number }[],
+  ) {
+    const res = await fetch('/admin/reservations/create', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ target_username: targetUsername, reservations }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminDeleteReservations(
+    token: string,
+    reservations: { day: string; time_index: number }[],
+  ) {
+    const res = await fetch('/admin/reservations/delete', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ reservations }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminClearReservations(token: string) {
+    const res = await fetch('/admin/reservations/clear', { headers: authHeaders(token) });
     return parseResponse<{ message: string }>(res);
   },
 

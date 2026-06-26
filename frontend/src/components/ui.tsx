@@ -50,16 +50,19 @@ export function Toast({ message, type }: { message: string; type: 'success' | 'e
 export function PlanGrid({
   plans,
   currentPlanId,
+  selectedPlanId,
   onSelect,
 }: {
-  plans: import('./types').Plan[];
+  plans: import('../types').Plan[];
   currentPlanId?: number | null;
+  selectedPlanId?: number | null;
   onSelect: (planId: number) => void;
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       {plans.map((plan) => {
         const isCurrent = currentPlanId === plan.id;
+        const isSelected = selectedPlanId === plan.id;
         return (
           <button
             key={plan.id}
@@ -69,7 +72,9 @@ export function PlanGrid({
             className={`card p-5 text-left transition-all active:scale-[0.98] ${
               isCurrent
                 ? 'ring-2 ring-sage bg-sage-muted/40'
-                : 'hover:border-sage/30 hover:shadow-sm'
+                : isSelected
+                  ? 'ring-2 ring-ink/20 bg-cream-dark/50'
+                  : 'hover:border-sage/30 hover:shadow-sm'
             }`}
           >
             <p className="text-2xl font-bold text-ink">{plan.allowed_hours}<span className="text-base font-medium text-ink-muted">h</span></p>

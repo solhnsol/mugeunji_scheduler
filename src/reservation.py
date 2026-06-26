@@ -15,6 +15,10 @@ from src.automation_config import (
     get_free_booking_window,
     slots_in_booking_window,
     slot_key,
+    get_current_monthly_open,
+    get_next_monthly_open,
+    monthly_open_cycle_key,
+    format_monthly_open_label,
 )
 
 KST = timezone(timedelta(hours=9))
@@ -66,10 +70,37 @@ class ReservationManager:
         await self.maybe_reset_free_reservations()
         config = await self.get_schedule_config()
         settings = await self.get_system_settings()
-        opens_at_str = settings.get('reservation_opens_at')
-        last_cleared_for = settings.get('last_cleared_for')
-
         now_kst_dt = now_kst()
+
+        if settings.get("reservation_enabled") != "true":
+            return False, "현재 예약이 불가능합니다. 관리자에게 문의하세요."
+
+        if config.auto_monthly_open_enabled:
+            open_at = get_current_monthly_open(now_kst_dt, config)
+            cycle_key = monthly_open_cycle_key(open_at)
+            last_cleared_for = settings.get("last_cleared_for")
+            clear_trigger = open_at - timedelta(minutes=config.monthly_clear_minutes_before)
+            opens_at_local = format_monthly_open_label(open_at)
+
+            if now_kst_dt < open_at:
+                if (
+                    config.auto_monthly_clear_enabled
+                    and clear_trigger <= now_kst_dt
+                    and last_cleared_for != cycle_key
+                ):
+                    await self.clear_monthly_reservations()
+                    await self.conn.execute(
+                        "UPDATE system_settings SET value = ? WHERE key = 'last_cleared_for'",
+                        (cycle_key,),
+                    )
+                    await self.conn.commit()
+                    return False, f"예약자 명단이 초기화되었습니다. 예약은 {opens_at_local}부터 가능합니다."
+                return False, f"예약은 {opens_at_local}부터 가능합니다."
+
+            return True, "예약 가능"
+
+        opens_at_str = settings.get("reservation_opens_at")
+        last_cleared_for = settings.get("last_cleared_for")
 
         if opens_at_str:
             try:
@@ -84,36 +115,43 @@ class ReservationManager:
                     and last_cleared_for != opens_at_str
                 ):
                     await self.clear_monthly_reservations()
-
                     await self.conn.execute(
                         "UPDATE system_settings SET value = ? WHERE key = 'last_cleared_for'",
-                        (opens_at_str,)
+                        (opens_at_str,),
                     )
                     await self.conn.commit()
-
-                    opens_at_local = opens_at_dt_kst.strftime('%Y년 %m월 %d일 %H시 %M분')
+                    opens_at_local = format_monthly_open_label(opens_at_dt_kst)
                     return False, f"예약자 명단이 초기화되었습니다. 예약은 {opens_at_local}부터 가능합니다."
 
                 if now_kst_dt < opens_at_dt_kst:
-                    opens_at_local = opens_at_dt_kst.strftime('%Y년 %m월 %d일 %H시 %M분')
+                    opens_at_local = format_monthly_open_label(opens_at_dt_kst)
                     return False, f"예약은 {opens_at_local}부터 가능합니다."
                 else:
-                    try:
-                        await self.conn.execute("UPDATE system_settings SET value = 'true' WHERE key = 'reservation_enabled'")
-                        await self.conn.execute("UPDATE system_settings SET value = NULL WHERE key = 'reservation_opens_at'")
-                        await self.conn.commit()
-                    except Exception:
-                        await self.conn.rollback()
-                        raise
+                    await self.conn.execute(
+                        "UPDATE system_settings SET value = NULL WHERE key = 'reservation_opens_at'"
+                    )
+                    await self.conn.commit()
 
             except (ValueError, TypeError):
                 return False, "예약 오픈 시간 설정에 오류가 있습니다. 관리자에게 문의하세요."
 
-        final_settings = await self.get_system_settings()
-        if final_settings.get('reservation_enabled') != 'true':
-            return False, "현재 예약이 불가능합니다. 관리자에게 문의하세요."
-
         return True, "예약 가능"
+
+    async def get_public_schedule_status(self) -> Dict:
+        is_open, message = await self.check_reservation_availability()
+        config = await self.get_schedule_config()
+        now = now_kst()
+        next_open = (
+            get_next_monthly_open(now, config)
+            if config.auto_monthly_open_enabled
+            else None
+        )
+        return {
+            "reservation_enabled": is_open,
+            "schedule_message": message,
+            "next_monthly_open_at": next_open.isoformat() if next_open else None,
+            "reservation_opens_at": next_open.isoformat() if next_open else None,
+        }
 
     async def check_free_reservation_availability(self) -> Tuple[bool, str]:
         await self.maybe_reset_free_reservations()
@@ -380,9 +418,14 @@ class ReservationManager:
         settings = await self.get_system_settings()
         now = now_kst()
         window_start, window_end = get_free_booking_window(now, config)
+        next_monthly = get_next_monthly_open(now, config) if config.auto_monthly_open_enabled else None
         return {
             "reservation_enabled": settings.get("reservation_enabled") == "true",
-            "reservation_opens_at": settings.get("reservation_opens_at"),
+            "auto_monthly_open_enabled": config.auto_monthly_open_enabled,
+            "monthly_open_hour": config.monthly_open_hour,
+            "monthly_open_minute": config.monthly_open_minute,
+            "next_monthly_open_at": next_monthly.isoformat() if next_monthly else None,
+            "reservation_opens_at": next_monthly.isoformat() if next_monthly else settings.get("reservation_opens_at"),
             "monthly_clear_minutes_before": config.monthly_clear_minutes_before,
             "auto_monthly_clear_enabled": config.auto_monthly_clear_enabled,
             "auto_free_reset_enabled": config.auto_free_reset_enabled,

@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import bcrypt
 
 from src.membership import DEFAULT_PLANS
+from src.automation_config import AUTOMATION_SETTING_DEFAULTS
 
 async def init_db(db_path: str = "data/reservation.db"):
     load_dotenv()
@@ -20,6 +21,8 @@ async def _column_exists(conn: aiosqlite.Connection, table: str, column: str) ->
 async def _migrate_users_table(conn: aiosqlite.Connection):
     columns = [
         ("email", "TEXT"),
+        ("name", "TEXT"),
+        ("phone", "TEXT"),
         ("custom_allowed_hours", "INTEGER"),
         ("custom_monthly_fee", "INTEGER"),
         ("created_at", "TEXT"),
@@ -27,6 +30,18 @@ async def _migrate_users_table(conn: aiosqlite.Connection):
     for name, col_type in columns:
         if not await _column_exists(conn, table="users", column=name):
             await conn.execute(f"ALTER TABLE users ADD COLUMN {name} {col_type}")
+
+async def _migrate_reservations_table(conn: aiosqlite.Connection):
+    if not await _column_exists(conn, table="reservations", column="reservation_type"):
+        await conn.execute(
+            "ALTER TABLE reservations ADD COLUMN reservation_type TEXT NOT NULL DEFAULT 'monthly'"
+        )
+
+async def _migrate_subscriptions_table(conn: aiosqlite.Connection):
+    if not await _column_exists(conn, table="subscriptions", column="cancellation_effective_period"):
+        await conn.execute(
+            "ALTER TABLE subscriptions ADD COLUMN cancellation_effective_period TEXT"
+        )
 
 async def setup_database(conn: aiosqlite.Connection):
     await conn.execute("""
@@ -45,10 +60,12 @@ async def setup_database(conn: aiosqlite.Connection):
             username TEXT NOT NULL,
             reservation_day TEXT NOT NULL,
             time_index INTEGER NOT NULL,
+            reservation_type TEXT NOT NULL DEFAULT 'monthly',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(reservation_day, time_index)
         );
     """)
+    await _migrate_reservations_table(conn)
 
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS system_settings (
@@ -80,6 +97,7 @@ async def setup_database(conn: aiosqlite.Connection):
             FOREIGN KEY (plan_id) REFERENCES plans(id)
         );
     """)
+    await _migrate_subscriptions_table(conn)
 
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS billing_cycles (
@@ -135,6 +153,8 @@ async def setup_database(conn: aiosqlite.Connection):
         ('reservation_opens_at', None),
         ('last_cleared_for', None),
         ('current_access_period', None),
+        ('last_free_reset_at', None),
+        *[(k, v) for k, v in AUTOMATION_SETTING_DEFAULTS.items()],
     ]
     for key, value in settings_defaults:
         await conn.execute(

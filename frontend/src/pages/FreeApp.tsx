@@ -50,7 +50,7 @@ export default function FreeApp({
   useEffect(() => {
     load().catch((err) => {
       if (err instanceof ApiError && err.message.includes('권한')) {
-        setMe({ access_status: 'unknown', can_access_schedule: false, can_access_free_schedule: false, message: err.message, username } as MeResponse);
+        setMe({ role: 'user', access_status: 'unknown', can_access_schedule: false, can_access_free_schedule: false, message: err.message, username } as MeResponse);
       } else {
         show(err instanceof ApiError ? err.message : '로드 실패', 'error');
       }

@@ -134,7 +134,9 @@ class UpdateSettingsRequest(BaseModel):
 
 class UpdateAutomationRequest(BaseModel):
     reservation_enabled: bool
-    reservation_opens_at: Optional[str] = None
+    auto_monthly_open_enabled: bool = True
+    monthly_open_hour: int = Field(21, ge=0, le=23)
+    monthly_open_minute: int = Field(0, ge=0, le=59)
     monthly_clear_minutes_before: int = Field(20, ge=0, le=1440)
     auto_monthly_clear_enabled: bool = True
     auto_free_reset_enabled: bool = True
@@ -183,6 +185,8 @@ class PlanResponse(BaseModel):
 class SettingsResponse(BaseModel):
     reservation_enabled: bool
     reservation_opens_at: Optional[str] = None
+    next_monthly_open_at: Optional[str] = None
+    schedule_message: Optional[str] = None
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
@@ -330,12 +334,9 @@ async def admin_login(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_
 
 @app.get("/settings", response_model=SettingsResponse)
 async def get_public_settings(conn: aiosqlite.Connection = Depends(get_db_conn)):
-    settings_manager = SettingsManager(conn)
-    settings = await settings_manager.get_settings()
-    return {
-        "reservation_enabled": settings.get("reservation_enabled") == "true",
-        "reservation_opens_at": settings.get("reservation_opens_at"),
-    }
+    reserve_manager = ReservationManager(conn)
+    status = await reserve_manager.get_public_schedule_status()
+    return status
 
 
 @app.post("/reserve")
@@ -593,10 +594,10 @@ async def update_automation_settings(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     settings_manager = SettingsManager(conn)
-    opens_at = data.reservation_opens_at.strip() if data.reservation_opens_at else None
-    if opens_at == "":
-        opens_at = None
     config = ScheduleConfig(
+        auto_monthly_open_enabled=data.auto_monthly_open_enabled,
+        monthly_open_hour=data.monthly_open_hour,
+        monthly_open_minute=data.monthly_open_minute,
         monthly_clear_minutes_before=data.monthly_clear_minutes_before,
         auto_monthly_clear_enabled=data.auto_monthly_clear_enabled,
         auto_free_reset_enabled=data.auto_free_reset_enabled,
@@ -609,7 +610,6 @@ async def update_automation_settings(
     )
     payload = {
         "reservation_enabled": str(data.reservation_enabled).lower(),
-        "reservation_opens_at": opens_at,
         **config.to_settings_dict(),
     }
     is_success, message = await settings_manager.upsert_settings(payload)

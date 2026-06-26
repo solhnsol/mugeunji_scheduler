@@ -33,7 +33,7 @@ export function AdminReservationGrid({
   const toggle = (day: ValidDay, time: number) => {
     const key: SlotKey = `${day}-${time}`;
     if (time >= 0 && time <= 3) {
-      const group: SlotKey[] = [0, 1, 2, 3].map((t) => `${day}-${t}`);
+      const group: SlotKey[] = [0, 1, 2, 3].map((t) => `${day}-${t}` as SlotKey);
       const allSelected = group.every((k) => selected.has(k));
       setSelected((prev) => {
         const next = new Set(prev);

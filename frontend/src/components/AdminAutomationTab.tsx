@@ -2,16 +2,14 @@ import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
 import { AutomationSettings, WEEKDAY_OPTIONS } from '../types';
 
-function toDatetimeLocalValue(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function formatKst(iso: string | null | undefined): string {
   if (!iso) return '-';
   return new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+}
+
+function formatMonthlyOpenTime(hour: number, minute: number): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `매달 말일 ${pad(hour)}:${pad(minute)}`;
 }
 
 function Toggle({
@@ -90,15 +88,11 @@ export function AdminAutomationTab({
   onError: (msg: string) => void;
 }) {
   const [form, setForm] = useState<AutomationSettings | null>(null);
-  const [opensAtLocal, setOpensAtLocal] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.getAdminAutomation(token)
-      .then((data) => {
-        setForm(data);
-        setOpensAtLocal(toDatetimeLocalValue(data.reservation_opens_at));
-      })
+      .then((data) => setForm(data))
       .catch((e) => onError(e instanceof ApiError ? e.message : '설정 로드 실패'));
   }, [token, onError]);
 
@@ -111,12 +105,11 @@ export function AdminAutomationTab({
     if (!form) return;
     setSaving(true);
     try {
-      const opensAt = opensAtLocal
-        ? new Date(opensAtLocal).toISOString()
-        : null;
       const res = await api.updateAdminAutomation(token, {
         reservation_enabled: form.reservation_enabled,
-        reservation_opens_at: opensAt,
+        auto_monthly_open_enabled: form.auto_monthly_open_enabled,
+        monthly_open_hour: form.monthly_open_hour,
+        monthly_open_minute: form.monthly_open_minute,
         monthly_clear_minutes_before: form.monthly_clear_minutes_before,
         auto_monthly_clear_enabled: form.auto_monthly_clear_enabled,
         auto_free_reset_enabled: form.auto_free_reset_enabled,
@@ -128,7 +121,6 @@ export function AdminAutomationTab({
         free_booking_window_hours: form.free_booking_window_hours,
       });
       setForm(res);
-      setOpensAtLocal(toDatetimeLocalValue(res.reservation_opens_at));
       onSaved(res.message || '저장되었습니다.');
     } catch (err) {
       onError(err instanceof ApiError ? err.message : '저장 실패');
@@ -153,7 +145,11 @@ export function AdminAutomationTab({
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-ink-muted">다음 월간 오픈</dt>
-            <dd className="text-right text-xs">{formatKst(form.reservation_opens_at)}</dd>
+            <dd className="text-right text-xs">
+              {form.auto_monthly_open_enabled
+                ? formatKst(form.next_monthly_open_at)
+                : '수동 모드'}
+            </dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-ink-muted">자유이용 주간</dt>
@@ -176,23 +172,30 @@ export function AdminAutomationTab({
         <h2 className="font-semibold text-ink">월간 예약</h2>
         <Toggle
           label="월간 예약 접수"
-          hint="끄면 사용자가 월간 시간표를 신청할 수 없습니다"
+          hint="끄면 스케줄과 관계없이 사용자가 월간 시간표를 신청할 수 없습니다"
           checked={form.reservation_enabled}
           onChange={(v) => patch({ reservation_enabled: v })}
         />
-        <div>
-          <label className="label" htmlFor="opens-at">예약 오픈 예정 시각</label>
-          <input
-            id="opens-at"
-            type="datetime-local"
-            className="input"
-            value={opensAtLocal}
-            onChange={(e) => setOpensAtLocal(e.target.value)}
+        <Toggle
+          label="매달 말일 정기 오픈"
+          hint="켜면 매월 말일 지정 시각에 예약이 자동으로 열립니다"
+          checked={form.auto_monthly_open_enabled}
+          onChange={(v) => patch({ auto_monthly_open_enabled: v })}
+        />
+        {form.auto_monthly_open_enabled && (
+          <TimeField
+            label="말일 오픈 시각"
+            hour={form.monthly_open_hour}
+            minute={form.monthly_open_minute}
+            onHour={(v) => patch({ monthly_open_hour: v })}
+            onMinute={(v) => patch({ monthly_open_minute: v })}
           />
-          <p className="text-xs text-ink-faint mt-1.5">
-            비워두면 예약 오픈 시각 예약 없이 접수 on/off만 적용됩니다
+        )}
+        {form.auto_monthly_open_enabled && (
+          <p className="text-xs text-ink-faint">
+            {formatMonthlyOpenTime(form.monthly_open_hour, form.monthly_open_minute)}에 반복 오픈
           </p>
-        </div>
+        )}
         <div>
           <label className="label" htmlFor="clear-before">오픈 전 월간 시간표 초기화 (분)</label>
           <input

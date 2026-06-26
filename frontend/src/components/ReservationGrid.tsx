@@ -39,7 +39,7 @@ export function ReservationGrid({
     if (!reservationOpen || isTaken(day, time)) return;
     const key: SlotKey = `${day}-${time}`;
     if (time >= 0 && time <= 3) {
-      const group: SlotKey[] = [0, 1, 2, 3].map((t) => `${day}-${t}`);
+      const group: SlotKey[] = [0, 1, 2, 3].map((t) => `${day}-${t}` as SlotKey);
       const allSelected = group.every((k) => selected.has(k) || isTaken(day, Number(k.split('-')[1])));
       setSelected((prev) => {
         const next = new Set(prev);

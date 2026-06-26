@@ -35,6 +35,14 @@ export interface MeResponse {
   billing?: Billing | null;
   access_period?: string | null;
   open_settlement_period?: string | null;
+  can_access_free_schedule?: boolean;
+  pending_plan_change?: {
+    new_plan_name: string;
+    effective_period: string;
+  } | null;
+  pending_cancellation?: {
+    effective_period: string;
+  } | null;
 }
 
 export interface UserInfo {
@@ -81,10 +89,15 @@ export interface Reservation {
   display_name?: string;
   reservation_day: ValidDay;
   time_index: number;
+  reservation_type?: 'monthly' | 'free';
 }
 
 export interface AutomationSettings {
   reservation_enabled: boolean;
+  auto_monthly_open_enabled: boolean;
+  monthly_open_hour: number;
+  monthly_open_minute: number;
+  next_monthly_open_at: string | null;
   reservation_opens_at: string | null;
   monthly_clear_minutes_before: number;
   auto_monthly_clear_enabled: boolean;
