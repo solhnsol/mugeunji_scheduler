@@ -168,6 +168,24 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
+  async reopenSettlement(token: string, period: string) {
+    const res = await fetch('/admin/settlement/reopen', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ period }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async setAccessPeriod(token: string, period: string) {
+    const res = await fetch('/admin/settings/access-period', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ period }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
   async closeSettlement(token: string, period?: string) {
     const res = await fetch('/admin/settlement/close', {
       method: 'POST',
@@ -182,6 +200,18 @@ export const api = {
       method: 'POST',
       headers: authHeaders(token),
       body: JSON.stringify({ billing_id: billingId }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async undoConfirmPayment(
+    token: string,
+    body: { billing_id?: number; period?: string },
+  ) {
+    const res = await fetch('/admin/billing/unconfirm', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
     });
     return parseResponse<{ message: string }>(res);
   },

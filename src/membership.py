@@ -87,6 +87,17 @@ class MembershipManager:
             (period,),
         )
 
+    async def admin_set_access_period(self, period: str) -> Tuple[bool, str]:
+        if not period or len(period) != 7 or period[4] != "-":
+            return False, "이용 기간 형식이 올바르지 않습니다. (YYYY-MM)"
+        try:
+            await self.set_access_period(period)
+            await self.conn.commit()
+            return True, f"현재 이용 기간이 {period}로 설정되었습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"설정 실패: {str(e)}"
+
     async def get_open_settlement(self) -> Optional[Dict]:
         async with self.conn.execute(
             "SELECT * FROM settlement_periods WHERE status = 'open' ORDER BY period DESC LIMIT 1"
@@ -476,6 +487,30 @@ class MembershipManager:
             await self.conn.rollback()
             return False, f"정산 마감 실패: {str(e)}"
 
+    async def reopen_settlement(self, period: str) -> Tuple[bool, str]:
+        existing_open = await self.get_open_settlement()
+        if existing_open:
+            return False, f"이미 {existing_open['period']} 정산이 열려 있습니다."
+
+        try:
+            await self.conn.execute(
+                """
+                UPDATE settlement_periods
+                SET status = 'open', closed_at = NULL
+                WHERE period = ? AND status = 'closed'
+                """,
+                (period,),
+            )
+            if self.conn.total_changes == 0:
+                await self.conn.rollback()
+                return False, "마감된 정산 기간을 찾을 수 없습니다."
+            await self.set_access_period(period)
+            await self.conn.commit()
+            return True, f"{period} 정산이 다시 열렸습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"정산 다시 열기 실패: {str(e)}"
+
     async def confirm_payment(self, billing_id: int, admin_username: str) -> Tuple[bool, str]:
         try:
             async with self.conn.execute(
@@ -528,6 +563,88 @@ class MembershipManager:
         except Exception as e:
             await self.conn.rollback()
             return False, f"입금 확인 실패: {str(e)}"
+
+    async def undo_confirm_payment(self, billing_id: int) -> Tuple[bool, str]:
+        try:
+            async with self.conn.execute(
+                "SELECT * FROM billing_cycles WHERE id = ?", (billing_id,)
+            ) as cursor:
+                billing = await cursor.fetchone()
+            if not billing:
+                return False, "청구 내역을 찾을 수 없습니다."
+            if billing["status"] != "paid":
+                return False, "입금 확인된 내역이 아닙니다."
+
+            username = billing["username"]
+            period = billing["period"]
+            prev_period = self._previous_period(period)
+            now = datetime.now(KST).isoformat()
+
+            async with self.conn.execute(
+                """
+                SELECT id FROM plan_change_requests
+                WHERE username = ? AND effective_period = ? AND status = 'applied'
+                """,
+                (username, period),
+            ) as cursor:
+                change = await cursor.fetchone()
+            if change:
+                await self.conn.execute(
+                    "UPDATE plan_change_requests SET status = 'pending' WHERE id = ?",
+                    (change["id"],),
+                )
+                prev_billing = await self.get_billing_cycle(username, prev_period)
+                if prev_billing:
+                    await self.conn.execute(
+                        "UPDATE subscriptions SET plan_id = ?, updated_at = ? WHERE username = ?",
+                        (prev_billing["plan_id"], now, username),
+                    )
+
+            await self.conn.execute(
+                """
+                UPDATE billing_cycles
+                SET status = 'pending', paid_at = NULL, confirmed_by = NULL
+                WHERE id = ?
+                """,
+                (billing_id,),
+            )
+
+            access_period = await self.get_access_period()
+            if access_period == period:
+                await self.conn.execute(
+                    """
+                    UPDATE subscriptions SET status = 'pending_payment', updated_at = ?
+                    WHERE username = ?
+                    """,
+                    (now, username),
+                )
+
+            await self.sync_user_entitlements(username)
+            await self.conn.commit()
+            return True, f"{username}님의 {period} 입금 확인이 취소되었습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"입금 확인 취소 실패: {str(e)}"
+
+    async def undo_all_confirmations_for_period(self, period: str) -> Tuple[bool, str]:
+        paid = await self.list_billing_cycles(period=period, status="paid")
+        if not paid:
+            return False, "취소할 입금 확인 내역이 없습니다."
+
+        undone = 0
+        errors: List[str] = []
+        for row in paid:
+            ok, msg = await self.undo_confirm_payment(row["id"])
+            if ok:
+                undone += 1
+            else:
+                errors.append(msg)
+
+        if undone == 0:
+            return False, errors[0] if errors else "취소에 실패했습니다."
+        if errors:
+            return True, f"{undone}건 취소됨 ({len(errors)}건 실패)"
+        return True, f"{period} 입금 확인 {undone}건이 모두 취소되었습니다."
 
     async def list_billing_cycles(self, period: Optional[str] = None, status: Optional[str] = None) -> List[Dict]:
         query = """

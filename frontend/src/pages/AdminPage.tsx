@@ -94,16 +94,17 @@ function AdminDashboard({
   const [targetUser, setTargetUser] = useState('');
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (periodOverride?: string) => {
+    const period = periodOverride ?? (periodInput.trim() || undefined);
     const [s, p, u] = await Promise.all([
-      api.getSettlement(token),
+      api.getSettlement(token, period),
       api.getPlans(),
       api.getUsers(token),
     ]);
     setSettlement(s);
     setPlans(p);
     setUsers(u);
-    if (!periodInput) setPeriodInput(s.suggested_next_period);
+    if (!periodInput && s.period) setPeriodInput(s.period);
   }, [token, periodInput]);
 
   useEffect(() => {
@@ -168,6 +169,13 @@ function AdminDashboard({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
+                className="btn-secondary !w-auto !px-5"
+                onClick={() => load(periodInput.trim() || undefined)}
+              >
+                조회
+              </button>
+              <button
+                type="button"
                 className="btn-primary !w-auto !px-5"
                 onClick={async () => {
                   try {
@@ -197,6 +205,25 @@ function AdminDashboard({
               >
                 마감
               </button>
+              {settlement.settlement?.status === 'closed' && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={async () => {
+                    const period = periodInput.trim() || settlement.period;
+                    if (!confirm(`${period} 정산을 다시 여시겠습니까?`)) return;
+                    try {
+                      const res = await api.reopenSettlement(token, period);
+                      show(res.message, 'success');
+                      await load(period);
+                    } catch (e) {
+                      show(e instanceof ApiError ? e.message : '실패', 'error');
+                    }
+                  }}
+                >
+                  다시 열기
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-ghost"
@@ -215,12 +242,62 @@ function AdminDashboard({
             </div>
             <p className="mt-4 text-xs text-ink-faint">
               {settlement.period} · 미입금 {settlement.summary.pending ?? 0} · 완료 {settlement.summary.paid ?? 0}
-              {settlement.open_settlement ? ` · 열림` : ''}
+              {settlement.open_settlement ? ` · 열림` : settlement.settlement?.status === 'closed' ? ' · 마감' : ''}
             </p>
+            {settlement.current_access_period && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-ink-muted">
+                  현재 이용 기간: <strong className="text-ink">{settlement.current_access_period}</strong>
+                </span>
+                <button
+                  type="button"
+                  className="text-sage font-medium hover:underline"
+                  onClick={async () => {
+                    const next = prompt('이용 기간 (YYYY-MM)', settlement.current_access_period);
+                    if (!next?.trim()) return;
+                    try {
+                      const res = await api.setAccessPeriod(token, next.trim());
+                      show(res.message, 'success');
+                      await load(periodInput.trim() || undefined);
+                    } catch (e) {
+                      show(e instanceof ApiError ? e.message : '설정 실패', 'error');
+                    }
+                  }}
+                >
+                  변경
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="card p-5 overflow-x-auto">
-            <h2 className="font-semibold text-ink mb-4">입금</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h2 className="font-semibold text-ink">입금</h2>
+              {(settlement.summary.paid ?? 0) > 0 && (
+                <button
+                  type="button"
+                  className="text-xs border border-[#e8c4c4] text-[#8b4040] rounded-full px-3 py-1.5 min-h-[32px] hover:bg-[#fdf5f5]"
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        `${settlement.period} 입금 확인 ${settlement.summary.paid}건을 모두 취소하시겠습니까?\n해당 월 이용 권한이 회수됩니다.`,
+                      )
+                    ) {
+                      return;
+                    }
+                    try {
+                      const res = await api.undoConfirmPayment(token, { period: settlement.period });
+                      show(res.message, 'success');
+                      await load();
+                    } catch (e) {
+                      show(e instanceof ApiError ? e.message : '취소 실패', 'error');
+                    }
+                  }}
+                >
+                  전체 입금 확인 취소
+                </button>
+              )}
+            </div>
             {settlement.items.length === 0 ? (
               <p className="text-ink-faint text-sm">내역 없음</p>
             ) : (
@@ -247,7 +324,7 @@ function AdminDashboard({
                         {item.status === 'paid' ? '완료' : '대기'}
                       </td>
                       <td>
-                        {item.status !== 'paid' && (
+                        {item.status !== 'paid' ? (
                           <button
                             type="button"
                             className="text-xs bg-sage text-white rounded-full px-3 py-1.5 min-h-[32px]"
@@ -263,6 +340,23 @@ function AdminDashboard({
                             }}
                           >
                             확인
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-xs border border-line text-ink-muted rounded-full px-3 py-1.5 min-h-[32px] hover:bg-cream-dark/60"
+                            onClick={async () => {
+                              if (!confirm(`${item.name || item.username}님 입금 확인을 취소하시겠습니까?`)) return;
+                              try {
+                                const res = await api.undoConfirmPayment(token, { billing_id: item.id });
+                                show(res.message, 'success');
+                                await load();
+                              } catch (e) {
+                                show(e instanceof ApiError ? e.message : '취소 실패', 'error');
+                              }
+                            }}
+                          >
+                            취소
                           </button>
                         )}
                       </td>

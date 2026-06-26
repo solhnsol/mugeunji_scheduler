@@ -122,6 +122,15 @@ class ConfirmPaymentRequest(BaseModel):
     billing_id: int
 
 
+class UnconfirmPaymentRequest(BaseModel):
+    billing_id: Optional[int] = None
+    period: Optional[str] = None
+
+
+class SetAccessPeriodRequest(BaseModel):
+    period: str = Field(..., min_length=7, max_length=7)
+
+
 class UpdateUserMembershipRequest(BaseModel):
     allowed_hours: Optional[int] = Field(None, ge=4, le=8)
     free_access: Optional[bool] = None
@@ -547,6 +556,55 @@ async def confirm_billing_payment(
 ):
     membership = MembershipManager(conn)
     is_success, message = await membership.confirm_payment(data.billing_id, admin_user["username"])
+    if is_success:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/settlement/reopen")
+async def reopen_settlement(
+    data: OpenSettlementRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    if not data.period:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="period를 지정해주세요.")
+    membership = MembershipManager(conn)
+    is_success, message = await membership.reopen_settlement(data.period)
+    if is_success:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/billing/unconfirm")
+async def unconfirm_billing_payment(
+    data: UnconfirmPaymentRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    membership = MembershipManager(conn)
+    if data.billing_id is not None:
+        is_success, message = await membership.undo_confirm_payment(data.billing_id)
+    elif data.period:
+        is_success, message = await membership.undo_all_confirmations_for_period(data.period)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="billing_id 또는 period를 지정해주세요.",
+        )
+    if is_success:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.put("/admin/settings/access-period")
+async def set_access_period_setting(
+    data: SetAccessPeriodRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    membership = MembershipManager(conn)
+    is_success, message = await membership.admin_set_access_period(data.period)
     if is_success:
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
