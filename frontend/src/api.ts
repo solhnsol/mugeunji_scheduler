@@ -25,7 +25,6 @@ export const api = {
   async register(body: {
     username: string;
     password: string;
-    email: string;
     name: string;
     phone: string;
   }) {
@@ -63,6 +62,15 @@ export const api = {
   async getMe(token: string) {
     const res = await fetch('/me', { headers: authHeaders(token) });
     return parseResponse<import('./types').MeResponse>(res);
+  },
+
+  async updateProfile(token: string, body: Record<string, string>) {
+    const res = await fetch('/me/profile', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
   },
 
   async getPlans() {

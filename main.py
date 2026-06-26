@@ -99,9 +99,15 @@ class LoginInfo(BaseModel):
 class RegisterInfo(BaseModel):
     username: str = Field(..., min_length=2)
     password: str = Field(..., min_length=4)
-    email: str = Field(..., min_length=5)
     name: str = Field(..., min_length=2)
     phone: str = Field(..., min_length=9)
+
+
+class UpdateProfileRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=2)
+    phone: Optional[str] = Field(None, min_length=9)
+    current_password: Optional[str] = None
+    new_password: Optional[str] = Field(None, min_length=4)
 
 
 class PlanApplyRequest(BaseModel):
@@ -225,7 +231,7 @@ async def broadcast_reservation_updates(conn: aiosqlite.Connection):
 async def register_user(data: RegisterInfo, conn: aiosqlite.Connection = Depends(get_db_conn)):
     auth_manager = AuthManager(conn)
     is_success, message = await auth_manager.register(
-        data.username, data.password, data.email, data.name, data.phone
+        data.username, data.password, data.name, data.phone
     )
     if is_success:
         return {"status": "success", "message": message}
@@ -245,15 +251,40 @@ async def get_me(current_user: dict = Depends(get_current_user), conn: aiosqlite
     user = await membership.get_user_row(current_user["username"])
     role = current_user["role"]
     can_free = role in ("free", "admin") and (role == "admin" or access.get("can_access_schedule", False))
+    profile_complete = bool(
+        user
+        and user.get("name")
+        and user.get("phone")
+        and str(user.get("phone", "")).strip()
+    )
     return {
         "username": current_user["username"],
         "role": role,
-        "email": user.get("email") if user else None,
         "name": user.get("name") if user else None,
         "phone": user.get("phone") if user else None,
+        "profile_complete": profile_complete,
         "can_access_free_schedule": can_free,
         **access,
     }
+
+
+@app.put("/me/profile")
+async def update_my_profile(
+    data: UpdateProfileRequest,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    auth_manager = AuthManager(conn)
+    is_success, message = await auth_manager.update_profile(
+        current_user["username"],
+        name=data.name,
+        phone=data.phone,
+        current_password=data.current_password,
+        new_password=data.new_password,
+    )
+    if is_success:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
 @app.post("/plans/apply")

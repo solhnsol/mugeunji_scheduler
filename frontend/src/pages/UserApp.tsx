@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
 import { AppShell, PlanGrid, StatusDot, Toast } from '../components/ui';
 import { PlanManageModal } from '../components/PlanManageModal';
+import { ProfileModal } from '../components/ProfileModal';
 import { ReservationGrid } from '../components/ReservationGrid';
 import { MeResponse, Plan } from '../types';
 import { formatPrice } from '../utils';
@@ -28,6 +29,7 @@ export default function UserApp({
   const [plans, setPlans] = useState<Plan[]>([]);
   const [reservationOpen, setReservationOpen] = useState(true);
   const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const { toast, show } = useToast();
 
   const refresh = useCallback(async () => {
@@ -99,6 +101,9 @@ export default function UserApp({
 
   const headerActions = (
     <>
+      <button type="button" className="btn-ghost" onClick={() => setProfileOpen(true)}>
+        내 정보
+      </button>
       {hasSubscription && (
         <button type="button" className="btn-ghost" onClick={() => setPlanModalOpen(true)}>
           요금제
@@ -116,6 +121,27 @@ export default function UserApp({
     </span>
   ) : undefined;
 
+  const profileModal = profileOpen && (
+    <ProfileModal
+      me={me}
+      token={token}
+      onClose={() => setProfileOpen(false)}
+      onSaved={async () => {
+        show('저장되었습니다.', 'success');
+        await refresh();
+      }}
+      onError={(m) => show(m, 'error')}
+    />
+  );
+
+  const profileBanner = !me.profile_complete && (
+    <div className="card p-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50/80">
+      <p className="text-sm text-amber-900">전화번호 등 내 정보를 등록해주세요.</p>
+      <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm" onClick={() => setProfileOpen(true)}>
+        정보 입력
+      </button>
+    </div>
+  );
   const planModal = planModalOpen && me.subscription && (
     <PlanManageModal
       me={me}
@@ -130,9 +156,11 @@ export default function UserApp({
   if (me.access_status === 'no_plan') {
     return (
       <AppShell title={`${displayName}님`} actions={headerActions}>
+        {profileBanner}
         <p className="text-sm text-ink-muted mb-6">이용할 요금제를 선택하세요</p>
         <PlanGrid plans={plans} onSelect={handleApplyPlan} />
         {planModal}
+        {profileModal}
         <Toast message={toast.message} type={toast.type} />
       </AppShell>
     );
@@ -141,6 +169,7 @@ export default function UserApp({
   if (me.access_status === 'pending_payment' || !me.can_access_schedule) {
     return (
       <AppShell title={`${displayName}님`} badge={planBadge} actions={headerActions}>
+        {profileBanner}
         <div className="card p-8 max-w-sm mx-auto text-center space-y-5">
           <StatusDot label="입금 확인 중" variant="wait" />
           {me.billing && (
@@ -152,6 +181,7 @@ export default function UserApp({
           {!me.billing && <p className="text-sm text-ink-muted">{me.message}</p>}
         </div>
         {planModal}
+        {profileModal}
         <Toast message={toast.message} type={toast.type} />
       </AppShell>
     );
@@ -171,6 +201,7 @@ export default function UserApp({
       }
       actions={headerActions}
     >
+      {profileBanner}
       {me.pending_cancellation && (
         <p className="text-xs text-ink-faint mb-4 text-center">
           {me.pending_cancellation.effective_period}부터 중단 예정
@@ -190,6 +221,7 @@ export default function UserApp({
         }}
       />
       {planModal}
+      {profileModal}
       <Toast message={toast.message} type={toast.type} />
     </AppShell>
   );

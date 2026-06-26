@@ -30,6 +30,7 @@ export interface MeResponse {
   phone?: string;
   access_status: 'no_plan' | 'pending_payment' | 'active' | 'unknown';
   can_access_schedule: boolean;
+  profile_complete?: boolean;
   message: string;
   subscription?: Subscription | null;
   billing?: Billing | null;

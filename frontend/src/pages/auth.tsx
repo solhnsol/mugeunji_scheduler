@@ -70,7 +70,6 @@ export function RegisterPage() {
       const data = await api.register({
         username: String(fd.get('username')),
         password: String(fd.get('password')),
-        email: String(fd.get('email')),
         name: String(fd.get('name')),
         phone: phone.replace(/\D/g, ''),
       });
@@ -103,10 +102,6 @@ export function RegisterPage() {
         <div>
           <label className="label" htmlFor="username">아이디</label>
           <input className="input" id="username" name="username" required minLength={2} />
-        </div>
-        <div>
-          <label className="label" htmlFor="email">이메일</label>
-          <input className="input" id="email" name="email" type="email" required />
         </div>
         <div>
           <label className="label" htmlFor="password">비밀번호</label>

@@ -5,6 +5,7 @@ import bcrypt
 
 from src.membership import DEFAULT_PLANS
 from src.automation_config import AUTOMATION_SETTING_DEFAULTS
+from src.legacy_migration import run_legacy_migration
 
 async def init_db(db_path: str = "data/reservation.db"):
     load_dotenv()
@@ -171,4 +172,5 @@ async def setup_database(conn: aiosqlite.Connection):
                 (plan["name"], plan["allowed_hours"], plan["monthly_price"], plan["sort_order"]),
             )
 
+    await run_legacy_migration(conn)
     await conn.commit()

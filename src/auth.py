@@ -44,10 +44,9 @@ class AuthManager:
         return await self._validate_user(username, password)
 
     async def register(
-        self, username: str, password: str, email: str, name: str, phone: str
+        self, username: str, password: str, name: str, phone: str
     ) -> Tuple[bool, str]:
         username = username.strip()
-        email = email.strip().lower()
         name = name.strip()
         phone = re.sub(r"\D", "", phone.strip())
 
@@ -57,8 +56,6 @@ class AuthManager:
             return False, "이름은 2자 이상이어야 합니다."
         if len(password) < 4:
             return False, "비밀번호는 4자 이상이어야 합니다."
-        if "@" not in email or "." not in email:
-            return False, "올바른 이메일 형식이 아닙니다."
         if not PHONE_PATTERN.match(phone):
             return False, "올바른 휴대폰 번호 형식이 아닙니다. (예: 010-1234-5678)"
         if username == "admin":
@@ -67,10 +64,6 @@ class AuthManager:
         async with self.conn.execute("SELECT username FROM users WHERE username = ?", (username,)) as cursor:
             if await cursor.fetchone():
                 return False, "이미 사용 중인 아이디입니다."
-
-        async with self.conn.execute("SELECT username FROM users WHERE email = ?", (email,)) as cursor:
-            if await cursor.fetchone():
-                return False, "이미 등록된 이메일입니다."
 
         async with self.conn.execute("SELECT username FROM users WHERE phone = ?", (phone,)) as cursor:
             if await cursor.fetchone():
@@ -83,16 +76,90 @@ class AuthManager:
             now = datetime.now(KST).isoformat()
             await self.conn.execute(
                 """
-                INSERT INTO users (username, password, allowed_hours, role, email, name, phone, created_at)
-                VALUES (?, ?, 0, 'user', ?, ?, ?, ?)
+                INSERT INTO users (username, password, allowed_hours, role, name, phone, created_at)
+                VALUES (?, ?, 0, 'user', ?, ?, ?)
                 """,
-                (username, pw_hash_bytes.decode("utf-8"), email, name, phone, now),
+                (username, pw_hash_bytes.decode("utf-8"), name, phone, now),
             )
             await self.conn.commit()
             return True, "회원가입이 완료되었습니다."
         except Exception as e:
             await self.conn.rollback()
             return False, f"회원가입 실패: {str(e)}"
+
+    async def update_profile(
+        self,
+        username: str,
+        *,
+        name: Optional[str] = None,
+        phone: Optional[str] = None,
+        current_password: Optional[str] = None,
+        new_password: Optional[str] = None,
+    ) -> Tuple[bool, str]:
+        user = await self.get_user_row(username)
+        if not user:
+            return False, "사용자를 찾을 수 없습니다."
+
+        updates: List[str] = []
+        params: List[object] = []
+
+        if name is not None:
+            name = name.strip()
+            if len(name) < 2:
+                return False, "이름은 2자 이상이어야 합니다."
+            updates.append("name = ?")
+            params.append(name)
+
+        if phone is not None:
+            phone = re.sub(r"\D", "", phone.strip())
+            if not PHONE_PATTERN.match(phone):
+                return False, "올바른 휴대폰 번호 형식이 아닙니다."
+            async with self.conn.execute(
+                "SELECT username FROM users WHERE phone = ? AND username != ?",
+                (phone, username),
+            ) as cursor:
+                if await cursor.fetchone():
+                    return False, "이미 등록된 전화번호입니다."
+            updates.append("phone = ?")
+            params.append(phone)
+
+        if new_password is not None:
+            if not current_password:
+                return False, "현재 비밀번호를 입력해주세요."
+            if len(new_password) < 4:
+                return False, "새 비밀번호는 4자 이상이어야 합니다."
+            valid = await self._run_sync(
+                bcrypt.checkpw,
+                current_password.encode("utf-8"),
+                user["password"].encode("utf-8"),
+            )
+            if not valid:
+                return False, "현재 비밀번호가 올바르지 않습니다."
+            pw_hash = await self._run_sync(
+                bcrypt.hashpw, new_password.encode("utf-8"), bcrypt.gensalt()
+            )
+            updates.append("password = ?")
+            params.append(pw_hash.decode("utf-8"))
+
+        if not updates:
+            return False, "변경할 항목이 없습니다."
+
+        params.append(username)
+        try:
+            await self.conn.execute(
+                f"UPDATE users SET {', '.join(updates)} WHERE username = ?",
+                params,
+            )
+            await self.conn.commit()
+            return True, "정보가 저장되었습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"저장 실패: {str(e)}"
+
+    async def get_user_row(self, username: str) -> Optional[Dict]:
+        async with self.conn.execute("SELECT * FROM users WHERE username = ?", (username,)) as cursor:
+            row = await cursor.fetchone()
+        return dict(row) if row else None
 
     async def get_all_users(self) -> List[Dict]:
         async with self.conn.execute(
