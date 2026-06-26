@@ -161,12 +161,13 @@ function AdminDashboard({
         </>
       }
     >
-      <div className="flex gap-1.5 mb-6 p-1 bg-cream-dark/50 rounded-full">
+      <div className="mb-4 -mx-4 px-4 overflow-x-auto">
+        <div className="flex gap-1 p-1 bg-cream-dark/50 rounded-full min-w-max">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
-            className={`flex-1 rounded-full py-2.5 text-sm font-medium transition-colors min-h-[44px] ${
+            className={`flex-none rounded-full py-2.5 px-4 text-sm font-medium transition-colors min-h-[44px] whitespace-nowrap ${
               tab === t.id ? 'bg-sage text-white shadow-sm' : 'text-ink-muted hover:text-ink'
             }`}
             onClick={() => setTab(t.id)}
@@ -174,6 +175,7 @@ function AdminDashboard({
             {t.label}
           </button>
         ))}
+        </div>
       </div>
 
       {tab === 'settlement' && settlement && (

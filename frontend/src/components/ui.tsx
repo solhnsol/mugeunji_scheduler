@@ -1,8 +1,8 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 function scheduleTabClass(active: boolean) {
-  return `inline-flex items-center rounded-full px-3 py-2 min-h-[40px] text-sm font-medium transition-colors ${
+  return `inline-flex items-center justify-center rounded-full px-2.5 sm:px-3 py-1.5 min-h-[36px] sm:min-h-[40px] text-xs sm:text-sm font-medium transition-colors flex-1 sm:flex-none ${
     active
       ? 'bg-sage text-white shadow-sm'
       : 'text-ink-muted hover:text-ink hover:bg-cream-dark/60'
@@ -17,7 +17,10 @@ export function ScheduleModeNav({
   showFree?: boolean;
 }) {
   return (
-    <nav className="flex items-center gap-1 p-1 rounded-full bg-cream-dark/50" aria-label="예약 메뉴">
+    <nav
+      className="flex items-center gap-1 p-1 rounded-full bg-cream-dark/50 w-full sm:w-auto"
+      aria-label="예약 메뉴"
+    >
       {mode === 'monthly' ? (
         <span className={scheduleTabClass(true)}>월신청</span>
       ) : (
@@ -37,31 +40,110 @@ export function ScheduleModeNav({
   );
 }
 
+export type HeaderMenuItem = {
+  id: string;
+  label: string;
+  onClick: () => void;
+  hidden?: boolean;
+};
+
+export function HeaderActions({ items }: { items: HeaderMenuItem[] }) {
+  const visible = items.filter((item) => !item.hidden);
+  const [open, setOpen] = useState(false);
+
+  if (visible.length === 0) return null;
+
+  const run = (item: HeaderMenuItem) => {
+    item.onClick();
+    setOpen(false);
+  };
+
+  return (
+    <>
+      <div className="hidden sm:flex items-center gap-0.5">
+        {visible.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className="btn-ghost !min-h-[40px] !py-1.5 !px-2.5"
+            onClick={() => run(item)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className="relative sm:hidden">
+        <button
+          type="button"
+          className="btn-ghost !min-h-[40px] !w-10 !px-0"
+          aria-expanded={open}
+          aria-label="메뉴"
+          onClick={() => setOpen((value) => !value)}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+            <circle cx="10" cy="4" r="1.5" />
+            <circle cx="10" cy="10" r="1.5" />
+            <circle cx="10" cy="16" r="1.5" />
+          </svg>
+        </button>
+        {open && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-30"
+              aria-label="메뉴 닫기"
+              onClick={() => setOpen(false)}
+            />
+            <div className="absolute right-0 top-[calc(100%+4px)] z-40 min-w-[9.5rem] rounded-2xl border border-line bg-white py-1 shadow-lg">
+              {visible.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="block w-full text-left px-4 py-3 text-sm text-ink hover:bg-cream-dark/60"
+                  onClick={() => run(item)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function AppShell({
   title,
   badge,
+  nav,
   children,
   actions,
 }: {
   title: string;
   badge?: ReactNode;
+  nav?: ReactNode;
   children: ReactNode;
   actions?: ReactNode;
 }) {
   return (
     <div className="min-h-dvh flex flex-col">
       <header className="sticky top-0 z-20 bg-cream/90 backdrop-blur-md border-b border-line/60">
-        <div className="mx-auto max-w-3xl px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="shrink-0 w-9 h-9 rounded-full bg-sage flex items-center justify-center text-white text-sm font-bold">
-              묵
+        <div className="mx-auto max-w-3xl px-4 pt-3 pb-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-sage flex items-center justify-center text-white text-sm font-bold">
+                묵
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base font-semibold text-ink truncate leading-tight">{title}</h1>
+                {badge && <div className="mt-1 hidden sm:block">{badge}</div>}
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="text-base font-semibold text-ink truncate leading-tight">{title}</h1>
-              {badge && <div className="mt-1">{badge}</div>}
-            </div>
+            {actions && <div className="shrink-0 flex items-center">{actions}</div>}
           </div>
-          {actions && <div className="flex items-center gap-1.5 shrink-0">{actions}</div>}
+          {nav}
+          {badge && <div className="sm:hidden">{badge}</div>}
         </div>
       </header>
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-5 pb-8">{children}</main>

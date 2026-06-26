@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { AppShell, ScheduleModeNav, StatusDot, Toast } from '../components/ui';
+import { AppShell, HeaderActions, ScheduleModeNav, StatusDot, Toast } from '../components/ui';
 import { FreeReservationGrid } from '../components/FreeReservationGrid';
 import { WeeklyUsage } from '../components/WeeklyUsage';
 import { MeResponse, Reservation } from '../types';
@@ -41,6 +41,7 @@ export default function FreeApp({
   const [windowLabel, setWindowLabel] = useState('');
   const [usageRefreshKey, setUsageRefreshKey] = useState(0);
   const { toast, show } = useToast();
+  const navigate = useNavigate();
 
   const load = useCallback(async () => {
     const [meData, schedule] = await Promise.all([
@@ -89,6 +90,20 @@ export default function FreeApp({
   }
 
   const displayName = me.name || me.username;
+  const isAdmin = isAdminSession || me.role === 'admin';
+  const headerMenuItems = [
+    {
+      id: 'admin',
+      label: '관리자',
+      onClick: () => navigate('/admin'),
+      hidden: !isAdmin,
+    },
+    {
+      id: 'logout',
+      label: isAdminSession ? '관리자 나가기' : '로그아웃',
+      onClick: onLogout,
+    },
+  ];
 
   return (
     <AppShell
@@ -99,17 +114,8 @@ export default function FreeApp({
           <StatusDot label={bookingOpen ? '신청 가능' : '대기'} variant={bookingOpen ? 'open' : 'wait'} />
         </div>
       }
-      actions={
-        <>
-          {(isAdminSession || me.role === 'admin') && (
-            <Link to="/admin" className="btn-ghost">관리자</Link>
-          )}
-          <ScheduleModeNav mode="free" />
-          <button type="button" className="btn-ghost" onClick={onLogout}>
-            {isAdminSession ? '관리자 나가기' : '로그아웃'}
-          </button>
-        </>
-      }
+      nav={<ScheduleModeNav mode="free" />}
+      actions={<HeaderActions items={headerMenuItems} />}
     >
       {windowLabel && (
         <p className="text-xs text-ink-faint text-center mb-4">예약 창 · {windowLabel}</p>

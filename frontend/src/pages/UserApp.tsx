@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
-import { AppShell, PlanGrid, ScheduleModeNav, StatusDot, Toast } from '../components/ui';
+import { AppShell, HeaderActions, PlanGrid, ScheduleModeNav, StatusDot, Toast } from '../components/ui';
 import { PlanManageModal } from '../components/PlanManageModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { ReservationGrid } from '../components/ReservationGrid';
@@ -99,26 +99,20 @@ export default function UserApp({
   const displayName = me.name || me.username;
   const hasSubscription = me.access_status !== 'no_plan' && me.subscription;
 
-  const headerActions = (
-    <>
-      {me.can_access_free_schedule ? (
-        <ScheduleModeNav mode="monthly" />
-      ) : (
-        <span className="text-sm font-medium text-ink-muted px-2">월신청</span>
-      )}
-      <button type="button" className="btn-ghost" onClick={() => setProfileOpen(true)}>
-        내 정보
-      </button>
-      {hasSubscription && (
-        <button type="button" className="btn-ghost" onClick={() => setPlanModalOpen(true)}>
-          요금제
-        </button>
-      )}
-      <button type="button" className="btn-ghost" onClick={onLogout}>
-        로그아웃
-      </button>
-    </>
-  );
+  const headerMenuItems = [
+    { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true) },
+    {
+      id: 'plan',
+      label: '요금제',
+      onClick: () => setPlanModalOpen(true),
+      hidden: !hasSubscription,
+    },
+    { id: 'logout', label: '로그아웃', onClick: onLogout },
+  ];
+
+  const headerNav = me.can_access_free_schedule ? (
+    <ScheduleModeNav mode="monthly" />
+  ) : undefined;
 
   const planBadge = me.subscription ? (
     <span className="text-xs text-ink-muted">
@@ -172,7 +166,11 @@ export default function UserApp({
 
   if (me.access_status === 'no_plan') {
     return (
-      <AppShell title={`${displayName}님`} actions={headerActions}>
+      <AppShell
+        title={`${displayName}님`}
+        nav={headerNav}
+        actions={<HeaderActions items={headerMenuItems} />}
+      >
         {profileBanner}
         <p className="text-sm text-ink-muted mb-6">이용할 요금제를 선택하세요</p>
         <PlanGrid plans={plans} onSelect={handleApplyPlan} />
@@ -185,7 +183,12 @@ export default function UserApp({
 
   if (me.access_status === 'pending_payment' || !me.can_access_schedule) {
     return (
-      <AppShell title={`${displayName}님`} badge={planBadge} actions={headerActions}>
+      <AppShell
+        title={`${displayName}님`}
+        badge={planBadge}
+        nav={headerNav}
+        actions={<HeaderActions items={headerMenuItems} />}
+      >
         {profileBanner}
         <div className="card p-8 max-w-sm mx-auto text-center space-y-5">
           <StatusDot label="입금 확인 중" variant="wait" />
@@ -216,7 +219,8 @@ export default function UserApp({
           />
         </div>
       }
-      actions={headerActions}
+      nav={headerNav}
+      actions={<HeaderActions items={headerMenuItems} />}
     >
       {profileBanner}
       {me.pending_cancellation && (
