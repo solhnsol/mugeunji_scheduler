@@ -13,7 +13,7 @@ export function ProfileModal({
   me: MeResponse;
   token: string;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (updated?: { name?: string; phone?: string; profile_complete?: boolean }) => void;
   onError: (msg: string) => void;
 }) {
   const [name, setName] = useState(me.name || me.username);
@@ -27,9 +27,22 @@ export function ProfileModal({
     setSaving(true);
     try {
       const body: Record<string, string> = {};
-      if (name.trim() !== (me.name || me.username)) body.name = name.trim();
+      const nameTrimmed = name.trim();
+      const storedName = (me.name || '').trim();
+      if (!storedName || nameTrimmed !== storedName) {
+        body.name = nameTrimmed;
+      }
+
       const phoneDigits = phone.replace(/\D/g, '');
-      if (phoneDigits !== (me.phone || '').replace(/\D/g, '')) body.phone = phoneDigits;
+      const storedPhone = (me.phone || '').replace(/\D/g, '');
+      if (!me.profile_complete && !phoneDigits) {
+        onError('전화번호를 입력해주세요.');
+        return;
+      }
+      if (!storedPhone || phoneDigits !== storedPhone) {
+        body.phone = phoneDigits;
+      }
+
       if (newPassword) {
         body.current_password = currentPassword;
         body.new_password = newPassword;
@@ -38,9 +51,9 @@ export function ProfileModal({
         onError('변경할 항목이 없습니다.');
         return;
       }
-      await api.updateProfile(token, body);
+      const res = await api.updateProfile(token, body);
       onClose();
-      onSaved();
+      onSaved(res);
     } catch (err) {
       onError(err instanceof ApiError ? err.message : '저장 실패');
     } finally {

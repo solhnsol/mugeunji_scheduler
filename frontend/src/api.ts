@@ -70,7 +70,12 @@ export const api = {
       headers: authHeaders(token),
       body: JSON.stringify(body),
     });
-    return parseResponse<{ message: string }>(res);
+    return parseResponse<{
+      message: string;
+      name?: string;
+      phone?: string;
+      profile_complete?: boolean;
+    }>(res);
   },
 
   async getPlans() {

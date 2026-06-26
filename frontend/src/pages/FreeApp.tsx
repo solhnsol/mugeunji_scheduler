@@ -24,10 +24,12 @@ function formatWindow(start: string, end: string) {
 export default function FreeApp({
   token,
   username,
+  isAdminSession = false,
   onLogout,
 }: {
   token: string;
   username: string;
+  isAdminSession?: boolean;
   onLogout: () => void;
 }) {
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -70,7 +72,11 @@ export default function FreeApp({
       <AppShell title="자유이용" actions={<button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>}>
         <div className="card p-8 max-w-sm mx-auto text-center">
           <p className="text-sm text-ink-muted">{me.message || '자유이용 권한이 없습니다.'}</p>
-          <Link to="/" className="btn-secondary mt-4 inline-flex">월간 예약으로</Link>
+          {isAdminSession || me.role === 'admin' ? (
+            <Link to="/admin" className="btn-secondary mt-4 inline-flex">관리자로</Link>
+          ) : (
+            <Link to="/" className="btn-secondary mt-4 inline-flex">월간 예약으로</Link>
+          )}
         </div>
       </AppShell>
     );
@@ -89,8 +95,14 @@ export default function FreeApp({
       }
       actions={
         <>
-          <Link to="/" className="btn-ghost">월간</Link>
-          <button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>
+          {isAdminSession || me.role === 'admin' ? (
+            <Link to="/admin" className="btn-ghost">관리자</Link>
+          ) : (
+            <Link to="/" className="btn-ghost">월간</Link>
+          )}
+          <button type="button" className="btn-ghost" onClick={onLogout}>
+            {isAdminSession ? '관리자 나가기' : '로그아웃'}
+          </button>
         </>
       }
     >

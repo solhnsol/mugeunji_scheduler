@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 
-from src.auth import AuthManager
+from src.auth import AuthManager, is_profile_complete
 from src.automation_config import RESERVATION_FREE, RESERVATION_MONTHLY, ScheduleConfig
 from src.database import init_db
 from src.membership import MembershipManager, period_from_offset
@@ -251,12 +251,7 @@ async def get_me(current_user: dict = Depends(get_current_user), conn: aiosqlite
     user = await membership.get_user_row(current_user["username"])
     role = current_user["role"]
     can_free = role in ("free", "admin") and (role == "admin" or access.get("can_access_schedule", False))
-    profile_complete = bool(
-        user
-        and user.get("name")
-        and user.get("phone")
-        and str(user.get("phone", "")).strip()
-    )
+    profile_complete = is_profile_complete(user)
     return {
         "username": current_user["username"],
         "role": role,
@@ -283,7 +278,14 @@ async def update_my_profile(
         new_password=data.new_password,
     )
     if is_success:
-        return {"status": "success", "message": message}
+        user = await auth_manager.get_user_row(current_user["username"])
+        return {
+            "status": "success",
+            "message": message,
+            "name": user.get("name") if user else None,
+            "phone": user.get("phone") if user else None,
+            "profile_complete": is_profile_complete(user),
+        }
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
@@ -446,7 +448,7 @@ async def get_all_users_by_admin(
             "username": user["username"],
             "allowed_hours": hours,
             "role": user["role"],
-            "free_access": user["role"] == "free",
+            "free_access": user["role"] in ("free", "admin"),
             "email": user.get("email"),
             "name": user.get("name"),
             "phone": user.get("phone"),

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, PlanGrid, StatusDot, Toast } from '../components/ui';
 import { PlanManageModal } from '../components/PlanManageModal';
@@ -101,6 +102,9 @@ export default function UserApp({
 
   const headerActions = (
     <>
+      {me.can_access_free_schedule && (
+        <Link to="/free" className="btn-ghost">자유이용</Link>
+      )}
       <button type="button" className="btn-ghost" onClick={() => setProfileOpen(true)}>
         내 정보
       </button>
@@ -126,8 +130,20 @@ export default function UserApp({
       me={me}
       token={token}
       onClose={() => setProfileOpen(false)}
-      onSaved={async () => {
+      onSaved={async (updated) => {
         show('저장되었습니다.', 'success');
+        if (updated?.profile_complete !== undefined) {
+          setMe((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  name: updated.name ?? prev.name,
+                  phone: updated.phone ?? prev.phone,
+                  profile_complete: updated.profile_complete,
+                }
+              : prev,
+          );
+        }
         await refresh();
       }}
       onError={(m) => show(m, 'error')}

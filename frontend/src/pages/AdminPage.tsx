@@ -124,7 +124,12 @@ function AdminDashboard({
     <AppShell
       title="관리자"
       badge={<span className="text-xs text-ink-muted">{adminUser}</span>}
-      actions={<button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>}
+      actions={
+        <>
+          <Link to="/free" className="btn-ghost">자유이용</Link>
+          <button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>
+        </>
+      }
     >
       <div className="flex gap-1.5 mb-6 p-1 bg-cream-dark/50 rounded-full">
         {TABS.map((t) => (
@@ -349,7 +354,7 @@ function AdminDashboard({
                   <td className="text-ink-muted">{u.phone || '-'}</td>
                   <td className="text-ink-muted">{u.username}</td>
                   <td>{u.allowed_hours ? `${u.allowed_hours}h` : '-'}</td>
-                  <td>{u.free_access || u.role === 'free' ? '○' : '-'}</td>
+                  <td>{u.free_access || u.role === 'free' || u.role === 'admin' ? '○' : '-'}</td>
                   <td>
                     <button type="button" className="text-sage text-xs font-medium min-h-[32px] px-2" onClick={() => setEditUser(u)}>
                       수정

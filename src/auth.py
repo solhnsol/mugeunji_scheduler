@@ -16,6 +16,18 @@ KST = timezone(timedelta(hours=9))
 PHONE_PATTERN = re.compile(r"^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$")
 
 
+def normalize_phone(phone: str) -> str:
+    return re.sub(r"\D", "", phone.strip())
+
+
+def is_profile_complete(user: Optional[Dict]) -> bool:
+    if not user:
+        return False
+    name = (user.get("name") or "").strip() or (user.get("username") or "").strip()
+    phone = normalize_phone(user.get("phone") or "")
+    return len(name) >= 2 and len(phone) >= 10 and phone.startswith("01")
+
+
 class AuthManager:
     def __init__(self, conn: aiosqlite.Connection):
         self.conn = conn
@@ -48,7 +60,7 @@ class AuthManager:
     ) -> Tuple[bool, str]:
         username = username.strip()
         name = name.strip()
-        phone = re.sub(r"\D", "", phone.strip())
+        phone = normalize_phone(phone)
 
         if len(username) < 2:
             return False, "아이디는 2자 이상이어야 합니다."
@@ -111,7 +123,7 @@ class AuthManager:
             params.append(name)
 
         if phone is not None:
-            phone = re.sub(r"\D", "", phone.strip())
+            phone = normalize_phone(phone)
             if not PHONE_PATTERN.match(phone):
                 return False, "올바른 휴대폰 번호 형식이 아닙니다."
             async with self.conn.execute(
