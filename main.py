@@ -1,7 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 import aiosqlite
 from dotenv import load_dotenv
@@ -175,6 +175,7 @@ class ReservationList(BaseModel):
 class ForceReservationRequest(BaseModel):
     target_username: str
     reservations: List[ReservationItem]
+    reservation_type: Literal["monthly", "free"] = "monthly"
 
 
 class UserInfoResponse(BaseModel):
@@ -722,7 +723,9 @@ async def admin_force_reserve(
     reserve_manager = ReservationManager(conn)
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     is_success, message = await reserve_manager.force_create_reservation(
-        data.target_username, reserve_times_list
+        data.target_username,
+        reserve_times_list,
+        reservation_type=data.reservation_type,
     )
     if is_success:
         await broadcast_reservation_updates(conn)
@@ -752,6 +755,37 @@ async def admin_clear_reservations(
 ):
     reserve_manager = ReservationManager(conn)
     is_success, message = await reserve_manager.clear_reservations()
+    if is_success:
+        await broadcast_reservation_updates(conn)
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.get("/admin/free/schedule")
+async def admin_get_free_schedule(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    reserve_manager = ReservationManager(conn)
+    free = await reserve_manager.get_reservations(RESERVATION_FREE)
+    monthly = await reserve_manager.get_reservations(RESERVATION_MONTHLY)
+    meta = await reserve_manager.get_free_schedule_meta()
+    usage = await reserve_manager.get_weekly_usage(RESERVATION_FREE)
+    return {
+        "free_reservations": free,
+        "monthly_reservations": monthly,
+        "weekly_usage": usage,
+        **meta,
+    }
+
+
+@app.get("/admin/reservations/clear-free")
+async def admin_clear_free_reservations(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    reserve_manager = ReservationManager(conn)
+    is_success, message = await reserve_manager.clear_free_reservations()
     if is_success:
         await broadcast_reservation_updates(conn)
         return {"status": "success", "message": message}

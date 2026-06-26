@@ -298,6 +298,18 @@ class ReservationManager:
             await self.conn.rollback()
             return False, f"실패: {str(e)}"
 
+    async def clear_free_reservations(self) -> Tuple[bool, str]:
+        try:
+            await self.conn.execute(
+                "DELETE FROM reservations WHERE reservation_type = ? AND username NOT IN ('신청불가')",
+                (RESERVATION_FREE,),
+            )
+            await self.conn.commit()
+            return True, "자유이용 예약이 초기화되었습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"실패: {str(e)}"
+
     async def clear_reservations(self) -> Tuple[bool, str]:
         return await self.clear_monthly_reservations()
 

@@ -285,12 +285,31 @@ export const api = {
     token: string,
     targetUsername: string,
     reservations: { day: string; time_index: number }[],
+    reservationType: 'monthly' | 'free' = 'monthly',
   ) {
     const res = await fetch('/admin/reservations/create', {
       method: 'POST',
       headers: authHeaders(token),
-      body: JSON.stringify({ target_username: targetUsername, reservations }),
+      body: JSON.stringify({
+        target_username: targetUsername,
+        reservations,
+        reservation_type: reservationType,
+      }),
     });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async getAdminFreeSchedule(token: string) {
+    const res = await fetch('/admin/free/schedule', { headers: authHeaders(token) });
+    return parseResponse<import('./types').FreeScheduleMeta & {
+      free_reservations: import('./types').Reservation[];
+      monthly_reservations: import('./types').Reservation[];
+      weekly_usage: import('./types').WeeklyUsage;
+    }>(res);
+  },
+
+  async adminClearFreeReservations(token: string) {
+    const res = await fetch('/admin/reservations/clear-free', { headers: authHeaders(token) });
     return parseResponse<{ message: string }>(res);
   },
 

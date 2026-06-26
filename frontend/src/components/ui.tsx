@@ -1,4 +1,41 @@
 import { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+
+function scheduleTabClass(active: boolean) {
+  return `inline-flex items-center rounded-full px-3 py-2 min-h-[40px] text-sm font-medium transition-colors ${
+    active
+      ? 'bg-sage text-white shadow-sm'
+      : 'text-ink-muted hover:text-ink hover:bg-cream-dark/60'
+  }`;
+}
+
+export function ScheduleModeNav({
+  mode,
+  showFree = true,
+}: {
+  mode: 'monthly' | 'free';
+  showFree?: boolean;
+}) {
+  return (
+    <nav className="flex items-center gap-1 p-1 rounded-full bg-cream-dark/50" aria-label="예약 메뉴">
+      {mode === 'monthly' ? (
+        <span className={scheduleTabClass(true)}>월신청</span>
+      ) : (
+        <Link to="/" className={scheduleTabClass(false)}>
+          월신청
+        </Link>
+      )}
+      {showFree &&
+        (mode === 'free' ? (
+          <span className={scheduleTabClass(true)}>자유이용</span>
+        ) : (
+          <Link to="/free" className={scheduleTabClass(false)}>
+            자유이용
+          </Link>
+        ))}
+    </nav>
+  );
+}
 
 export function AppShell({
   title,

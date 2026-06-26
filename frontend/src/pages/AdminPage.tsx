@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, Toast } from '../components/ui';
 import { AdminReservationGrid } from '../components/AdminReservationGrid';
+import { AdminFreeReservationGrid } from '../components/AdminFreeReservationGrid';
 import { AdminAutomationTab } from '../components/AdminAutomationTab';
-import { Plan, SettlementOverview, UserInfo, HOUR_OPTIONS } from '../types';
+import { WeeklyUsage } from '../components/WeeklyUsage';
+import { Plan, Reservation, SettlementOverview, UserInfo, HOUR_OPTIONS } from '../types';
 import { formatPrice } from '../utils';
 
 const ADMIN_TOKEN_KEY = 'adminAccessToken';
@@ -12,10 +14,18 @@ const ADMIN_USER_KEY = 'adminUsername';
 
 const TABS = [
   { id: 'settlement' as const, label: '정산' },
-  { id: 'schedule' as const, label: '시간표' },
+  { id: 'schedule' as const, label: '월신청' },
+  { id: 'free' as const, label: '자유이용' },
   { id: 'automation' as const, label: '자동화' },
   { id: 'users' as const, label: '회원' },
 ];
+
+function formatFreeWindow(start: string, end: string) {
+  const s = new Date(start);
+  const e = new Date(end);
+  const fmt = (d: Date) => `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}시`;
+  return `${fmt(s)} ~ ${fmt(e)}`;
+}
 
 export default function AdminPage() {
   const [token, setToken] = useState(sessionStorage.getItem(ADMIN_TOKEN_KEY));
@@ -86,12 +96,22 @@ function AdminDashboard({
   show: (m: string, t: 'success' | 'error') => void;
   toast: { message: string; type: 'success' | 'error' | '' };
 }) {
-  const [tab, setTab] = useState<'settlement' | 'schedule' | 'automation' | 'users'>('settlement');
+  const [tab, setTab] = useState<'settlement' | 'schedule' | 'free' | 'automation' | 'users'>('settlement');
   const [settlement, setSettlement] = useState<SettlementOverview | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [periodInput, setPeriodInput] = useState('');
   const [targetUser, setTargetUser] = useState('');
+  const [freeTargetUser, setFreeTargetUser] = useState('');
+  const [freeSchedule, setFreeSchedule] = useState<{
+    free_reservations: Reservation[];
+    monthly_reservations: Reservation[];
+    weekly_usage: import('../types').WeeklyUsage;
+    booking_open: boolean;
+    message: string;
+    window_start: string;
+    window_end: string;
+  } | null>(null);
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
 
   const load = useCallback(async (periodOverride?: string) => {
@@ -111,6 +131,16 @@ function AdminDashboard({
     load().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
   }, [load, show]);
 
+  const loadFreeSchedule = useCallback(async () => {
+    const data = await api.getAdminFreeSchedule(token);
+    setFreeSchedule(data);
+  }, [token]);
+
+  useEffect(() => {
+    if (tab !== 'free') return;
+    loadFreeSchedule().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
+  }, [tab, loadFreeSchedule, show]);
+
   const savePlanPrice = async (planId: number, price: number) => {
     try {
       const res = await api.updatePlanPrice(token, planId, price);
@@ -127,7 +157,6 @@ function AdminDashboard({
       badge={<span className="text-xs text-ink-muted">{adminUser}</span>}
       actions={
         <>
-          <Link to="/free" className="btn-ghost">자유이용</Link>
           <button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>
         </>
       }
@@ -417,6 +446,82 @@ function AdminDashboard({
               }
             }}
           />
+        </div>
+      )}
+
+      {tab === 'free' && (
+        <div className="space-y-4">
+          {freeSchedule && (
+            <div className="card p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+              <p className="text-ink-muted">
+                예약 창 · {formatFreeWindow(freeSchedule.window_start, freeSchedule.window_end)}
+              </p>
+              <span className={`badge ${freeSchedule.booking_open ? 'badge-open' : 'badge-wait'}`}>
+                {freeSchedule.booking_open ? '신청 가능' : freeSchedule.message || '대기'}
+              </span>
+            </div>
+          )}
+          {freeSchedule && <WeeklyUsage data={freeSchedule.weekly_usage} />}
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="label" htmlFor="free-target-username">강제 신청 대상</label>
+              <input
+                id="free-target-username"
+                className="input"
+                placeholder="아이디"
+                value={freeTargetUser}
+                onChange={(e) => setFreeTargetUser(e.target.value)}
+              />
+            </div>
+          </div>
+          {freeSchedule ? (
+            <AdminFreeReservationGrid
+              initialMonthly={freeSchedule.monthly_reservations}
+              initialFree={freeSchedule.free_reservations}
+              onForceReserve={async (slots) => {
+                if (!freeTargetUser.trim()) {
+                  show('대상 아이디를 입력하세요', 'error');
+                  return;
+                }
+                try {
+                  const res = await api.adminForceReserve(
+                    token,
+                    freeTargetUser.trim(),
+                    slots,
+                    'free',
+                  );
+                  show(res.message, 'success');
+                  await loadFreeSchedule();
+                } catch (e) {
+                  show(e instanceof ApiError ? e.message : '신청 실패', 'error');
+                  throw e;
+                }
+              }}
+              onDelete={async (slots) => {
+                if (!confirm(`${slots.length}칸 삭제?`)) return;
+                try {
+                  const res = await api.adminDeleteReservations(token, slots);
+                  show(res.message, 'success');
+                  await loadFreeSchedule();
+                } catch (e) {
+                  show(e instanceof ApiError ? e.message : '삭제 실패', 'error');
+                  throw e;
+                }
+              }}
+              onClearAll={async () => {
+                try {
+                  const res = await api.adminClearFreeReservations(token);
+                  show(res.message, 'success');
+                  await loadFreeSchedule();
+                } catch (e) {
+                  show(e instanceof ApiError ? e.message : '초기화 실패', 'error');
+                  throw e;
+                }
+              }}
+            />
+          ) : (
+            <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+          )}
         </div>
       )}
 

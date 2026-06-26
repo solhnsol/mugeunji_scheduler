@@ -21,17 +21,22 @@ function usageColor(hours: number, max: number) {
 export function WeeklyUsage({
   token,
   refreshKey = 0,
+  data: dataProp,
 }: {
-  token: string;
+  token?: string;
   refreshKey?: number;
+  data?: WeeklyUsageData | null;
 }) {
-  const [data, setData] = useState<WeeklyUsageData | null>(null);
+  const [fetched, setFetched] = useState<WeeklyUsageData | null>(null);
 
   useEffect(() => {
+    if (dataProp !== undefined || !token) return;
     api.getFreeWeeklyUsage(token)
-      .then(setData)
-      .catch(() => setData(null));
-  }, [token, refreshKey]);
+      .then(setFetched)
+      .catch(() => setFetched(null));
+  }, [token, refreshKey, dataProp]);
+
+  const data = dataProp !== undefined ? dataProp : fetched;
 
   if (!data?.items.length) return null;
 

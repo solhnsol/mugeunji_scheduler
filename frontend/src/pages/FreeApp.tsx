@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { AppShell, StatusDot, Toast } from '../components/ui';
+import { AppShell, ScheduleModeNav, StatusDot, Toast } from '../components/ui';
 import { FreeReservationGrid } from '../components/FreeReservationGrid';
 import { WeeklyUsage } from '../components/WeeklyUsage';
 import { MeResponse, Reservation } from '../types';
@@ -81,7 +81,7 @@ export default function FreeApp({
           {isAdminSession || me.role === 'admin' ? (
             <Link to="/admin" className="btn-secondary mt-4 inline-flex">관리자로</Link>
           ) : (
-            <Link to="/" className="btn-secondary mt-4 inline-flex">월간 예약으로</Link>
+            <Link to="/" className="btn-secondary mt-4 inline-flex">월신청으로</Link>
           )}
         </div>
       </AppShell>
@@ -101,11 +101,10 @@ export default function FreeApp({
       }
       actions={
         <>
-          {isAdminSession || me.role === 'admin' ? (
+          {(isAdminSession || me.role === 'admin') && (
             <Link to="/admin" className="btn-ghost">관리자</Link>
-          ) : (
-            <Link to="/" className="btn-ghost">월간</Link>
           )}
+          <ScheduleModeNav mode="free" />
           <button type="button" className="btn-ghost" onClick={onLogout}>
             {isAdminSession ? '관리자 나가기' : '로그아웃'}
           </button>

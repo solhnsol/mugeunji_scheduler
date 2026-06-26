@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { AppShell, PlanGrid, StatusDot, Toast } from '../components/ui';
+import { AppShell, PlanGrid, ScheduleModeNav, StatusDot, Toast } from '../components/ui';
 import { PlanManageModal } from '../components/PlanManageModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { ReservationGrid } from '../components/ReservationGrid';
@@ -102,8 +101,10 @@ export default function UserApp({
 
   const headerActions = (
     <>
-      {me.can_access_free_schedule && (
-        <Link to="/free" className="btn-ghost">자유이용</Link>
+      {me.can_access_free_schedule ? (
+        <ScheduleModeNav mode="monthly" />
+      ) : (
+        <span className="text-sm font-medium text-ink-muted px-2">월신청</span>
       )}
       <button type="button" className="btn-ghost" onClick={() => setProfileOpen(true)}>
         내 정보
