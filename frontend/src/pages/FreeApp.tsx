@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, StatusDot, Toast } from '../components/ui';
 import { FreeReservationGrid } from '../components/FreeReservationGrid';
-import { MeResponse } from '../types';
+import { WeeklyUsage } from '../components/WeeklyUsage';
+import { MeResponse, Reservation } from '../types';
 
 function useToast() {
   const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
@@ -33,9 +34,12 @@ export default function FreeApp({
   onLogout: () => void;
 }) {
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [monthlyReservations, setMonthlyReservations] = useState<Reservation[]>([]);
+  const [freeReservations, setFreeReservations] = useState<Reservation[]>([]);
   const [bookableSlots, setBookableSlots] = useState<Set<string>>(new Set());
   const [bookingOpen, setBookingOpen] = useState(false);
   const [windowLabel, setWindowLabel] = useState('');
+  const [usageRefreshKey, setUsageRefreshKey] = useState(0);
   const { toast, show } = useToast();
 
   const load = useCallback(async () => {
@@ -44,6 +48,8 @@ export default function FreeApp({
       api.getFreeSchedule(token),
     ]);
     setMe(meData);
+    setMonthlyReservations(schedule.monthly_reservations);
+    setFreeReservations(schedule.free_reservations);
     setBookableSlots(new Set(schedule.bookable_slots));
     setBookingOpen(schedule.booking_open);
     setWindowLabel(formatWindow(schedule.window_start, schedule.window_end));
@@ -109,14 +115,18 @@ export default function FreeApp({
       {windowLabel && (
         <p className="text-xs text-ink-faint text-center mb-4">예약 창 · {windowLabel}</p>
       )}
+      <WeeklyUsage token={token} refreshKey={usageRefreshKey} />
       <FreeReservationGrid
         username={username}
         bookableSlots={bookableSlots}
         bookingOpen={bookingOpen}
+        initialMonthly={monthlyReservations}
+        initialFree={freeReservations}
         onSubmit={async (slots) => {
           try {
             const res = await api.reserveFree(token, slots);
             show(res.message, 'success');
+            setUsageRefreshKey((k) => k + 1);
             await load();
           } catch (err) {
             show(err instanceof ApiError ? err.message : '신청 실패', 'error');

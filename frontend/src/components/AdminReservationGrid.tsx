@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { DAYS, DAY_LABELS, Reservation, ValidDay } from '../types';
-import { wsUrl } from '../api';
+import { useReservationSocket } from '../hooks/useReservationSocket';
 
 type SlotKey = `${ValidDay}-${number}`;
 
@@ -21,14 +21,11 @@ export function AdminReservationGrid({
   const [selected, setSelected] = useState<Set<SlotKey>>(new Set());
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    const socket = new WebSocket(wsUrl());
-    socket.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      if (msg.type === 'RESERVATION_UPDATE') setReservations(msg.data);
-    };
-    return () => socket.close();
+  const handleSocketMessage = useCallback((msg: { type: string; data: unknown }) => {
+    if (msg.type === 'RESERVATION_UPDATE') setReservations(msg.data as Reservation[]);
   }, []);
+
+  useReservationSocket(handleSocketMessage);
 
   const toggle = (day: ValidDay, time: number) => {
     const key: SlotKey = `${day}-${time}`;

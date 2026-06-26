@@ -758,3 +758,16 @@ async def read_admin_index():
 @app.get("/free")
 async def read_free_index():
     return _spa_index()
+
+
+@app.get("/register")
+async def read_register_index():
+    return _spa_index()
+
+
+@app.get("/favicon.svg")
+async def favicon_svg():
+    path = "static/dist/favicon.svg"
+    if os.path.exists(path):
+        return FileResponse(path, media_type="image/svg+xml")
+    raise HTTPException(status_code=404)

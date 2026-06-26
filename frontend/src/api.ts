@@ -8,8 +8,11 @@ export class ApiError extends Error {
 async function parseResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const detail = (data as { detail?: string }).detail;
-    throw new ApiError(detail || '요청 처리 중 오류가 발생했습니다.');
+    const detail = (data as { detail?: string | { msg?: string }[] }).detail;
+    const message = Array.isArray(detail)
+      ? detail.map((item) => item.msg || JSON.stringify(item)).join(', ')
+      : detail;
+    throw new ApiError(message || '요청 처리 중 오류가 발생했습니다.');
   }
   return data as T;
 }

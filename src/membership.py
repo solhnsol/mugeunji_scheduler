@@ -138,6 +138,7 @@ class MembershipManager:
 
         pending_change = await self._get_pending_plan_change(username)
         open_settlement = await self.get_open_settlement()
+        pending_cancellation = self._pending_cancellation(sub)
 
         if billing and billing["status"] == "paid":
             return {
@@ -148,6 +149,7 @@ class MembershipManager:
                 "billing": self._public_billing(billing),
                 "access_period": access_period,
                 "pending_plan_change": pending_change,
+                "pending_cancellation": pending_cancellation,
                 "open_settlement_period": open_settlement["period"] if open_settlement else None,
             }
 
@@ -160,6 +162,7 @@ class MembershipManager:
                 "billing": self._public_billing(billing),
                 "access_period": access_period,
                 "pending_plan_change": pending_change,
+                "pending_cancellation": pending_cancellation,
                 "open_settlement_period": open_settlement["period"] if open_settlement else None,
             }
 
@@ -171,8 +174,14 @@ class MembershipManager:
             "billing": None,
             "access_period": access_period,
             "pending_plan_change": pending_change,
+            "pending_cancellation": pending_cancellation,
             "open_settlement_period": open_settlement["period"] if open_settlement else None,
         }
+
+    def _pending_cancellation(self, sub: Optional[Dict]) -> Optional[Dict]:
+        if not sub or not sub.get("cancellation_effective_period"):
+            return None
+        return {"effective_period": sub["cancellation_effective_period"]}
 
     def _public_subscription(self, sub: Dict, hours: int, price: int) -> Dict:
         return {
@@ -290,6 +299,53 @@ class MembershipManager:
         except Exception as e:
             await self.conn.rollback()
             return False, f"요금제 변경 신청 중 오류: {str(e)}"
+
+    async def request_cancellation(self, username: str) -> Tuple[bool, str]:
+        sub = await self.get_subscription(username)
+        if not sub:
+            return False, "요금제가 없습니다."
+        if sub.get("cancellation_effective_period"):
+            return False, "이미 중단이 예약되어 있습니다."
+
+        open_settlement = await self.get_open_settlement()
+        effective_period = open_settlement["period"] if open_settlement else period_from_offset(1)
+        now = datetime.now(KST).isoformat()
+
+        try:
+            await self.conn.execute(
+                """
+                UPDATE subscriptions
+                SET auto_renew = 0, cancellation_effective_period = ?, updated_at = ?
+                WHERE username = ?
+                """,
+                (effective_period, now, username),
+            )
+            await self.conn.commit()
+            return True, f"{effective_period}부터 요금제가 중단됩니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"요금제 중단 신청 중 오류: {str(e)}"
+
+    async def revoke_cancellation(self, username: str) -> Tuple[bool, str]:
+        sub = await self.get_subscription(username)
+        if not sub or not sub.get("cancellation_effective_period"):
+            return False, "예약된 중단이 없습니다."
+
+        now = datetime.now(KST).isoformat()
+        try:
+            await self.conn.execute(
+                """
+                UPDATE subscriptions
+                SET auto_renew = 1, cancellation_effective_period = NULL, updated_at = ?
+                WHERE username = ?
+                """,
+                (now, username),
+            )
+            await self.conn.commit()
+            return True, "요금제 중단이 취소되었습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"중단 취소 중 오류: {str(e)}"
 
     async def _resolve_plan_for_period(self, username: str, period: str) -> int:
         async with self.conn.execute(
@@ -475,7 +531,7 @@ class MembershipManager:
 
     async def list_billing_cycles(self, period: Optional[str] = None, status: Optional[str] = None) -> List[Dict]:
         query = """
-            SELECT bc.*, p.name AS plan_name, u.email,
+            SELECT bc.*, p.name AS plan_name, u.name, u.phone, u.email,
                    u.custom_allowed_hours, u.custom_monthly_fee
             FROM billing_cycles bc
             JOIN plans p ON p.id = bc.plan_id
@@ -555,7 +611,7 @@ class MembershipManager:
     async def list_users_with_membership(self) -> List[Dict]:
         async with self.conn.execute(
             """
-            SELECT u.username, u.email, u.role, u.allowed_hours,
+            SELECT u.username, u.email, u.name, u.phone, u.role, u.allowed_hours,
                    u.custom_allowed_hours, u.custom_monthly_fee,
                    s.plan_id, s.status AS subscription_status, s.auto_renew,
                    p.name AS plan_name, p.monthly_price AS plan_monthly_price
@@ -572,6 +628,9 @@ class MembershipManager:
     async def update_user_membership(
         self,
         username: str,
+        *,
+        allowed_hours: Optional[int] = None,
+        free_access: Optional[bool] = None,
         plan_id: Optional[int] = None,
         custom_allowed_hours: Optional[int] = None,
         custom_monthly_fee: Optional[int] = None,
@@ -585,14 +644,25 @@ class MembershipManager:
         if user["role"] == "admin":
             return False, "관리자 계정은 수정할 수 없습니다."
 
+        hours_to_set = allowed_hours if allowed_hours is not None else custom_allowed_hours
+
         try:
             if clear_custom_hours:
                 await self.conn.execute(
                     "UPDATE users SET custom_allowed_hours = NULL WHERE username = ?", (username,)
                 )
-            elif custom_allowed_hours is not None:
+            elif hours_to_set is not None:
                 await self.conn.execute(
-                    "UPDATE users SET custom_allowed_hours = ? WHERE username = ?", (custom_allowed_hours, username)
+                    "UPDATE users SET custom_allowed_hours = ? WHERE username = ?", (hours_to_set, username)
+                )
+
+            if free_access is not None:
+                hours, _, _ = await self.get_effective_hours_and_price(username)
+                if hours_to_set is not None:
+                    hours = hours_to_set
+                new_role = "free" if free_access else role_from_hours(hours)
+                await self.conn.execute(
+                    "UPDATE users SET role = ? WHERE username = ?", (new_role, username)
                 )
 
             if clear_custom_fee:

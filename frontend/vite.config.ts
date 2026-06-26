@@ -28,7 +28,6 @@ export default defineConfig({
       '/admin/plans': 'http://127.0.0.1:8000',
       '/admin/reservations': 'http://127.0.0.1:8000',
       '/free': 'http://127.0.0.1:8000',
-      '/weekly-usage': 'http://127.0.0.1:8000',
     },
   },
 });
