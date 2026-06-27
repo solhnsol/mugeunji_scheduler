@@ -68,12 +68,26 @@ class MembershipManager:
         price = user["custom_monthly_fee"] if user.get("custom_monthly_fee") is not None else sub["plan_monthly_price"]
         return hours, price, sub
 
+    async def get_monthly_allowed_hours(self, username: str) -> int:
+        user = await self.get_user_row(username)
+        if not user:
+            return 0
+        if user.get("custom_allowed_hours") is not None:
+            return int(user["custom_allowed_hours"])
+        hours, _, sub = await self.get_effective_hours_and_price(username)
+        if sub:
+            return hours
+        return int(user.get("allowed_hours") or 0)
+
     async def sync_user_entitlements(self, username: str) -> None:
         user = await self.get_user_row(username)
         if not user or user["role"] == "admin":
             return
-        hours, _, _ = await self.get_effective_hours_and_price(username)
-        new_role = role_from_hours(hours)
+        hours = await self.get_monthly_allowed_hours(username)
+        if user["role"] == "free" and hours <= 4:
+            new_role = "free"
+        else:
+            new_role = role_from_hours(hours)
         await self.conn.execute(
             "UPDATE users SET allowed_hours = ?, role = ? WHERE username = ?",
             (hours, new_role, username),
@@ -740,7 +754,8 @@ class MembershipManager:
             SELECT u.username, u.email, u.name, u.phone, u.role, u.allowed_hours,
                    u.custom_allowed_hours, u.custom_monthly_fee,
                    s.plan_id, s.status AS subscription_status, s.auto_renew,
-                   p.name AS plan_name, p.monthly_price AS plan_monthly_price
+                   p.name AS plan_name, p.allowed_hours AS plan_allowed_hours,
+                   p.monthly_price AS plan_monthly_price
             FROM users u
             LEFT JOIN subscriptions s ON s.username = u.username
             LEFT JOIN plans p ON p.id = s.plan_id
@@ -773,33 +788,6 @@ class MembershipManager:
         hours_to_set = allowed_hours if allowed_hours is not None else custom_allowed_hours
 
         try:
-            if clear_custom_hours:
-                await self.conn.execute(
-                    "UPDATE users SET custom_allowed_hours = NULL WHERE username = ?", (username,)
-                )
-            elif hours_to_set is not None:
-                await self.conn.execute(
-                    "UPDATE users SET custom_allowed_hours = ? WHERE username = ?", (hours_to_set, username)
-                )
-
-            if free_access is not None:
-                hours, _, _ = await self.get_effective_hours_and_price(username)
-                if hours_to_set is not None:
-                    hours = hours_to_set
-                new_role = "free" if free_access else role_from_hours(hours)
-                await self.conn.execute(
-                    "UPDATE users SET role = ? WHERE username = ?", (new_role, username)
-                )
-
-            if clear_custom_fee:
-                await self.conn.execute(
-                    "UPDATE users SET custom_monthly_fee = NULL WHERE username = ?", (username,)
-                )
-            elif custom_monthly_fee is not None:
-                await self.conn.execute(
-                    "UPDATE users SET custom_monthly_fee = ? WHERE username = ?", (custom_monthly_fee, username)
-                )
-
             if plan_id is not None:
                 sub = await self.get_subscription(username)
                 if sub:
@@ -815,6 +803,38 @@ class MembershipManager:
                         """,
                         (username, plan_id, datetime.now(KST).isoformat(), datetime.now(KST).isoformat()),
                     )
+                if hours_to_set is None and not clear_custom_hours:
+                    async with self.conn.execute(
+                        "SELECT allowed_hours FROM plans WHERE id = ?", (plan_id,)
+                    ) as cursor:
+                        plan_row = await cursor.fetchone()
+                    if plan_row:
+                        hours_to_set = plan_row["allowed_hours"]
+
+            if clear_custom_hours:
+                await self.conn.execute(
+                    "UPDATE users SET custom_allowed_hours = NULL WHERE username = ?", (username,)
+                )
+            elif hours_to_set is not None:
+                await self.conn.execute(
+                    "UPDATE users SET custom_allowed_hours = ? WHERE username = ?", (hours_to_set, username)
+                )
+
+            if free_access is not None:
+                hours = hours_to_set if hours_to_set is not None else await self.get_monthly_allowed_hours(username)
+                new_role = "free" if free_access else role_from_hours(hours)
+                await self.conn.execute(
+                    "UPDATE users SET role = ? WHERE username = ?", (new_role, username)
+                )
+
+            if clear_custom_fee:
+                await self.conn.execute(
+                    "UPDATE users SET custom_monthly_fee = NULL WHERE username = ?", (username,)
+                )
+            elif custom_monthly_fee is not None:
+                await self.conn.execute(
+                    "UPDATE users SET custom_monthly_fee = ? WHERE username = ?", (custom_monthly_fee, username)
+                )
 
             if auto_renew is not None:
                 await self.conn.execute(

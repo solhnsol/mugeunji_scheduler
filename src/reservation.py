@@ -194,7 +194,7 @@ class ReservationManager:
 
             if user_data is None:
                 return False, "사용자 정보를 찾을 수 없습니다."
-            user_allowed_hours = user_data['allowed_hours']
+            user_allowed_hours = await self.membership.get_monthly_allowed_hours(username)
             user_role = user_data['role']
 
             cursor = await self.conn.execute(

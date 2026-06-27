@@ -132,9 +132,11 @@ class SetAccessPeriodRequest(BaseModel):
 
 
 class UpdateUserMembershipRequest(BaseModel):
-    allowed_hours: Optional[int] = Field(None, ge=4, le=8)
+    allowed_hours: Optional[int] = Field(None, ge=1, le=24)
+    plan_id: Optional[int] = Field(None, ge=1)
     free_access: Optional[bool] = None
     custom_monthly_fee: Optional[int] = Field(None, ge=0)
+    clear_custom_hours: bool = False
     clear_custom_fee: bool = False
 
 
@@ -452,13 +454,16 @@ async def get_all_users_by_admin(
     users = await membership.list_users_with_membership()
     result = []
     for user in users:
-        hours = user["custom_allowed_hours"] if user.get("custom_allowed_hours") is not None else user.get("allowed_hours", 0)
+        hours = await membership.get_monthly_allowed_hours(user["username"])
         price = user["custom_monthly_fee"] if user.get("custom_monthly_fee") is not None else user.get("plan_monthly_price")
         result.append({
             "username": user["username"],
             "allowed_hours": hours,
+            "plan_id": user.get("plan_id"),
+            "plan_allowed_hours": user.get("plan_allowed_hours"),
+            "custom_allowed_hours": user.get("custom_allowed_hours"),
             "role": user["role"],
-            "free_access": user["role"] in ("free", "admin"),
+            "free_access": user["role"] == "free",
             "email": user.get("email"),
             "name": user.get("name"),
             "phone": user.get("phone"),
@@ -480,8 +485,10 @@ async def update_user_membership(
     is_success, message = await membership.update_user_membership(
         username,
         allowed_hours=data.allowed_hours,
+        plan_id=data.plan_id,
         free_access=data.free_access,
         custom_monthly_fee=data.custom_monthly_fee,
+        clear_custom_hours=data.clear_custom_hours,
         clear_custom_fee=data.clear_custom_fee,
     )
     if is_success:

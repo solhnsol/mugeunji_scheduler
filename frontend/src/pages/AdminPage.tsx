@@ -6,7 +6,7 @@ import { AdminReservationGrid } from '../components/AdminReservationGrid';
 import { AdminFreeReservationGrid } from '../components/AdminFreeReservationGrid';
 import { AdminAutomationTab } from '../components/AdminAutomationTab';
 import { WeeklyUsage } from '../components/WeeklyUsage';
-import { Plan, Reservation, SettlementOverview, UserInfo, HOUR_OPTIONS } from '../types';
+import { Plan, Reservation, SettlementOverview, UserInfo } from '../types';
 import { formatPrice } from '../utils';
 
 const ADMIN_TOKEN_KEY = 'adminAccessToken';
@@ -384,17 +384,45 @@ function AdminDashboard({
 
       {tab === 'schedule' && (
         <div className="space-y-4">
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label className="label" htmlFor="target-username">강제 신청 대상</label>
-              <input
-                id="target-username"
-                className="input"
-                placeholder="아이디"
-                value={targetUser}
-                onChange={(e) => setTargetUser(e.target.value)}
-              />
-            </div>
+          <div className="card p-4 space-y-3">
+            <label className="label" htmlFor="target-username">강제 신청 대상</label>
+            <select
+              id="target-username"
+              className="input"
+              value={targetUser}
+              onChange={(e) => setTargetUser(e.target.value)}
+            >
+              <option value="">회원 선택</option>
+              {users.map((u) => (
+                <option key={u.username} value={u.username}>
+                  {u.name || u.username} (@{u.username}) · 월 {u.allowed_hours}h
+                </option>
+              ))}
+            </select>
+            {targetUser && (() => {
+              const selected = users.find((u) => u.username === targetUser);
+              if (!selected) return null;
+              return (
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <p className="text-sm text-ink-muted">
+                    월 예약 {selected.allowed_hours}시간
+                    {selected.plan_name && (
+                      <span className="text-ink-faint"> · {selected.plan_name}</span>
+                    )}
+                    {selected.custom_allowed_hours != null && (
+                      <span className="text-amber-700"> · 개별 설정</span>
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    className="text-xs text-sage font-medium min-h-[32px] px-2"
+                    onClick={() => setEditUser(selected)}
+                  >
+                    시간 변경
+                  </button>
+                </div>
+              );
+            })()}
           </div>
           <AdminReservationGrid
             onForceReserve={async (slots) => {
@@ -525,7 +553,7 @@ function AdminDashboard({
                 <th className="py-2 font-medium">이름</th>
                 <th className="font-medium">연락처</th>
                 <th className="font-medium">아이디</th>
-                <th className="font-medium">시간</th>
+                <th className="font-medium">월 예약</th>
                 <th className="font-medium">자유</th>
                 <th></th>
               </tr>
@@ -536,8 +564,13 @@ function AdminDashboard({
                   <td className="py-3 font-medium">{u.name || '-'}</td>
                   <td className="text-ink-muted">{u.phone || '-'}</td>
                   <td className="text-ink-muted">{u.username}</td>
-                  <td>{u.allowed_hours ? `${u.allowed_hours}h` : '-'}</td>
-                  <td>{u.free_access || u.role === 'free' || u.role === 'admin' ? '○' : '-'}</td>
+                  <td>
+                    {u.allowed_hours ? `${u.allowed_hours}h` : '-'}
+                    {u.custom_allowed_hours != null && (
+                      <span className="text-xs text-amber-700 ml-1">개별</span>
+                    )}
+                  </td>
+                  <td>{u.free_access || u.role === 'free' ? '○' : '-'}</td>
                   <td>
                     <button type="button" className="text-sage text-xs font-medium min-h-[32px] px-2" onClick={() => setEditUser(u)}>
                       수정
@@ -553,6 +586,7 @@ function AdminDashboard({
       {editUser && (
         <EditUserModal
           user={editUser}
+          plans={plans}
           token={token}
           onClose={() => setEditUser(null)}
           onSaved={async () => { setEditUser(null); await load(); show('저장됨', 'success'); }}
@@ -586,35 +620,53 @@ function PlanPriceRow({ plan, onSave }: { plan: Plan; onSave: (id: number, price
 
 function EditUserModal({
   user,
+  plans,
   token,
   onClose,
   onSaved,
   onError,
 }: {
   user: UserInfo;
+  plans: Plan[];
   token: string;
   onClose: () => void;
   onSaved: () => void;
   onError: (m: string) => void;
 }) {
-  const defaultHours = HOUR_OPTIONS.includes(user.allowed_hours as (typeof HOUR_OPTIONS)[number])
-    ? user.allowed_hours
-    : 4;
-  const [allowedHours, setAllowedHours] = useState<number>(defaultHours);
+  const hourOptions = [...new Set(plans.map((p) => p.allowed_hours))].sort((a, b) => a - b);
+  const fallbackHours = hourOptions[0] ?? 4;
+
+  const initialPlanId = user.plan_id ?? plans.find((p) => p.allowed_hours === user.plan_allowed_hours)?.id ?? plans[0]?.id;
+  const usesCustomHours = user.custom_allowed_hours != null;
+
+  const [planId, setPlanId] = useState<number | undefined>(initialPlanId);
+  const [useCustomHours, setUseCustomHours] = useState(usesCustomHours);
+  const [allowedHours, setAllowedHours] = useState<number>(
+    usesCustomHours ? (user.custom_allowed_hours ?? user.allowed_hours) : (user.allowed_hours || fallbackHours),
+  );
   const [freeAccess, setFreeAccess] = useState(user.free_access ?? user.role === 'free');
   const [customFee, setCustomFee] = useState(
     user.monthly_price != null ? String(user.monthly_price) : '',
   );
   const [useCustomFee, setUseCustomFee] = useState(user.monthly_price != null && user.monthly_price > 0);
 
+  const selectedPlan = plans.find((p) => p.id === planId);
+
   const save = async () => {
     try {
-      await api.updateUser(token, user.username, {
-        allowed_hours: allowedHours,
+      const body: Record<string, unknown> = {
         free_access: freeAccess,
         clear_custom_fee: !useCustomFee,
         ...(useCustomFee && customFee !== '' ? { custom_monthly_fee: Number(customFee) } : {}),
-      });
+      };
+      if (planId) body.plan_id = planId;
+      if (useCustomHours) {
+        body.allowed_hours = allowedHours;
+        body.clear_custom_hours = false;
+      } else {
+        body.clear_custom_hours = true;
+      }
+      await api.updateUser(token, user.username, body);
       onSaved();
     } catch (e) {
       onError(e instanceof ApiError ? e.message : '저장 실패');
@@ -623,28 +675,64 @@ function EditUserModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+      <div className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg text-ink">{user.name || user.username}</h3>
         <p className="text-xs text-ink-faint mb-5">@{user.username}</p>
         <div className="space-y-4">
           <div>
-            <label className="label">이용시간</label>
-            <div className="grid grid-cols-3 gap-2">
-              {HOUR_OPTIONS.map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${
-                    allowedHours === h
-                      ? 'bg-sage text-white border-sage'
-                      : 'bg-white text-ink-muted border-line hover:border-sage/30'
-                  }`}
-                  onClick={() => setAllowedHours(h)}
-                >
-                  {h}h
-                </button>
+            <label className="label" htmlFor="edit-plan">요금제</label>
+            <select
+              id="edit-plan"
+              className="input"
+              value={planId ?? ''}
+              onChange={(e) => {
+                const nextId = Number(e.target.value);
+                setPlanId(nextId);
+                const plan = plans.find((p) => p.id === nextId);
+                if (plan && !useCustomHours) setAllowedHours(plan.allowed_hours);
+              }}
+            >
+              {plans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} (월 {p.allowed_hours}h · {p.monthly_price.toLocaleString('ko-KR')}원)
+                </option>
               ))}
-            </div>
+            </select>
+          </div>
+          <div>
+            <label className="flex items-center gap-2 mb-3 text-sm">
+              <input
+                type="checkbox"
+                checked={useCustomHours}
+                onChange={(e) => {
+                  setUseCustomHours(e.target.checked);
+                  if (!e.target.checked && selectedPlan) setAllowedHours(selectedPlan.allowed_hours);
+                }}
+              />
+              <span className="font-medium">월 예약 시간 개별 설정</span>
+            </label>
+            {useCustomHours ? (
+              <div className="grid grid-cols-3 gap-2">
+                {hourOptions.map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${
+                      allowedHours === h
+                        ? 'bg-sage text-white border-sage'
+                        : 'bg-white text-ink-muted border-line hover:border-sage/30'
+                    }`}
+                    onClick={() => setAllowedHours(h)}
+                  >
+                    {h}h
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-ink-muted rounded-2xl border border-line px-4 py-3">
+                요금제 기본 · 주 {selectedPlan?.allowed_hours ?? user.allowed_hours}시간
+              </p>
+            )}
           </div>
           <label className="flex items-center gap-3 rounded-2xl border border-line p-4 cursor-pointer">
             <input

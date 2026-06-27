@@ -53,6 +53,9 @@ export interface UserInfo {
   email?: string;
   name?: string;
   phone?: string;
+  plan_id?: number;
+  plan_allowed_hours?: number;
+  custom_allowed_hours?: number | null;
   plan_name?: string;
   subscription_status?: string;
   monthly_price?: number;
