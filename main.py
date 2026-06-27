@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from src.auth import AuthManager, is_profile_complete
 from src.automation_config import RESERVATION_FREE, RESERVATION_MONTHLY, ScheduleConfig
 from src.database import init_db
-from src.membership import MembershipManager, period_from_offset
+from src.membership import MembershipManager, period_from_offset, usage_period
 from src.reservation import ReservationManager
 from src.settings import SettingsManager
 
@@ -502,6 +502,7 @@ async def get_settlement_overview(
     return {
         "suggested_next_period": period_from_offset(1),
         "open_settlement": open_settlement,
+        "usage_period": usage_period(),
         "current_access_period": await membership.get_access_period(),
         **summary,
     }

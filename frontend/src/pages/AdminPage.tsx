@@ -275,29 +275,11 @@ function AdminDashboard({
               {settlement.period} · 미입금 {settlement.summary.pending ?? 0} · 완료 {settlement.summary.paid ?? 0}
               {settlement.open_settlement ? ` · 열림` : settlement.settlement?.status === 'closed' ? ' · 마감' : ''}
             </p>
-            {settlement.current_access_period && (
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-ink-muted">
-                  현재 이용 기간: <strong className="text-ink">{settlement.current_access_period}</strong>
-                </span>
-                <button
-                  type="button"
-                  className="text-sage font-medium hover:underline"
-                  onClick={async () => {
-                    const next = prompt('이용 기간 (YYYY-MM)', settlement.current_access_period);
-                    if (!next?.trim()) return;
-                    try {
-                      const res = await api.setAccessPeriod(token, next.trim());
-                      show(res.message, 'success');
-                      await load(periodInput.trim() || undefined);
-                    } catch (e) {
-                      show(e instanceof ApiError ? e.message : '설정 실패', 'error');
-                    }
-                  }}
-                >
-                  변경
-                </button>
-              </div>
+            {settlement.usage_period && (
+              <p className="mt-3 text-xs text-ink-muted">
+                이용 중 기간: <strong className="text-ink">{settlement.usage_period}</strong>
+                <span className="text-ink-faint"> · 이번 달 입금 확인 기준</span>
+              </p>
             )}
           </section>
 

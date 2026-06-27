@@ -76,6 +76,7 @@ export interface SettlementOverview {
   period: string;
   suggested_next_period: string;
   current_access_period?: string;
+  usage_period?: string;
   open_settlement?: { period: string; status: string } | null;
   settlement?: { period: string; status: string } | null;
   summary: Record<string, number>;

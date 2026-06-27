@@ -24,6 +24,11 @@ def role_from_hours(hours: int) -> str:
     return "free" if hours > 4 else "user"
 
 
+def usage_period(from_dt: Optional[datetime] = None) -> str:
+    """달력상 현재 월 — 시간표·자유이용 접근 판단에 사용."""
+    return period_from_offset(0, from_dt)
+
+
 class MembershipManager:
     def __init__(self, conn: aiosqlite.Connection):
         self.conn = conn
@@ -118,6 +123,27 @@ class MembershipManager:
             row = await cursor.fetchone()
         return dict(row) if row else None
 
+    async def _sync_subscription_payment_status(self, username: str) -> None:
+        """이번 달(usage_period) 입금 여부에 맞춰 구독 상태 동기화."""
+        billing = await self.get_billing_cycle(username, usage_period())
+        now = datetime.now(KST).isoformat()
+        if billing and billing["status"] == "paid":
+            await self.conn.execute(
+                """
+                UPDATE subscriptions SET status = 'active', updated_at = ?
+                WHERE username = ?
+                """,
+                (now, username),
+            )
+        else:
+            await self.conn.execute(
+                """
+                UPDATE subscriptions SET status = 'pending_payment', updated_at = ?
+                WHERE username = ?
+                """,
+                (now, username),
+            )
+
     async def get_access_status(self, username: str) -> Dict:
         user = await self.get_user_row(username)
         if not user:
@@ -129,7 +155,7 @@ class MembershipManager:
                 "message": "관리자",
                 "subscription": None,
                 "billing": None,
-                "access_period": await self.get_access_period(),
+                "access_period": usage_period(),
             }
 
         sub = await self.get_subscription(username)
@@ -140,11 +166,11 @@ class MembershipManager:
                 "message": "요금제를 신청해주세요.",
                 "subscription": None,
                 "billing": None,
-                "access_period": await self.get_access_period(),
+                "access_period": usage_period(),
             }
 
-        access_period = await self.get_access_period()
-        billing = await self.get_billing_cycle(username, access_period) if access_period else None
+        active_period = usage_period()
+        billing = await self.get_billing_cycle(username, active_period)
         hours, price, _ = await self.get_effective_hours_and_price(username)
 
         pending_change = await self._get_pending_plan_change(username)
@@ -158,7 +184,7 @@ class MembershipManager:
                 "message": "이용 가능",
                 "subscription": self._public_subscription(sub, hours, price),
                 "billing": self._public_billing(billing),
-                "access_period": access_period,
+                "access_period": active_period,
                 "pending_plan_change": pending_change,
                 "pending_cancellation": pending_cancellation,
                 "open_settlement_period": open_settlement["period"] if open_settlement else None,
@@ -171,7 +197,7 @@ class MembershipManager:
                 "message": f"{billing['period']} 이용 요금 입금 확인 후 시간표를 이용할 수 있습니다.",
                 "subscription": self._public_subscription(sub, hours, price),
                 "billing": self._public_billing(billing),
-                "access_period": access_period,
+                "access_period": active_period,
                 "pending_plan_change": pending_change,
                 "pending_cancellation": pending_cancellation,
                 "open_settlement_period": open_settlement["period"] if open_settlement else None,
@@ -180,10 +206,10 @@ class MembershipManager:
         return {
             "access_status": "pending_payment",
             "can_access_schedule": False,
-            "message": "다음 달 정산이 열리면 입금 안내가 표시됩니다.",
+            "message": f"{active_period} 이용 요금 입금 확인 후 시간표를 이용할 수 있습니다.",
             "subscription": self._public_subscription(sub, hours, price),
             "billing": None,
-            "access_period": access_period,
+            "access_period": active_period,
             "pending_plan_change": pending_change,
             "pending_cancellation": pending_cancellation,
             "open_settlement_period": open_settlement["period"] if open_settlement else None,
@@ -437,7 +463,6 @@ class MembershipManager:
                 """,
                 (period, datetime.now(KST).isoformat(), admin_username),
             )
-            await self.set_access_period(period)
 
             async with self.conn.execute(
                 """
@@ -504,7 +529,6 @@ class MembershipManager:
             if self.conn.total_changes == 0:
                 await self.conn.rollback()
                 return False, "마감된 정산 기간을 찾을 수 없습니다."
-            await self.set_access_period(period)
             await self.conn.commit()
             return True, f"{period} 정산이 다시 열렸습니다."
         except Exception as e:
@@ -531,13 +555,6 @@ class MembershipManager:
                 """,
                 (now, admin_username, billing_id),
             )
-            await self.conn.execute(
-                """
-                UPDATE subscriptions SET status = 'active', updated_at = ?
-                WHERE username = ?
-                """,
-                (now, billing["username"]),
-            )
 
             async with self.conn.execute(
                 """
@@ -557,6 +574,7 @@ class MembershipManager:
                     (billing["plan_id"], billing["username"]),
                 )
 
+            await self._sync_subscription_payment_status(billing["username"])
             await self.sync_user_entitlements(billing["username"])
             await self.conn.commit()
             return True, f"{billing['username']}님의 {billing['period']} 입금이 확인되었습니다."
@@ -609,16 +627,7 @@ class MembershipManager:
                 (billing_id,),
             )
 
-            access_period = await self.get_access_period()
-            if access_period == period:
-                await self.conn.execute(
-                    """
-                    UPDATE subscriptions SET status = 'pending_payment', updated_at = ?
-                    WHERE username = ?
-                    """,
-                    (now, username),
-                )
-
+            await self._sync_subscription_payment_status(username)
             await self.sync_user_entitlements(username)
             await self.conn.commit()
             return True, f"{username}님의 {period} 입금 확인이 취소되었습니다."
