@@ -100,6 +100,7 @@ function AdminDashboard({
   const [settlement, setSettlement] = useState<SettlementOverview | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
+  const [admins, setAdmins] = useState<UserInfo[]>([]);
   const [periodInput, setPeriodInput] = useState('');
   const [targetUser, setTargetUser] = useState('');
   const [freeTargetUser, setFreeTargetUser] = useState('');
@@ -116,14 +117,16 @@ function AdminDashboard({
 
   const load = useCallback(async (periodOverride?: string) => {
     const period = periodOverride ?? (periodInput.trim() || undefined);
-    const [s, p, u] = await Promise.all([
+    const [s, p, u, a] = await Promise.all([
       api.getSettlement(token, period),
       api.getPlans(),
       api.getUsers(token),
+      api.getAdmins(token),
     ]);
     setSettlement(s);
     setPlans(p);
     setUsers(u);
+    setAdmins(a);
     if (!periodInput && s.period) setPeriodInput(s.period);
   }, [token, periodInput]);
 
@@ -393,6 +396,11 @@ function AdminDashboard({
               onChange={(e) => setTargetUser(e.target.value)}
             >
               <option value="">회원 선택</option>
+              {admins.map((u) => (
+                <option key={u.username} value={u.username}>
+                  [관리자] {u.name || u.username} (@{u.username}) · 월 {u.allowed_hours}h
+                </option>
+              ))}
               {users.map((u) => (
                 <option key={u.username} value={u.username}>
                   {u.name || u.username} (@{u.username}) · 월 {u.allowed_hours}h
@@ -400,16 +408,19 @@ function AdminDashboard({
               ))}
             </select>
             {targetUser && (() => {
-              const selected = users.find((u) => u.username === targetUser);
+              const selected = [...admins, ...users].find((u) => u.username === targetUser);
               if (!selected) return null;
               return (
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                   <p className="text-sm text-ink-muted">
                     월 예약 {selected.allowed_hours}시간
+                    {selected.role === 'admin' && (
+                      <span className="text-ink-faint"> · 관리자</span>
+                    )}
                     {selected.plan_name && (
                       <span className="text-ink-faint"> · {selected.plan_name}</span>
                     )}
-                    {selected.custom_allowed_hours != null && (
+                    {selected.custom_allowed_hours != null && selected.role !== 'admin' && (
                       <span className="text-amber-700"> · 개별 설정</span>
                     )}
                   </p>
@@ -546,8 +557,42 @@ function AdminDashboard({
       )}
 
       {tab === 'users' && (
-        <section className="card p-5 overflow-x-auto">
-          <table className="w-full text-sm min-w-[560px]">
+        <div className="space-y-5">
+          <section className="card p-5 overflow-x-auto">
+            <h2 className="font-semibold text-ink mb-4">관리자</h2>
+            <table className="w-full text-sm min-w-[480px]">
+              <thead>
+                <tr className="text-left text-ink-faint border-b border-line text-xs">
+                  <th className="py-2 font-medium">이름</th>
+                  <th className="font-medium">아이디</th>
+                  <th className="font-medium">월 예약</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {admins.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-6 text-center text-ink-faint">관리자 계정 없음</td>
+                  </tr>
+                ) : admins.map((u) => (
+                  <tr key={u.username} className="border-b border-line/50">
+                    <td className="py-3 font-medium">{u.name || '-'}</td>
+                    <td className="text-ink-muted">{u.username}</td>
+                    <td>{u.allowed_hours ? `${u.allowed_hours}h` : '-'}</td>
+                    <td>
+                      <button type="button" className="text-sage text-xs font-medium min-h-[32px] px-2" onClick={() => setEditUser(u)}>
+                        시간 변경
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="card p-5 overflow-x-auto">
+            <h2 className="font-semibold text-ink mb-4">회원</h2>
+            <table className="w-full text-sm min-w-[560px]">
             <thead>
               <tr className="text-left text-ink-faint border-b border-line text-xs">
                 <th className="py-2 font-medium">이름</th>
@@ -580,10 +625,20 @@ function AdminDashboard({
               ))}
             </tbody>
           </table>
-        </section>
+          </section>
+        </div>
       )}
 
-      {editUser && (
+      {editUser && editUser.role === 'admin' ? (
+        <EditAdminModal
+          user={editUser}
+          plans={plans}
+          token={token}
+          onClose={() => setEditUser(null)}
+          onSaved={async () => { setEditUser(null); await load(); show('저장됨', 'success'); }}
+          onError={(m) => show(m, 'error')}
+        />
+      ) : editUser && (
         <EditUserModal
           user={editUser}
           plans={plans}
@@ -614,6 +669,87 @@ function PlanPriceRow({ plan, onSave }: { plan: Plan; onSave: (id: number, price
       <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm" onClick={() => onSave(plan.id, price)}>
         저장
       </button>
+    </div>
+  );
+}
+
+function EditAdminModal({
+  user,
+  plans,
+  token,
+  onClose,
+  onSaved,
+  onError,
+}: {
+  user: UserInfo;
+  plans: Plan[];
+  token: string;
+  onClose: () => void;
+  onSaved: () => void;
+  onError: (m: string) => void;
+}) {
+  const presetHours = [...new Set(plans.map((p) => p.allowed_hours))].sort((a, b) => a - b);
+  const [allowedHours, setAllowedHours] = useState(user.allowed_hours || presetHours[0] || 4);
+  const [customInput, setCustomInput] = useState('');
+  const useCustom = !presetHours.includes(allowedHours);
+
+  const save = async () => {
+    const hours = customInput !== '' ? Number(customInput) : allowedHours;
+    if (!Number.isInteger(hours) || hours < 1 || hours > 24) {
+      onError('월 예약 시간은 1~24시간 사이 정수여야 합니다.');
+      return;
+    }
+    try {
+      await api.updateAdminHours(token, user.username, hours);
+      onSaved();
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : '저장 실패');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold text-lg text-ink">{user.name || user.username}</h3>
+        <p className="text-xs text-ink-faint mb-1">@{user.username}</p>
+        <p className="text-xs text-sage mb-5">관리자 · 월 예약 시간</p>
+        <div className="space-y-4">
+          <div>
+            <label className="label">월 예약 시간</label>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {presetHours.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${
+                    !useCustom && allowedHours === h
+                      ? 'bg-sage text-white border-sage'
+                      : 'bg-white text-ink-muted border-line hover:border-sage/30'
+                  }`}
+                  onClick={() => { setAllowedHours(h); setCustomInput(''); }}
+                >
+                  {h}h
+                </button>
+              ))}
+            </div>
+            <label className="label" htmlFor="admin-custom-hours">직접 입력 (1~24)</label>
+            <input
+              id="admin-custom-hours"
+              className="input"
+              type="number"
+              min={1}
+              max={24}
+              placeholder={`현재 ${user.allowed_hours}h`}
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 mt-6">
+          <button type="button" className="btn-primary flex-1" onClick={save}>저장</button>
+          <button type="button" className="btn-secondary flex-1" onClick={onClose}>취소</button>
+        </div>
+      </div>
     </div>
   );
 }

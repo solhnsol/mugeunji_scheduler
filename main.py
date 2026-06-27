@@ -140,6 +140,10 @@ class UpdateUserMembershipRequest(BaseModel):
     clear_custom_fee: bool = False
 
 
+class UpdateAdminHoursRequest(BaseModel):
+    allowed_hours: int = Field(..., ge=1, le=24)
+
+
 class UpdatePlanPriceRequest(BaseModel):
     monthly_price: int = Field(..., ge=0)
 
@@ -472,6 +476,48 @@ async def get_all_users_by_admin(
             "monthly_price": price,
         })
     return result
+
+
+@app.get("/admin/admins", response_model=List[UserInfoResponse])
+async def get_admin_users(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    membership = MembershipManager(conn)
+    admins = await membership.list_admin_users()
+    result = []
+    for user in admins:
+        hours = await membership.get_monthly_allowed_hours(user["username"])
+        result.append({
+            "username": user["username"],
+            "allowed_hours": hours,
+            "plan_id": None,
+            "plan_allowed_hours": None,
+            "custom_allowed_hours": user.get("custom_allowed_hours"),
+            "role": user["role"],
+            "free_access": True,
+            "email": user.get("email"),
+            "name": user.get("name"),
+            "phone": user.get("phone"),
+            "plan_name": None,
+            "subscription_status": None,
+            "monthly_price": None,
+        })
+    return result
+
+
+@app.put("/admin/admins/{username}")
+async def update_admin_hours(
+    username: str,
+    data: UpdateAdminHoursRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    membership = MembershipManager(conn)
+    is_success, message = await membership.update_admin_hours(username, data.allowed_hours)
+    if is_success:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
 @app.put("/admin/users/{username}")

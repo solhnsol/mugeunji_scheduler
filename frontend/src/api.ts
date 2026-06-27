@@ -228,6 +228,20 @@ export const api = {
     return parseResponse<import('./types').UserInfo[]>(res);
   },
 
+  async getAdmins(token: string) {
+    const res = await fetch('/admin/admins', { headers: authHeaders(token) });
+    return parseResponse<import('./types').UserInfo[]>(res);
+  },
+
+  async updateAdminHours(token: string, username: string, allowedHours: number) {
+    const res = await fetch(`/admin/admins/${encodeURIComponent(username)}`, {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ allowed_hours: allowedHours }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
   async updateUser(
     token: string,
     username: string,

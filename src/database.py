@@ -146,7 +146,7 @@ async def setup_database(conn: aiosqlite.Connection):
         hashed_admin_password = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         await conn.execute(
             "INSERT OR IGNORE INTO users (username, password, allowed_hours, role) VALUES (?, ?, ?, ?)",
-            ("admin", hashed_admin_password, 0, "admin")
+            ("admin", hashed_admin_password, 4, "admin")
         )
 
     settings_defaults = [

@@ -766,6 +766,38 @@ class MembershipManager:
             rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
+    async def list_admin_users(self) -> List[Dict]:
+        async with self.conn.execute(
+            """
+            SELECT username, email, name, phone, role, allowed_hours, custom_allowed_hours
+            FROM users
+            WHERE role = 'admin'
+            ORDER BY username
+            """
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def update_admin_hours(self, username: str, allowed_hours: int) -> Tuple[bool, str]:
+        user = await self.get_user_row(username)
+        if not user or user["role"] != "admin":
+            return False, "관리자 계정을 찾을 수 없습니다."
+        if allowed_hours < 1 or allowed_hours > 24:
+            return False, "월 예약 시간은 1~24시간 사이여야 합니다."
+        try:
+            await self.conn.execute(
+                """
+                UPDATE users SET allowed_hours = ?, custom_allowed_hours = ?
+                WHERE username = ?
+                """,
+                (allowed_hours, allowed_hours, username),
+            )
+            await self.conn.commit()
+            return True, f"'{username}' 관리자의 월 예약 시간이 {allowed_hours}시간으로 변경되었습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"관리자 수정 실패: {str(e)}"
+
     async def update_user_membership(
         self,
         username: str,
