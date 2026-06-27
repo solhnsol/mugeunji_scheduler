@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, Toast } from '../components/ui';
@@ -114,6 +114,18 @@ function AdminDashboard({
     window_end: string;
   } | null>(null);
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
+
+  const freeTargetUsers = useMemo(() => {
+    const seen = new Set<string>();
+    return [
+      ...admins,
+      ...users.filter((u) => u.role === 'free' || u.free_access),
+    ].filter((u) => {
+      if (seen.has(u.username)) return false;
+      seen.add(u.username);
+      return true;
+    });
+  }, [admins, users]);
 
   const load = useCallback(async (periodOverride?: string) => {
     const period = periodOverride ?? (periodInput.trim() || undefined);
@@ -485,17 +497,22 @@ function AdminDashboard({
             </div>
           )}
           {freeSchedule && <WeeklyUsage data={freeSchedule.weekly_usage} />}
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label className="label" htmlFor="free-target-username">강제 신청 대상</label>
-              <input
-                id="free-target-username"
-                className="input"
-                placeholder="아이디"
-                value={freeTargetUser}
-                onChange={(e) => setFreeTargetUser(e.target.value)}
-              />
-            </div>
+          <div className="card p-4 space-y-3">
+            <label className="label" htmlFor="free-target-username">강제 신청 대상</label>
+            <select
+              id="free-target-username"
+              className="input"
+              value={freeTargetUser}
+              onChange={(e) => setFreeTargetUser(e.target.value)}
+            >
+              <option value="">자유이용 / 관리자 선택</option>
+              {freeTargetUsers.map((u) => (
+                <option key={u.username} value={u.username}>
+                  {u.role === 'admin' ? '[관리자] ' : ''}
+                  {u.name || u.username} (@{u.username})
+                </option>
+              ))}
+            </select>
           </div>
           {freeSchedule ? (
             <AdminFreeReservationGrid

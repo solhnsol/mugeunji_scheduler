@@ -91,3 +91,63 @@ body {
   background: var(--color-line);
   border-radius: 999px;
 }
+
+/* 시간표: 가로·세로 스크롤, 요일 헤더 고정, 일요일 열 여백 */
+.schedule-grid-scroll {
+  @apply overflow-auto -mx-4 px-4 sm:mx-0 sm:px-0;
+  max-height: min(70dvh, 36rem);
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-inline-end: 1.25rem;
+}
+
+.schedule-grid-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.schedule-grid-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 999px;
+}
+
+.schedule-grid-card {
+  @apply bg-white rounded-2xl border border-line/80 shadow-[0_1px_3px_rgba(20,20,20,0.04)] inline-block w-full;
+  min-width: max(100%, 26rem);
+}
+
+.schedule-grid-table {
+  min-width: 26rem;
+}
+
+.schedule-grid-th-corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  background: white;
+  box-shadow: 1px 1px 0 var(--color-line);
+}
+
+.schedule-grid-th-day {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: white;
+  box-shadow: 0 1px 0 var(--color-line);
+}
+
+.schedule-grid-th-day-last {
+  padding-right: 0.75rem;
+}
+
+.schedule-grid-td-time {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--color-cream) 95%, transparent);
+  box-shadow: 1px 0 0 var(--color-line);
+}
+
+.schedule-grid-td-last {
+  padding-right: 0.75rem;
+}

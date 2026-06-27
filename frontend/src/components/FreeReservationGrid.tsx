@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DAYS, DAY_LABELS, Reservation, ValidDay } from '../types';
 import { useReservationSocket } from '../hooks/useReservationSocket';
+import { dayCellClass, dayHeaderClass, isLastDay } from './scheduleGridClasses';
 
 type SlotKey = `${ValidDay}-${number}`;
 
@@ -109,21 +110,21 @@ export function FreeReservationGrid({
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-pick inline-block" />선택</span>
       </div>
 
-      <div className="grid-scroll">
-        <div className="card overflow-hidden min-w-[min(100%,36rem)] inline-block w-full">
-          <table className="w-full text-center text-[11px] sm:text-xs border-collapse">
+      <div className="schedule-grid-scroll">
+        <div className="schedule-grid-card">
+          <table className="schedule-grid-table w-full text-center text-[11px] sm:text-xs border-collapse">
             <thead>
               <tr className="border-b border-line">
-                <th className="sticky left-0 z-10 bg-white p-2 w-11 font-medium text-ink-faint">시</th>
+                <th className="schedule-grid-th-corner p-2 w-11 font-medium text-ink-faint">시</th>
                 {DAYS.map((d) => (
-                  <th key={d} className="p-2 font-medium text-ink-muted min-w-[2.75rem]">{DAY_LABELS[d]}</th>
+                  <th key={d} className={dayHeaderClass(isLastDay(d, DAYS))}>{DAY_LABELS[d]}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {Array.from({ length: 24 }, (_, time) => (
                 <tr key={time} className="border-b border-line/50 last:border-0">
-                  <td className="sticky left-0 z-10 bg-cream/80 p-1.5 font-medium text-ink-faint tabular-nums">{time}</td>
+                  <td className="schedule-grid-td-time p-1.5 font-medium text-ink-faint tabular-nums">{time}</td>
                   {DAYS.map((day) => {
                     const slot = getSlot(reservations, day, time);
                     const isMonthly = slot?.reservation_type === 'monthly';
@@ -133,14 +134,15 @@ export function FreeReservationGrid({
                     const isSelected = selected.has(key);
                     const taken = !!slot;
                     const bookable = isBookable(day, time) && !taken;
+                    const last = isLastDay(day, DAYS);
 
-                    let cellClass = 'p-0.5 min-w-[2.75rem] h-11 sm:h-10 align-middle transition-colors ';
-                    if (mine) cellClass += 'bg-slot-mine cursor-default';
-                    else if (isMonthly) cellClass += 'bg-[#d4cfc4] cursor-default';
-                    else if (taken) cellClass += 'bg-slot-taken cursor-default';
-                    else if (isSelected) cellClass += 'bg-slot-pick cursor-pointer';
-                    else if (bookable && bookingOpen) cellClass += 'bg-sage-muted/30 hover:bg-sage-muted/60 cursor-pointer ring-1 ring-inset ring-sage/10';
-                    else cellClass += 'bg-white/60 text-ink-faint';
+                    let cellClass = dayCellClass(last, '');
+                    if (mine) cellClass += ' bg-slot-mine cursor-default';
+                    else if (isMonthly) cellClass += ' bg-[#d4cfc4] cursor-default';
+                    else if (taken) cellClass += ' bg-slot-taken cursor-default';
+                    else if (isSelected) cellClass += ' bg-slot-pick cursor-pointer';
+                    else if (bookable && bookingOpen) cellClass += ' bg-sage-muted/30 hover:bg-sage-muted/60 cursor-pointer ring-1 ring-inset ring-sage/10';
+                    else cellClass += ' bg-white/60 text-ink-faint';
 
                     return (
                       <td key={key} className={cellClass} onClick={() => toggle(day, time)}>

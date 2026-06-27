@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { DAYS, DAY_LABELS, Reservation, ValidDay } from '../types';
 import { useReservationSocket } from '../hooks/useReservationSocket';
+import { dayCellClass, dayHeaderClass, isLastDay } from './scheduleGridClasses';
 
 type SlotKey = `${ValidDay}-${number}`;
 
@@ -83,30 +84,36 @@ export function AdminReservationGrid({
         </button>
       </div>
 
-      <div className="grid-scroll">
-        <div className="card overflow-hidden min-w-[min(100%,36rem)] w-full">
-          <table className="w-full text-center text-[11px] sm:text-xs border-collapse">
+      <div className="schedule-grid-scroll">
+        <div className="schedule-grid-card">
+          <table className="schedule-grid-table w-full text-center text-[11px] sm:text-xs border-collapse">
             <thead>
               <tr className="border-b border-line">
-                <th className="sticky left-0 z-10 bg-white p-2 w-11 text-ink-faint">시</th>
-                {DAYS.map((d) => <th key={d} className="p-2 text-ink-muted min-w-[2.75rem]">{DAY_LABELS[d]}</th>)}
+                <th className="schedule-grid-th-corner p-2 w-11 text-ink-faint">시</th>
+                {DAYS.map((d) => (
+                  <th key={d} className={dayHeaderClass(isLastDay(d, DAYS))}>{DAY_LABELS[d]}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {Array.from({ length: 24 }, (_, time) => (
                 <tr key={time} className="border-b border-line/50">
-                  <td className="sticky left-0 z-10 bg-cream/80 p-1.5 text-ink-faint">{time}</td>
+                  <td className="schedule-grid-td-time p-1.5 text-ink-faint">{time}</td>
                   {DAYS.map((day) => {
                     const slot = getSlot(reservations, day, time);
                     const label = slot?.display_name || slot?.username || '';
                     const key: SlotKey = `${day}-${time}`;
                     const isSelected = selected.has(key);
+                    const last = isLastDay(day, DAYS);
                     return (
                       <td
                         key={key}
-                        className={`p-0.5 min-w-[2.75rem] h-11 cursor-pointer transition-colors ${
-                          isSelected ? 'bg-slot-pick text-white' : slot ? 'bg-slot-taken' : 'hover:bg-sage-muted/40'
-                        }`}
+                        className={dayCellClass(
+                          last,
+                          `cursor-pointer ${
+                            isSelected ? 'bg-slot-pick text-white' : slot ? 'bg-slot-taken' : 'hover:bg-sage-muted/40'
+                          }`,
+                        )}
                         onClick={() => toggle(day, time)}
                       >
                         <span className="block truncate px-0.5">{label}</span>
