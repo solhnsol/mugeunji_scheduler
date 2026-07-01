@@ -112,7 +112,7 @@ export default function UserApp({
   }
 
   const displayName = me.name || me.username;
-  const hasSubscription = me.access_status !== 'no_plan' && me.subscription;
+  const hasSubscription = me.access_status !== 'no_plan' && !!me.subscription;
   const canViewSchedule = me.can_view_schedule ?? hasSubscription;
   const canReserve =
     (me.can_reserve_monthly ?? me.can_access_schedule) && reservationOpen;
