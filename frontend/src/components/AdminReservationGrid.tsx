@@ -13,10 +13,12 @@ export function AdminReservationGrid({
   onForceReserve,
   onDelete,
   onClearAll,
+  fillHeight = false,
 }: {
   onForceReserve: (slots: { day: ValidDay; time_index: number }[]) => Promise<void>;
   onDelete: (slots: { day: ValidDay; time_index: number }[]) => Promise<void>;
   onClearAll: () => Promise<void>;
+  fillHeight?: boolean;
 }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [selected, setSelected] = useState<Set<SlotKey>>(new Set());
@@ -67,8 +69,8 @@ export function AdminReservationGrid({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
+    <div className={`flex flex-col min-h-0 ${fillHeight ? 'flex-1' : 'space-y-4'}`}>
+      <div className="flex flex-wrap gap-2 shrink-0 mb-3">
         <button type="button" className="btn-primary !w-auto !min-h-[40px] !py-2 !text-sm" disabled={busy || !selected.size} onClick={() => run(onForceReserve)}>
           강제 신청
         </button>
@@ -84,7 +86,7 @@ export function AdminReservationGrid({
         </button>
       </div>
 
-      <div className="schedule-grid-scroll">
+      <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
         <div className="schedule-grid-card">
           <table className="schedule-grid-table w-full text-center text-[11px] sm:text-xs border-collapse">
             <thead>
@@ -126,7 +128,7 @@ export function AdminReservationGrid({
           </table>
         </div>
       </div>
-      <p className="text-xs text-ink-faint">{selected.size}칸 선택</p>
+      <p className="text-xs text-ink-faint shrink-0 pt-2">{selected.size}칸 선택</p>
     </div>
   );
 }

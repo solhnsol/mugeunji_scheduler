@@ -19,12 +19,14 @@ export function AdminFreeReservationGrid({
   onForceReserve,
   onDelete,
   onClearAll,
+  fillHeight = false,
 }: {
   initialMonthly?: Reservation[];
   initialFree?: Reservation[];
   onForceReserve: (slots: { day: ValidDay; time_index: number }[]) => Promise<void>;
   onDelete: (slots: { day: ValidDay; time_index: number }[]) => Promise<void>;
   onClearAll: () => Promise<void>;
+  fillHeight?: boolean;
 }) {
   const [reservations, setReservations] = useState<Reservation[]>(() =>
     mergeReservations(initialMonthly, initialFree),
@@ -85,14 +87,14 @@ export function AdminFreeReservationGrid({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 text-xs text-ink-muted">
+    <div className={`flex flex-col min-h-0 ${fillHeight ? 'flex-1' : 'space-y-4'}`}>
+      <div className="flex flex-wrap gap-3 text-xs text-ink-muted shrink-0 mb-3">
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-taken inline-block" />자유이용</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-[#d4cfc4] inline-block" />월간 (선택 불가)</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-pick inline-block" />선택</span>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 shrink-0 mb-3">
         <button
           type="button"
           className="btn-primary !w-auto !min-h-[40px] !py-2 !text-sm"
@@ -128,7 +130,7 @@ export function AdminFreeReservationGrid({
         </button>
       </div>
 
-      <div className="schedule-grid-scroll">
+      <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
         <div className="schedule-grid-card">
           <table className="schedule-grid-table w-full text-center text-[11px] sm:text-xs border-collapse">
             <thead>
@@ -177,7 +179,7 @@ export function AdminFreeReservationGrid({
           </table>
         </div>
       </div>
-      <p className="text-xs text-ink-faint">{selected.size}칸 선택 · 월간 예약 칸은 선택할 수 없습니다</p>
+      <p className="text-xs text-ink-faint shrink-0 pt-2">{selected.size}칸 선택 · 월간 예약 칸은 선택할 수 없습니다</p>
     </div>
   );
 }

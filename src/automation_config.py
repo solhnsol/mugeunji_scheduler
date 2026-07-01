@@ -146,6 +146,29 @@ def get_monthly_open_datetime(year: int, month: int, config: ScheduleConfig) -> 
     )
 
 
+def get_last_monthly_open(dt: datetime, config: ScheduleConfig) -> datetime:
+    """가장 최근에 지난 월간 예약 오픈 시각 (현재 월 말 오픈 전이면 전월 말)."""
+    local = dt.astimezone(KST)
+    this_month_open = get_current_monthly_open(local, config)
+    if local >= this_month_open:
+        return this_month_open
+    year, month = local.year, local.month - 1
+    if month < 1:
+        month = 12
+        year -= 1
+    return get_monthly_open_datetime(year, month, config)
+
+
+def get_monthly_reservation_target_period(dt: datetime, config: ScheduleConfig) -> str:
+    """현재 월간 예약 창이 대상으로 하는 이용 달 (YYYY-MM)."""
+    last_open = get_last_monthly_open(dt, config)
+    year, month = last_open.year, last_open.month + 1
+    if month > 12:
+        month = 1
+        year += 1
+    return f"{year}-{month:02d}"
+
+
 def get_current_monthly_open(dt: datetime, config: ScheduleConfig) -> datetime:
     local = dt.astimezone(KST)
     return get_monthly_open_datetime(local.year, local.month, config)

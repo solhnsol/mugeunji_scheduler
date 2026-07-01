@@ -12,6 +12,7 @@ export interface Subscription {
   allowed_hours: number;
   monthly_price: number;
   auto_renew: boolean;
+  start_period?: string | null;
 }
 
 export interface Billing {
@@ -30,11 +31,16 @@ export interface MeResponse {
   phone?: string;
   access_status: 'no_plan' | 'pending_payment' | 'active' | 'unknown';
   can_access_schedule: boolean;
+  can_reserve_monthly?: boolean;
+  can_access_current_month?: boolean;
+  can_view_schedule?: boolean;
   profile_complete?: boolean;
   message: string;
   subscription?: Subscription | null;
   billing?: Billing | null;
   access_period?: string | null;
+  reservation_target_period?: string | null;
+  start_period?: string | null;
   open_settlement_period?: string | null;
   can_access_free_schedule?: boolean;
   pending_plan_change?: {

@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 import bcrypt
 
-from src.membership import DEFAULT_PLANS
+from src.membership import DEFAULT_PLANS, period_from_offset
 from src.automation_config import AUTOMATION_SETTING_DEFAULTS
 from src.legacy_migration import run_legacy_migration
 
@@ -43,6 +43,27 @@ async def _migrate_subscriptions_table(conn: aiosqlite.Connection):
         await conn.execute(
             "ALTER TABLE subscriptions ADD COLUMN cancellation_effective_period TEXT"
         )
+    if not await _column_exists(conn, table="subscriptions", column="start_period"):
+        await conn.execute(
+            "ALTER TABLE subscriptions ADD COLUMN start_period TEXT"
+        )
+    await conn.execute(
+        """
+        UPDATE subscriptions
+        SET start_period = (
+            SELECT MIN(period) FROM billing_cycles bc
+            WHERE bc.username = subscriptions.username
+        )
+        WHERE start_period IS NULL
+        AND EXISTS (
+            SELECT 1 FROM billing_cycles bc WHERE bc.username = subscriptions.username
+        )
+        """
+    )
+    await conn.execute(
+        "UPDATE subscriptions SET start_period = ? WHERE start_period IS NULL",
+        (period_from_offset(1),),
+    )
 
 async def setup_database(conn: aiosqlite.Connection):
     await conn.execute("""

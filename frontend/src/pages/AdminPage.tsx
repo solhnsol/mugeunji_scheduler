@@ -170,13 +170,14 @@ function AdminDashboard({
     <AppShell
       title="관리자"
       badge={<span className="text-xs text-ink-muted">{adminUser}</span>}
+      fillMain={tab === 'schedule' || tab === 'free'}
       actions={
         <>
           <button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>
         </>
       }
     >
-      <div className="mb-4 -mx-4 px-4 overflow-x-auto">
+      <div className="mb-4 -mx-4 px-4 overflow-x-auto shrink-0">
         <div className="flex gap-1 p-1 bg-cream-dark/50 rounded-full min-w-max">
         {TABS.map((t) => (
           <button
@@ -398,8 +399,8 @@ function AdminDashboard({
       )}
 
       {tab === 'schedule' && (
-        <div className="space-y-4">
-          <div className="card p-4 space-y-3">
+        <div className="flex flex-col flex-1 min-h-0 gap-3">
+          <div className="card p-4 space-y-3 shrink-0">
             <label className="label" htmlFor="target-username">강제 신청 대상</label>
             <select
               id="target-username"
@@ -448,6 +449,7 @@ function AdminDashboard({
             })()}
           </div>
           <AdminReservationGrid
+            fillHeight
             onForceReserve={async (slots) => {
               if (!targetUser.trim()) {
                 show('대상 아이디를 입력하세요', 'error');
@@ -485,9 +487,9 @@ function AdminDashboard({
       )}
 
       {tab === 'free' && (
-        <div className="space-y-4">
+        <div className="flex flex-col flex-1 min-h-0 gap-3">
           {freeSchedule && (
-            <div className="card p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div className="card p-4 flex flex-wrap items-center justify-between gap-3 text-sm shrink-0">
               <p className="text-ink-muted">
                 예약 창 · {formatFreeWindow(freeSchedule.window_start, freeSchedule.window_end)}
               </p>
@@ -496,8 +498,8 @@ function AdminDashboard({
               </span>
             </div>
           )}
-          {freeSchedule && <WeeklyUsage data={freeSchedule.weekly_usage} />}
-          <div className="card p-4 space-y-3">
+          {freeSchedule && <div className="shrink-0"><WeeklyUsage data={freeSchedule.weekly_usage} /></div>}
+          <div className="card p-4 space-y-3 shrink-0">
             <label className="label" htmlFor="free-target-username">강제 신청 대상</label>
             <select
               id="free-target-username"
@@ -516,6 +518,7 @@ function AdminDashboard({
           </div>
           {freeSchedule ? (
             <AdminFreeReservationGrid
+              fillHeight
               initialMonthly={freeSchedule.monthly_reservations}
               initialFree={freeSchedule.free_reservations}
               onForceReserve={async (slots) => {

@@ -86,11 +86,11 @@ export const api = {
     return parseResponse<import('./types').Plan[]>(res);
   },
 
-  async applyPlan(token: string, planId: number) {
+  async applyPlan(token: string, planId: number, startPeriod: 'current' | 'next' = 'next') {
     const res = await fetch('/plans/apply', {
       method: 'POST',
       headers: authHeaders(token),
-      body: JSON.stringify({ plan_id: planId }),
+      body: JSON.stringify({ plan_id: planId, start_period: startPeriod }),
     });
     return parseResponse<{ message: string }>(res);
   },
@@ -131,7 +131,12 @@ export const api = {
 
   async getSettings() {
     const res = await fetch('/settings');
-    return parseResponse<{ reservation_enabled: boolean; reservation_opens_at?: string }>(res);
+    return parseResponse<{
+      reservation_enabled: boolean;
+      reservation_opens_at?: string;
+      schedule_message?: string;
+      next_monthly_open_at?: string;
+    }>(res);
   },
 
   async getFreeWeeklyUsage(token: string) {

@@ -20,6 +20,7 @@ export function FreeReservationGrid({
   initialMonthly = [],
   initialFree = [],
   onSubmit,
+  fillHeight = false,
 }: {
   username: string;
   bookableSlots: Set<string>;
@@ -27,6 +28,7 @@ export function FreeReservationGrid({
   initialMonthly?: Reservation[];
   initialFree?: Reservation[];
   onSubmit: (slots: { day: ValidDay; time_index: number }[]) => Promise<void>;
+  fillHeight?: boolean;
 }) {
   const [reservations, setReservations] = useState<Reservation[]>(() =>
     mergeReservations(initialMonthly, initialFree),
@@ -101,8 +103,8 @@ export function FreeReservationGrid({
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 text-xs text-ink-muted">
+    <div className={`flex flex-col min-h-0 ${fillHeight ? 'flex-1' : 'space-y-4'}`}>
+      <div className="flex flex-wrap gap-3 text-xs text-ink-muted shrink-0 mb-3">
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-mine inline-block" />내 자유이용</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-taken inline-block" />자유이용</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-[#d4cfc4] inline-block" />월간</span>
@@ -110,7 +112,7 @@ export function FreeReservationGrid({
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-pick inline-block" />선택</span>
       </div>
 
-      <div className="schedule-grid-scroll">
+      <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
         <div className="schedule-grid-card">
           <table className="schedule-grid-table w-full text-center text-[11px] sm:text-xs border-collapse">
             <thead>
@@ -165,7 +167,7 @@ export function FreeReservationGrid({
       </div>
 
       {bookingOpen && (
-        <div className="sticky bottom-4 z-10 pt-2">
+        <div className="shrink-0 pt-3">
           <button
             type="button"
             className="btn-primary shadow-lg shadow-sage/20"

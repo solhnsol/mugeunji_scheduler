@@ -59,7 +59,14 @@ export default function FreeApp({
   useEffect(() => {
     load().catch((err) => {
       if (err instanceof ApiError && err.message.includes('권한')) {
-        setMe({ role: 'user', access_status: 'unknown', can_access_schedule: false, can_access_free_schedule: false, message: err.message, username } as MeResponse);
+        setMe({
+          role: 'user',
+          access_status: 'unknown',
+          can_access_schedule: false,
+          can_access_free_schedule: false,
+          message: err.message,
+          username,
+        } as MeResponse);
       } else {
         show(err instanceof ApiError ? err.message : '로드 실패', 'error');
       }
@@ -108,6 +115,7 @@ export default function FreeApp({
   return (
     <AppShell
       title={`${displayName}님`}
+      fillMain
       badge={
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-ink-muted">자유이용</span>
@@ -117,28 +125,33 @@ export default function FreeApp({
       nav={<ScheduleModeNav mode="free" />}
       actions={<HeaderActions items={headerMenuItems} />}
     >
-      {windowLabel && (
-        <p className="text-xs text-ink-faint text-center mb-4">예약 창 · {windowLabel}</p>
-      )}
-      <WeeklyUsage token={token} refreshKey={usageRefreshKey} />
-      <FreeReservationGrid
-        username={username}
-        bookableSlots={bookableSlots}
-        bookingOpen={bookingOpen}
-        initialMonthly={monthlyReservations}
-        initialFree={freeReservations}
-        onSubmit={async (slots) => {
-          try {
-            const res = await api.reserveFree(token, slots);
-            show(res.message, 'success');
-            setUsageRefreshKey((k) => k + 1);
-            await load();
-          } catch (err) {
-            show(err instanceof ApiError ? err.message : '신청 실패', 'error');
-            throw err;
-          }
-        }}
-      />
+      <div className="flex flex-col flex-1 min-h-0 gap-3">
+        {windowLabel && (
+          <p className="text-xs text-ink-faint text-center shrink-0">예약 창 · {windowLabel}</p>
+        )}
+        <div className="shrink-0">
+          <WeeklyUsage token={token} refreshKey={usageRefreshKey} />
+        </div>
+        <FreeReservationGrid
+          fillHeight
+          username={username}
+          bookableSlots={bookableSlots}
+          bookingOpen={bookingOpen}
+          initialMonthly={monthlyReservations}
+          initialFree={freeReservations}
+          onSubmit={async (slots) => {
+            try {
+              const res = await api.reserveFree(token, slots);
+              show(res.message, 'success');
+              setUsageRefreshKey((k) => k + 1);
+              await load();
+            } catch (err) {
+              show(err instanceof ApiError ? err.message : '신청 실패', 'error');
+              throw err;
+            }
+          }}
+        />
+      </div>
       <Toast message={toast.message} type={toast.type} />
     </AppShell>
   );

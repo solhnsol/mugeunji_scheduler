@@ -2,6 +2,9 @@ import aiosqlite
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 
+from src.automation_config import ScheduleConfig, get_monthly_reservation_target_period, now_kst
+from src.schedule_utils import parse_opens_at
+
 KST = timezone(timedelta(hours=9))
 
 DEFAULT_PLANS = [
@@ -27,6 +30,17 @@ def role_from_hours(hours: int) -> str:
 def usage_period(from_dt: Optional[datetime] = None) -> str:
     """달력상 현재 월 — 시간표·자유이용 접근 판단에 사용."""
     return period_from_offset(0, from_dt)
+
+
+def resolve_start_period(choice: Optional[str], from_dt: Optional[datetime] = None) -> str:
+    """신청 시 이용 시작 달 (YYYY-MM). choice: 'current' | 'next' | YYYY-MM."""
+    if choice in (None, "", "next"):
+        return period_from_offset(1, from_dt)
+    if choice == "current":
+        return usage_period(from_dt)
+    if len(choice) == 7 and choice[4] == "-":
+        return choice
+    return period_from_offset(1, from_dt)
 
 
 class MembershipManager:
@@ -138,10 +152,13 @@ class MembershipManager:
         return dict(row) if row else None
 
     async def _sync_subscription_payment_status(self, username: str) -> None:
-        """이번 달(usage_period) 입금 여부에 맞춰 구독 상태 동기화."""
-        billing = await self.get_billing_cycle(username, usage_period())
+        """이용 달·예약 대상 달 입금 여부에 맞춰 구독 상태 동기화."""
+        current = usage_period()
+        target = await self.get_reservation_target_period()
+        billing_current = await self.get_billing_cycle(username, current)
+        billing_target = await self.get_billing_cycle(username, target)
         now = datetime.now(KST).isoformat()
-        if billing and billing["status"] == "paid":
+        if self._is_billing_paid(billing_current) or self._is_billing_paid(billing_target):
             await self.conn.execute(
                 """
                 UPDATE subscriptions SET status = 'active', updated_at = ?
@@ -158,18 +175,45 @@ class MembershipManager:
                 (now, username),
             )
 
+    async def _get_schedule_config(self) -> ScheduleConfig:
+        async with self.conn.execute("SELECT key, value FROM system_settings") as cursor:
+            rows = await cursor.fetchall()
+        settings = {row["key"]: row["value"] for row in rows}
+        return ScheduleConfig.from_settings(settings)
+
+    async def get_reservation_target_period(self, from_dt: Optional[datetime] = None) -> str:
+        now = from_dt or now_kst()
+        config = await self._get_schedule_config()
+        if not config.auto_monthly_open_enabled:
+            async with self.conn.execute(
+                "SELECT value FROM system_settings WHERE key = 'reservation_opens_at'"
+            ) as cursor:
+                row = await cursor.fetchone()
+            manual = parse_opens_at(row["value"] if row else None)
+            if manual:
+                return f"{manual.year}-{manual.month:02d}"
+        return get_monthly_reservation_target_period(now, config)
+
+    def _is_billing_paid(self, billing: Optional[Dict]) -> bool:
+        return bool(billing and billing.get("status") == "paid")
+
     async def get_access_status(self, username: str) -> Dict:
         user = await self.get_user_row(username)
         if not user:
             return {"access_status": "unknown", "can_access_schedule": False, "message": "사용자를 찾을 수 없습니다."}
         if user["role"] == "admin":
+            target = await self.get_reservation_target_period()
             return {
                 "access_status": "active",
                 "can_access_schedule": True,
+                "can_reserve_monthly": True,
+                "can_access_current_month": True,
+                "can_view_schedule": True,
                 "message": "관리자",
                 "subscription": None,
                 "billing": None,
                 "access_period": usage_period(),
+                "reservation_target_period": target,
             }
 
         sub = await self.get_subscription(username)
@@ -177,53 +221,81 @@ class MembershipManager:
             return {
                 "access_status": "no_plan",
                 "can_access_schedule": False,
+                "can_reserve_monthly": False,
+                "can_access_current_month": False,
+                "can_view_schedule": False,
                 "message": "요금제를 신청해주세요.",
                 "subscription": None,
                 "billing": None,
                 "access_period": usage_period(),
+                "reservation_target_period": await self.get_reservation_target_period(),
             }
 
-        active_period = usage_period()
-        billing = await self.get_billing_cycle(username, active_period)
+        current_period = usage_period()
+        next_period = period_from_offset(1)
+        target_period = await self.get_reservation_target_period()
+        billing_current = await self.get_billing_cycle(username, current_period)
+        billing_next = await self.get_billing_cycle(username, next_period)
+        billing_target = await self.get_billing_cycle(username, target_period)
         hours, price, _ = await self.get_effective_hours_and_price(username)
 
         pending_change = await self._get_pending_plan_change(username)
         open_settlement = await self.get_open_settlement()
         pending_cancellation = self._pending_cancellation(sub)
+        start_period = sub.get("start_period") or current_period
 
-        if billing and billing["status"] == "paid":
-            return {
-                "access_status": "active",
-                "can_access_schedule": True,
-                "message": "이용 가능",
-                "subscription": self._public_subscription(sub, hours, price),
-                "billing": self._public_billing(billing),
-                "access_period": active_period,
-                "pending_plan_change": pending_change,
-                "pending_cancellation": pending_cancellation,
-                "open_settlement_period": open_settlement["period"] if open_settlement else None,
-            }
+        paid_current = self._is_billing_paid(billing_current)
+        paid_next = self._is_billing_paid(billing_next)
+        paid_target = self._is_billing_paid(billing_target)
 
-        if billing and billing["status"] == "pending":
-            return {
-                "access_status": "pending_payment",
-                "can_access_schedule": False,
-                "message": f"{billing['period']} 이용 요금 입금 확인 후 시간표를 이용할 수 있습니다.",
-                "subscription": self._public_subscription(sub, hours, price),
-                "billing": self._public_billing(billing),
-                "access_period": active_period,
-                "pending_plan_change": pending_change,
-                "pending_cancellation": pending_cancellation,
-                "open_settlement_period": open_settlement["period"] if open_settlement else None,
-            }
+        can_access_current_month = paid_current
+        can_access_schedule = paid_current or paid_next or paid_target
+        can_reserve_monthly = paid_target
+        can_view_schedule = True
+
+        display_billing = billing_target or billing_next or billing_current
+        if display_billing and display_billing["status"] == "paid":
+            access_status = "active"
+        elif display_billing and display_billing["status"] == "pending":
+            access_status = "pending_payment"
+        elif can_access_schedule:
+            access_status = "active"
+        else:
+            access_status = "pending_payment"
+
+        if can_reserve_monthly:
+            message = "이용 가능"
+        elif paid_next and not paid_current:
+            config = await self._get_schedule_config()
+            from src.automation_config import get_current_monthly_open, format_monthly_open_label
+            this_month_open = get_current_monthly_open(now_kst(), config)
+            if now_kst() < this_month_open:
+                opens_at = format_monthly_open_label(this_month_open)
+                message = (
+                    f"{next_period} 이용 요금이 확인되었습니다. "
+                    f"월간 예약은 {opens_at}부터 가능합니다."
+                )
+            else:
+                message = f"{next_period} 이용 요금이 확인되었습니다."
+        elif display_billing and display_billing["status"] == "pending":
+            message = f"{display_billing['period']} 이용 요금 입금 확인 후 시간표를 이용할 수 있습니다."
+        elif not can_access_schedule:
+            message = f"{start_period} 이용 요금 입금 확인 후 시간표를 이용할 수 있습니다."
+        else:
+            message = "이용 가능"
 
         return {
-            "access_status": "pending_payment",
-            "can_access_schedule": False,
-            "message": f"{active_period} 이용 요금 입금 확인 후 시간표를 이용할 수 있습니다.",
+            "access_status": access_status,
+            "can_access_schedule": can_access_schedule,
+            "can_reserve_monthly": can_reserve_monthly,
+            "can_access_current_month": can_access_current_month,
+            "can_view_schedule": can_view_schedule,
+            "message": message,
             "subscription": self._public_subscription(sub, hours, price),
-            "billing": None,
-            "access_period": active_period,
+            "billing": self._public_billing(display_billing) if display_billing else None,
+            "access_period": current_period,
+            "reservation_target_period": target_period,
+            "start_period": start_period,
             "pending_plan_change": pending_change,
             "pending_cancellation": pending_cancellation,
             "open_settlement_period": open_settlement["period"] if open_settlement else None,
@@ -242,6 +314,7 @@ class MembershipManager:
             "allowed_hours": hours,
             "monthly_price": price,
             "auto_renew": bool(sub["auto_renew"]),
+            "start_period": sub.get("start_period"),
         }
 
     def _public_billing(self, billing: Dict) -> Dict:
@@ -275,7 +348,9 @@ class MembershipManager:
             "new_monthly_price": row["monthly_price"],
         }
 
-    async def apply_for_plan(self, username: str, plan_id: int) -> Tuple[bool, str]:
+    async def apply_for_plan(
+        self, username: str, plan_id: int, start_period_choice: Optional[str] = None
+    ) -> Tuple[bool, str]:
         user = await self.get_user_row(username)
         if not user:
             return False, "사용자를 찾을 수 없습니다."
@@ -290,31 +365,40 @@ class MembershipManager:
         if existing and existing["status"] == "active":
             return False, "이미 이용 중인 요금제가 있습니다. 변경은 다음 달부터 적용됩니다."
 
-        open_settlement = await self.get_open_settlement()
+        start_period = resolve_start_period(start_period_choice)
         try:
             if existing:
                 await self.conn.execute(
-                    "UPDATE subscriptions SET plan_id = ?, status = 'pending_payment', updated_at = ? WHERE username = ?",
-                    (plan_id, datetime.now(KST).isoformat(), username),
+                    """
+                    UPDATE subscriptions
+                    SET plan_id = ?, status = 'pending_payment', start_period = ?, updated_at = ?
+                    WHERE username = ?
+                    """,
+                    (plan_id, start_period, datetime.now(KST).isoformat(), username),
                 )
             else:
                 await self.conn.execute(
                     """
-                    INSERT INTO subscriptions (username, plan_id, status, auto_renew, created_at, updated_at)
-                    VALUES (?, ?, 'pending_payment', 1, ?, ?)
+                    INSERT INTO subscriptions
+                    (username, plan_id, status, auto_renew, start_period, created_at, updated_at)
+                    VALUES (?, ?, 'pending_payment', 1, ?, ?, ?)
                     """,
-                    (username, plan_id, datetime.now(KST).isoformat(), datetime.now(KST).isoformat()),
+                    (
+                        username,
+                        plan_id,
+                        start_period,
+                        datetime.now(KST).isoformat(),
+                        datetime.now(KST).isoformat(),
+                    ),
                 )
 
             await self.sync_user_entitlements(username)
-
-            if open_settlement:
-                await self._ensure_billing_cycle(username, open_settlement["period"], billing_type="new")
-                await self.conn.commit()
-                return True, f"{open_settlement['period']} 요금제 신청이 완료되었습니다. 입금 확인 후 이용 가능합니다."
-
+            await self._ensure_billing_cycle(username, start_period, billing_type="new")
             await self.conn.commit()
-            return True, "요금제 신청이 완료되었습니다. 다음 달 정산이 열리면 입금 안내가 표시됩니다."
+            return True, (
+                f"{start_period} 요금제 신청이 완료되었습니다. "
+                "입금 확인 후 이용 가능합니다."
+            )
         except Exception as e:
             await self.conn.rollback()
             return False, f"요금제 신청 중 오류가 발생했습니다: {str(e)}"
@@ -480,7 +564,8 @@ class MembershipManager:
 
             async with self.conn.execute(
                 """
-                SELECT username FROM subscriptions
+                SELECT username, start_period, cancellation_effective_period
+                FROM subscriptions
                 WHERE status IN ('active', 'pending_payment')
                 """
             ) as cursor:
@@ -491,6 +576,12 @@ class MembershipManager:
                 username = row["username"]
                 user = await self.get_user_row(username)
                 if not user or user["role"] == "admin":
+                    continue
+                start = row["start_period"] or usage_period()
+                if start > period:
+                    continue
+                cancel = row["cancellation_effective_period"]
+                if cancel and cancel <= period:
                     continue
                 plan_id = await self._resolve_plan_for_period(username, period)
                 await self.conn.execute(

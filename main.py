@@ -112,6 +112,7 @@ class UpdateProfileRequest(BaseModel):
 
 class PlanApplyRequest(BaseModel):
     plan_id: int = Field(..., ge=1)
+    start_period: Optional[Literal["current", "next"]] = "next"
 
 
 class OpenSettlementRequest(BaseModel):
@@ -160,6 +161,8 @@ class UpdateAutomationRequest(BaseModel):
     monthly_open_minute: int = Field(0, ge=0, le=59)
     monthly_clear_minutes_before: int = Field(20, ge=0, le=1440)
     auto_monthly_clear_enabled: bool = True
+    reservation_opens_at: Optional[str] = None
+    clear_reservation_opens_at: bool = False
     auto_free_reset_enabled: bool = True
     free_reset_weekday: int = Field(6, ge=0, le=6)
     free_reset_hour: int = Field(20, ge=0, le=23)
@@ -266,7 +269,9 @@ async def get_me(current_user: dict = Depends(get_current_user), conn: aiosqlite
     access = await membership.get_access_status(current_user["username"])
     user = await membership.get_user_row(current_user["username"])
     role = current_user["role"]
-    can_free = role in ("free", "admin") and (role == "admin" or access.get("can_access_schedule", False))
+    can_free = role in ("free", "admin") and (
+        role == "admin" or access.get("can_access_current_month", False)
+    )
     profile_complete = is_profile_complete(user)
     return {
         "username": current_user["username"],
@@ -312,7 +317,9 @@ async def apply_plan(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     membership = MembershipManager(conn)
-    is_success, message = await membership.apply_for_plan(current_user["username"], data.plan_id)
+    is_success, message = await membership.apply_for_plan(
+        current_user["username"], data.plan_id, data.start_period
+    )
     if is_success:
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
@@ -385,6 +392,8 @@ async def admin_login(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_
 async def get_public_settings(conn: aiosqlite.Connection = Depends(get_db_conn)):
     reserve_manager = ReservationManager(conn)
     status = await reserve_manager.get_public_schedule_status()
+    if status.pop("did_clear", False):
+        await broadcast_reservation_updates(conn)
     return status
 
 
@@ -758,11 +767,18 @@ async def update_automation_settings(
         "reservation_enabled": str(data.reservation_enabled).lower(),
         **config.to_settings_dict(),
     }
+    if data.reservation_opens_at is not None:
+        payload["reservation_opens_at"] = data.reservation_opens_at
+        if not data.auto_monthly_open_enabled:
+            payload["last_cleared_for"] = None
+    elif data.auto_monthly_open_enabled or data.clear_reservation_opens_at:
+        payload["reservation_opens_at"] = None
+
     is_success, message = await settings_manager.upsert_settings(payload)
     if not is_success:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
     reserve_manager = ReservationManager(conn)
-    await reserve_manager.check_reservation_availability()
+    _, _, did_clear = await reserve_manager.check_reservation_availability()
     await broadcast_reservation_updates(conn)
     status_data = await reserve_manager.get_automation_status()
     return {"status": "success", "message": message, **status_data}
