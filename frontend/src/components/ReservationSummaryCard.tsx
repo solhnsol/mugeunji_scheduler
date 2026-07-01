@@ -8,7 +8,6 @@ export function ReservationSummaryCard({
   type = 'monthly',
   allowedHours,
   emptyLabel = '미신청',
-  subtitle,
 }: {
   title?: string;
   reservations: Reservation[];
@@ -16,35 +15,35 @@ export function ReservationSummaryCard({
   type?: 'monthly' | 'free';
   allowedHours?: number;
   emptyLabel?: string;
-  subtitle?: string;
 }) {
   const summary = summarizeReservations(reservations, { username, type });
 
   return (
-    <div className="card p-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-medium text-ink">{title}</h3>
-          {subtitle && <p className="text-xs text-ink-faint mt-0.5">{subtitle}</p>}
-        </div>
-        {allowedHours != null && (
-          <span className="text-xs text-ink-faint">
-            {summary.totalHours}/{allowedHours}시간
+    <section className="card p-5 sm:p-6">
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <h2 className="text-base font-semibold text-ink">{title}</h2>
+        {allowedHours != null && summary.hasReservations && (
+          <span className="text-sm text-ink-faint tabular-nums">
+            {summary.totalHours}
+            <span className="text-ink-faint/50">/{allowedHours}h</span>
           </span>
         )}
       </div>
+
       {!summary.hasReservations ? (
-        <p className="text-sm text-ink-muted py-3 text-center">{emptyLabel}</p>
+        <p className="text-sm text-ink-faint py-8 text-center leading-relaxed">{emptyLabel}</p>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="mt-3 divide-y divide-line/50">
           {summary.days.map((d) => (
-            <li key={d.day} className="flex items-baseline gap-3 text-sm">
-              <span className="font-semibold text-sage w-7 shrink-0 text-center">{d.dayLabel}</span>
-              <span className="text-ink">{d.timeText}</span>
+            <li key={d.day} className="flex items-center gap-3.5 py-3.5 first:pt-0 last:pb-0">
+              <span className="w-10 h-10 rounded-2xl bg-sage-muted text-sage font-bold text-sm flex items-center justify-center shrink-0">
+                {d.dayLabel}
+              </span>
+              <span className="text-[15px] font-medium text-ink">{d.timeText}</span>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

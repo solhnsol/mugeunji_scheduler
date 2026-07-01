@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
-import { AppShell, HeaderActions, PlanGrid, ScheduleModeNav, StatusDot, Toast } from '../components/ui';
+import { AppShell, HeaderActions, PlanGrid, ScheduleModeNav, Toast } from '../components/ui';
 import { PlanApplyModal } from '../components/PlanApplyModal';
 import { PlanManageModal } from '../components/PlanManageModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { ReservationGrid } from '../components/ReservationGrid';
 import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
+import { MonthlyPlanHero } from '../components/ScheduleHero';
 import { ScheduleModal } from '../components/ScheduleModal';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { MeResponse, Plan } from '../types';
-import { formatPrice } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 
 function useToast() {
@@ -146,14 +146,10 @@ export default function UserApp({
     <ScheduleModeNav mode="monthly" />
   ) : undefined;
 
-  const planBadge = me.subscription ? (
-    <span className="text-xs text-ink-muted">
-      {me.subscription.plan_name} · 주 {me.subscription.allowed_hours}시간
-      {me.subscription.start_period && (
-        <span className="text-ink-faint"> · {me.subscription.start_period}~</span>
-      )}
-    </span>
-  ) : undefined;
+  const showBillingHero =
+    !!me.billing && (me.access_status === 'pending_payment' || !me.can_access_schedule);
+  const heroNotice =
+    me.message && me.message !== '이용 가능' && !showBillingHero ? me.message : undefined;
 
   const profileModal = profileOpen && (
     <ProfileModal
@@ -258,70 +254,44 @@ export default function UserApp({
   return (
     <AppShell
       title={`${displayName}님`}
-      badge={
-        <div className="flex items-center gap-2 flex-wrap">
-          {planBadge}
-        </div>
-      }
       nav={headerNav}
       actions={<HeaderActions items={headerMenuItems} />}
     >
-      {profileBanner}
+      <div className="space-y-4">
+        {profileBanner}
 
-      <div className="card p-4 mb-3 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {me.access_status === 'pending_payment' || !me.can_access_schedule ? (
-            <StatusDot label="입금 확인 중" variant="wait" />
-          ) : canReserve ? (
-            <StatusDot label="예약 가능" variant="open" />
-          ) : (
-            <StatusDot label="예약 대기" variant="wait" />
-          )}
-        </div>
-
-        {me.billing && (me.access_status === 'pending_payment' || !me.can_access_schedule) && (
-          <div className="text-center">
-            <p className="text-2xl font-bold text-ink">{formatPrice(me.billing.amount)}</p>
-            <p className="text-sm text-ink-muted mt-1">
-              {me.billing.period} · {me.billing.plan_name}
-            </p>
-          </div>
+        {me.subscription && (
+          <MonthlyPlanHero
+            planName={me.subscription.plan_name}
+            allowedHours={me.subscription.allowed_hours}
+            startPeriod={me.subscription.start_period}
+            targetPeriod={me.reservation_target_period}
+            pendingBilling={showBillingHero ? me.billing : undefined}
+            pendingCancellation={me.pending_cancellation ?? undefined}
+            notice={heroNotice}
+          />
         )}
 
-        {me.message && me.message !== '이용 가능' && (
-          <p className="text-sm text-ink-muted text-center">{me.message}</p>
-        )}
-
-        {me.pending_cancellation && (
-          <p className="text-xs text-ink-faint text-center">
-            {me.pending_cancellation.effective_period}부터 중단 예정
-          </p>
+        {canViewSchedule && (
+          <>
+            <ReservationSummaryCard
+              title="이번 달 예약"
+              reservations={monthlyReservations}
+              username={username}
+              type="monthly"
+              allowedHours={me.subscription?.allowed_hours}
+              emptyLabel="아직 신청하지 않았어요"
+            />
+            <button
+              type="button"
+              className="btn-primary shadow-lg shadow-sage/20"
+              onClick={() => setScheduleModalOpen(true)}
+            >
+              {scheduleButtonLabel}
+            </button>
+          </>
         )}
       </div>
-
-      {canViewSchedule && (
-        <div className="space-y-3">
-          <ReservationSummaryCard
-            title="월신청 현황"
-            reservations={monthlyReservations}
-            username={username}
-            type="monthly"
-            allowedHours={me.subscription?.allowed_hours}
-            subtitle={
-              me.reservation_target_period
-                ? `예약 대상 · ${me.reservation_target_period}`
-                : undefined
-            }
-          />
-          <button
-            type="button"
-            className="btn-primary shadow-lg shadow-sage/20"
-            onClick={() => setScheduleModalOpen(true)}
-          >
-            {scheduleButtonLabel}
-          </button>
-        </div>
-      )}
 
       {applyPlan && (
         <PlanApplyModal

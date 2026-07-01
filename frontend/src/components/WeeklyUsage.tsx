@@ -41,9 +41,9 @@ export function WeeklyUsage({
   if (!data?.items.length) return null;
 
   return (
-    <section className="card p-4 mb-5">
+    <section className="card p-5 sm:p-6">
       <div className="flex items-baseline justify-between gap-2 mb-3">
-        <h2 className="text-sm font-semibold text-ink">이번 주 자유이용</h2>
+        <h2 className="text-base font-semibold text-ink">이번 주 이용</h2>
         <span className="text-xs text-ink-faint">{formatWeekRange(data.week_start, data.week_end)}</span>
       </div>
       <ul className="space-y-2">

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { AppShell, HeaderActions, ScheduleModeNav, StatusDot, Toast } from '../components/ui';
+import { AppShell, HeaderActions, ScheduleModeNav, Toast } from '../components/ui';
 import { FreeReservationGrid } from '../components/FreeReservationGrid';
 import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
+import { FreeScheduleHero } from '../components/ScheduleHero';
 import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
 import { MeResponse, Reservation } from '../types';
@@ -126,28 +127,20 @@ export default function FreeApp({
   return (
     <AppShell
       title={`${displayName}님`}
-      badge={
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-ink-muted">자유이용</span>
-          <StatusDot label={bookingOpen ? '신청 가능' : '대기'} variant={bookingOpen ? 'open' : 'wait'} />
-        </div>
-      }
       nav={<ScheduleModeNav mode="free" />}
       actions={<HeaderActions items={headerMenuItems} />}
     >
-      <div className="space-y-3">
-        {windowLabel && (
-          <p className="text-xs text-ink-faint text-center">예약 창 · {windowLabel}</p>
-        )}
+      <div className="space-y-4">
+        <FreeScheduleHero windowLabel={windowLabel || undefined} />
 
         <WeeklyUsage token={token} refreshKey={usageRefreshKey} />
 
         <ReservationSummaryCard
-          title="자유이용 현황"
+          title="내 예약"
           reservations={freeReservations}
           username={username}
           type="free"
-          emptyLabel="미신청"
+          emptyLabel="아직 신청하지 않았어요"
         />
 
         <button
