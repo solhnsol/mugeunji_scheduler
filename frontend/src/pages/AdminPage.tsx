@@ -5,9 +5,13 @@ import { AppShell, Toast } from '../components/ui';
 import { AdminReservationGrid } from '../components/AdminReservationGrid';
 import { AdminFreeReservationGrid } from '../components/AdminFreeReservationGrid';
 import { AdminAutomationTab } from '../components/AdminAutomationTab';
+import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
+import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
+import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { Plan, Reservation, SettlementOverview, UserInfo } from '../types';
 import { formatPrice } from '../utils';
+import { summarizeReservations } from '../utils/reservationSummary';
 
 const ADMIN_TOKEN_KEY = 'adminAccessToken';
 const ADMIN_USER_KEY = 'adminUsername';
@@ -114,6 +118,9 @@ function AdminDashboard({
     window_end: string;
   } | null>(null);
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [freeScheduleModalOpen, setFreeScheduleModalOpen] = useState(false);
+  const monthlyReservations = useMonthlyReservations();
 
   const freeTargetUsers = useMemo(() => {
     const seen = new Set<string>();
@@ -170,7 +177,6 @@ function AdminDashboard({
     <AppShell
       title="관리자"
       badge={<span className="text-xs text-ink-muted">{adminUser}</span>}
-      fillMain={tab === 'schedule' || tab === 'free'}
       actions={
         <>
           <button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>
@@ -399,8 +405,8 @@ function AdminDashboard({
       )}
 
       {tab === 'schedule' && (
-        <div className="flex flex-col flex-1 min-h-0 gap-3">
-          <div className="card p-4 space-y-3 shrink-0">
+        <div className="space-y-3">
+          <div className="card p-4 space-y-3">
             <label className="label" htmlFor="target-username">강제 신청 대상</label>
             <select
               id="target-username"
@@ -448,48 +454,80 @@ function AdminDashboard({
               );
             })()}
           </div>
-          <AdminReservationGrid
-            fillHeight
-            onForceReserve={async (slots) => {
-              if (!targetUser.trim()) {
-                show('대상 아이디를 입력하세요', 'error');
-                return;
+
+          {targetUser ? (
+            <ReservationSummaryCard
+              title="선택 회원 월신청"
+              reservations={monthlyReservations}
+              username={targetUser}
+              type="monthly"
+              allowedHours={
+                [...admins, ...users].find((u) => u.username === targetUser)?.allowed_hours
               }
-              try {
-                const res = await api.adminForceReserve(token, targetUser.trim(), slots);
-                show(res.message, 'success');
-              } catch (e) {
-                show(e instanceof ApiError ? e.message : '신청 실패', 'error');
-                throw e;
-              }
-            }}
-            onDelete={async (slots) => {
-              if (!confirm(`${slots.length}칸 삭제?`)) return;
-              try {
-                const res = await api.adminDeleteReservations(token, slots);
-                show(res.message, 'success');
-              } catch (e) {
-                show(e instanceof ApiError ? e.message : '삭제 실패', 'error');
-                throw e;
-              }
-            }}
-            onClearAll={async () => {
-              try {
-                const res = await api.adminClearReservations(token);
-                show(res.message, 'success');
-              } catch (e) {
-                show(e instanceof ApiError ? e.message : '초기화 실패', 'error');
-                throw e;
-              }
-            }}
-          />
+            />
+          ) : (
+            <div className="card p-4 text-center space-y-1">
+              <p className="text-sm text-ink-muted">회원을 선택하면 예약 현황이 표시됩니다.</p>
+              <p className="text-xs text-ink-faint">
+                전체 {summarizeReservations(monthlyReservations, { type: 'monthly' }).totalHours}칸 예약됨
+              </p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="btn-primary shadow-lg shadow-sage/20"
+            onClick={() => setScheduleModalOpen(true)}
+          >
+            시간표 보기
+          </button>
+
+          {scheduleModalOpen && (
+            <ScheduleModal title="월신청 시간표" onClose={() => setScheduleModalOpen(false)}>
+              <AdminReservationGrid
+                fillHeight
+                onForceReserve={async (slots) => {
+                  if (!targetUser.trim()) {
+                    show('대상 아이디를 입력하세요', 'error');
+                    return;
+                  }
+                  try {
+                    const res = await api.adminForceReserve(token, targetUser.trim(), slots);
+                    show(res.message, 'success');
+                  } catch (e) {
+                    show(e instanceof ApiError ? e.message : '신청 실패', 'error');
+                    throw e;
+                  }
+                }}
+                onDelete={async (slots) => {
+                  if (!confirm(`${slots.length}칸 삭제?`)) return;
+                  try {
+                    const res = await api.adminDeleteReservations(token, slots);
+                    show(res.message, 'success');
+                  } catch (e) {
+                    show(e instanceof ApiError ? e.message : '삭제 실패', 'error');
+                    throw e;
+                  }
+                }}
+                onClearAll={async () => {
+                  try {
+                    const res = await api.adminClearReservations(token);
+                    show(res.message, 'success');
+                  } catch (e) {
+                    show(e instanceof ApiError ? e.message : '초기화 실패', 'error');
+                    throw e;
+                  }
+                }}
+              />
+            </ScheduleModal>
+          )}
         </div>
       )}
 
       {tab === 'free' && (
-        <div className="flex flex-col flex-1 min-h-0 gap-3">
+        <div className="space-y-3">
           {freeSchedule && (
-            <div className="card p-4 flex flex-wrap items-center justify-between gap-3 text-sm shrink-0">
+            <div className="card p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
               <p className="text-ink-muted">
                 예약 창 · {formatFreeWindow(freeSchedule.window_start, freeSchedule.window_end)}
               </p>
@@ -498,8 +536,9 @@ function AdminDashboard({
               </span>
             </div>
           )}
-          {freeSchedule && <div className="shrink-0"><WeeklyUsage data={freeSchedule.weekly_usage} /></div>}
-          <div className="card p-4 space-y-3 shrink-0">
+          {freeSchedule && <WeeklyUsage data={freeSchedule.weekly_usage} />}
+
+          <div className="card p-4 space-y-3">
             <label className="label" htmlFor="free-target-username">강제 신청 대상</label>
             <select
               id="free-target-username"
@@ -516,52 +555,83 @@ function AdminDashboard({
               ))}
             </select>
           </div>
+
           {freeSchedule ? (
-            <AdminFreeReservationGrid
-              fillHeight
-              initialMonthly={freeSchedule.monthly_reservations}
-              initialFree={freeSchedule.free_reservations}
-              onForceReserve={async (slots) => {
-                if (!freeTargetUser.trim()) {
-                  show('대상 아이디를 입력하세요', 'error');
-                  return;
-                }
-                try {
-                  const res = await api.adminForceReserve(
-                    token,
-                    freeTargetUser.trim(),
-                    slots,
-                    'free',
-                  );
-                  show(res.message, 'success');
-                  await loadFreeSchedule();
-                } catch (e) {
-                  show(e instanceof ApiError ? e.message : '신청 실패', 'error');
-                  throw e;
-                }
-              }}
-              onDelete={async (slots) => {
-                if (!confirm(`${slots.length}칸 삭제?`)) return;
-                try {
-                  const res = await api.adminDeleteReservations(token, slots);
-                  show(res.message, 'success');
-                  await loadFreeSchedule();
-                } catch (e) {
-                  show(e instanceof ApiError ? e.message : '삭제 실패', 'error');
-                  throw e;
-                }
-              }}
-              onClearAll={async () => {
-                try {
-                  const res = await api.adminClearFreeReservations(token);
-                  show(res.message, 'success');
-                  await loadFreeSchedule();
-                } catch (e) {
-                  show(e instanceof ApiError ? e.message : '초기화 실패', 'error');
-                  throw e;
-                }
-              }}
-            />
+            <>
+              {freeTargetUser ? (
+                <ReservationSummaryCard
+                  title="선택 회원 자유이용"
+                  reservations={freeSchedule.free_reservations}
+                  username={freeTargetUser}
+                  type="free"
+                />
+              ) : (
+                <div className="card p-4 text-center space-y-1">
+                  <p className="text-sm text-ink-muted">회원을 선택하면 예약 현황이 표시됩니다.</p>
+                  <p className="text-xs text-ink-faint">
+                    전체 {summarizeReservations(freeSchedule.free_reservations, { type: 'free' }).totalHours}칸 예약됨
+                  </p>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="btn-primary shadow-lg shadow-sage/20"
+                onClick={() => setFreeScheduleModalOpen(true)}
+              >
+                시간표 보기
+              </button>
+
+              {freeScheduleModalOpen && (
+                <ScheduleModal title="자유이용 시간표" onClose={() => setFreeScheduleModalOpen(false)}>
+                  <AdminFreeReservationGrid
+                    fillHeight
+                    initialMonthly={freeSchedule.monthly_reservations}
+                    initialFree={freeSchedule.free_reservations}
+                    onForceReserve={async (slots) => {
+                      if (!freeTargetUser.trim()) {
+                        show('대상 아이디를 입력하세요', 'error');
+                        return;
+                      }
+                      try {
+                        const res = await api.adminForceReserve(
+                          token,
+                          freeTargetUser.trim(),
+                          slots,
+                          'free',
+                        );
+                        show(res.message, 'success');
+                        await loadFreeSchedule();
+                      } catch (e) {
+                        show(e instanceof ApiError ? e.message : '신청 실패', 'error');
+                        throw e;
+                      }
+                    }}
+                    onDelete={async (slots) => {
+                      if (!confirm(`${slots.length}칸 삭제?`)) return;
+                      try {
+                        const res = await api.adminDeleteReservations(token, slots);
+                        show(res.message, 'success');
+                        await loadFreeSchedule();
+                      } catch (e) {
+                        show(e instanceof ApiError ? e.message : '삭제 실패', 'error');
+                        throw e;
+                      }
+                    }}
+                    onClearAll={async () => {
+                      try {
+                        const res = await api.adminClearFreeReservations(token);
+                        show(res.message, 'success');
+                        await loadFreeSchedule();
+                      } catch (e) {
+                        show(e instanceof ApiError ? e.message : '초기화 실패', 'error');
+                        throw e;
+                      }
+                    }}
+                  />
+                </ScheduleModal>
+              )}
+            </>
           ) : (
             <p className="text-center text-ink-faint py-16">불러오는 중…</p>
           )}

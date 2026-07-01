@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, HeaderActions, ScheduleModeNav, StatusDot, Toast } from '../components/ui';
 import { FreeReservationGrid } from '../components/FreeReservationGrid';
+import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
+import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
 import { MeResponse, Reservation } from '../types';
+import { summarizeReservations } from '../utils/reservationSummary';
 
 function useToast() {
   const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
@@ -40,6 +43,7 @@ export default function FreeApp({
   const [bookingOpen, setBookingOpen] = useState(false);
   const [windowLabel, setWindowLabel] = useState('');
   const [usageRefreshKey, setUsageRefreshKey] = useState(0);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const { toast, show } = useToast();
   const navigate = useNavigate();
 
@@ -72,6 +76,13 @@ export default function FreeApp({
       }
     });
   }, [load, show, username]);
+
+  const myFreeSummary = useMemo(
+    () => summarizeReservations(freeReservations, { username, type: 'free' }),
+    [freeReservations, username],
+  );
+  const scheduleButtonLabel =
+    !myFreeSummary.hasReservations && bookingOpen ? '신청하기' : '시간표 보기';
 
   if (!me) {
     return (
@@ -115,7 +126,6 @@ export default function FreeApp({
   return (
     <AppShell
       title={`${displayName}님`}
-      fillMain
       badge={
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-ink-muted">자유이용</span>
@@ -125,33 +135,54 @@ export default function FreeApp({
       nav={<ScheduleModeNav mode="free" />}
       actions={<HeaderActions items={headerMenuItems} />}
     >
-      <div className="flex flex-col flex-1 min-h-0 gap-3">
+      <div className="space-y-3">
         {windowLabel && (
-          <p className="text-xs text-ink-faint text-center shrink-0">예약 창 · {windowLabel}</p>
+          <p className="text-xs text-ink-faint text-center">예약 창 · {windowLabel}</p>
         )}
-        <div className="shrink-0">
-          <WeeklyUsage token={token} refreshKey={usageRefreshKey} />
-        </div>
-        <FreeReservationGrid
-          fillHeight
+
+        <WeeklyUsage token={token} refreshKey={usageRefreshKey} />
+
+        <ReservationSummaryCard
+          title="자유이용 현황"
+          reservations={freeReservations}
           username={username}
-          bookableSlots={bookableSlots}
-          bookingOpen={bookingOpen}
-          initialMonthly={monthlyReservations}
-          initialFree={freeReservations}
-          onSubmit={async (slots) => {
-            try {
-              const res = await api.reserveFree(token, slots);
-              show(res.message, 'success');
-              setUsageRefreshKey((k) => k + 1);
-              await load();
-            } catch (err) {
-              show(err instanceof ApiError ? err.message : '신청 실패', 'error');
-              throw err;
-            }
-          }}
+          type="free"
+          emptyLabel="미신청"
         />
+
+        <button
+          type="button"
+          className="btn-primary shadow-lg shadow-sage/20"
+          onClick={() => setScheduleModalOpen(true)}
+        >
+          {scheduleButtonLabel}
+        </button>
       </div>
+
+      {scheduleModalOpen && (
+        <ScheduleModal title="자유이용 시간표" onClose={() => setScheduleModalOpen(false)}>
+          <FreeReservationGrid
+            fillHeight
+            username={username}
+            bookableSlots={bookableSlots}
+            bookingOpen={bookingOpen}
+            initialMonthly={monthlyReservations}
+            initialFree={freeReservations}
+            onSubmit={async (slots) => {
+              try {
+                const res = await api.reserveFree(token, slots);
+                show(res.message, 'success');
+                setUsageRefreshKey((k) => k + 1);
+                await load();
+              } catch (err) {
+                show(err instanceof ApiError ? err.message : '신청 실패', 'error');
+                throw err;
+              }
+            }}
+          />
+        </ScheduleModal>
+      )}
+
       <Toast message={toast.message} type={toast.type} />
     </AppShell>
   );

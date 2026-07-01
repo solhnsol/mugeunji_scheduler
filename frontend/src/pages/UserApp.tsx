@@ -5,8 +5,12 @@ import { PlanApplyModal } from '../components/PlanApplyModal';
 import { PlanManageModal } from '../components/PlanManageModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { ReservationGrid } from '../components/ReservationGrid';
+import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
+import { ScheduleModal } from '../components/ScheduleModal';
+import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { MeResponse, Plan } from '../types';
 import { formatPrice } from '../utils';
+import { summarizeReservations } from '../utils/reservationSummary';
 
 function useToast() {
   const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
@@ -33,7 +37,9 @@ export default function UserApp({
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [applyPlan, setApplyPlan] = useState<Plan | null>(null);
-  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const monthlyReservations = useMonthlyReservations();
+  const mySummary = summarizeReservations(monthlyReservations, { username, type: 'monthly' });
   const { toast, show } = useToast();
 
   const refresh = useCallback(async () => {
@@ -53,12 +59,12 @@ export default function UserApp({
   }, [refresh, show]);
 
   useEffect(() => {
-    if (!showSchedule) return;
+    if (!scheduleModalOpen) return;
     const id = window.setInterval(() => {
       refresh().catch(() => undefined);
     }, 30000);
     return () => window.clearInterval(id);
-  }, [showSchedule, refresh]);
+  }, [scheduleModalOpen, refresh]);
 
   const handleApplyPlan = async (planId: number, startPeriod: 'current' | 'next') => {
     try {
@@ -116,7 +122,8 @@ export default function UserApp({
   const canViewSchedule = me.can_view_schedule ?? hasSubscription;
   const canReserve =
     (me.can_reserve_monthly ?? me.can_access_schedule) && reservationOpen;
-  const scheduleVisible = showSchedule && canViewSchedule;
+  const scheduleButtonLabel =
+    !mySummary.hasReservations && canReserve ? '신청하기' : '시간표 보기';
   const gridMessage =
     !reservationOpen && scheduleMessage
       ? scheduleMessage
@@ -193,6 +200,31 @@ export default function UserApp({
     />
   );
 
+  const scheduleModal = scheduleModalOpen && canViewSchedule && (
+    <ScheduleModal title="월신청 시간표" onClose={() => setScheduleModalOpen(false)}>
+      <ReservationGrid
+        username={username}
+        fillHeight
+        mode={canReserve ? 'reserve' : 'view'}
+        reservationOpen={reservationOpen}
+        scheduleMessage={gridMessage}
+        onSubmit={
+          canReserve
+            ? async (slots) => {
+                try {
+                  const res = await api.reserve(token, slots);
+                  show(res.message, 'success');
+                } catch (err) {
+                  show(err instanceof ApiError ? err.message : '신청 실패', 'error');
+                  throw err;
+                }
+              }
+            : undefined
+        }
+      />
+    </ScheduleModal>
+  );
+
   if (me.access_status === 'no_plan') {
     return (
       <AppShell
@@ -223,46 +255,6 @@ export default function UserApp({
     );
   }
 
-  const statusCard = (
-    <div className="card p-4 shrink-0 mb-3 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {me.access_status === 'pending_payment' || !me.can_access_schedule ? (
-          <StatusDot label="입금 확인 중" variant="wait" />
-        ) : canReserve ? (
-          <StatusDot label="예약 가능" variant="open" />
-        ) : (
-          <StatusDot label="예약 대기" variant="wait" />
-        )}
-        {canViewSchedule && (
-          <button
-            type="button"
-            className="btn-secondary !py-2 !min-h-[36px] !px-4 text-sm"
-            onClick={() => setShowSchedule((v) => !v)}
-          >
-            {scheduleVisible ? '시간표 닫기' : '시간표 보기'}
-          </button>
-        )}
-      </div>
-
-      {me.billing && (me.access_status === 'pending_payment' || !me.can_access_schedule) && (
-        <div className="text-center">
-          <p className="text-2xl font-bold text-ink">{formatPrice(me.billing.amount)}</p>
-          <p className="text-sm text-ink-muted mt-1">
-            {me.billing.period} · {me.billing.plan_name}
-          </p>
-        </div>
-      )}
-
-      <p className="text-sm text-ink-muted text-center">{me.message}</p>
-
-      {me.pending_cancellation && (
-        <p className="text-xs text-ink-faint text-center">
-          {me.pending_cancellation.effective_period}부터 중단 예정
-        </p>
-      )}
-    </div>
-  );
-
   return (
     <AppShell
       title={`${displayName}님`}
@@ -273,32 +265,64 @@ export default function UserApp({
       }
       nav={headerNav}
       actions={<HeaderActions items={headerMenuItems} />}
-      fillMain={scheduleVisible}
     >
       {profileBanner}
-      {statusCard}
-      {scheduleVisible && (
-        <ReservationGrid
-          username={username}
-          fillHeight
-          mode={canReserve ? 'reserve' : 'view'}
-          reservationOpen={reservationOpen}
-          scheduleMessage={gridMessage}
-          onSubmit={
-            canReserve
-              ? async (slots) => {
-                  try {
-                    const res = await api.reserve(token, slots);
-                    show(res.message, 'success');
-                  } catch (err) {
-                    show(err instanceof ApiError ? err.message : '신청 실패', 'error');
-                    throw err;
-                  }
-                }
-              : undefined
-          }
-        />
+
+      <div className="card p-4 mb-3 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {me.access_status === 'pending_payment' || !me.can_access_schedule ? (
+            <StatusDot label="입금 확인 중" variant="wait" />
+          ) : canReserve ? (
+            <StatusDot label="예약 가능" variant="open" />
+          ) : (
+            <StatusDot label="예약 대기" variant="wait" />
+          )}
+        </div>
+
+        {me.billing && (me.access_status === 'pending_payment' || !me.can_access_schedule) && (
+          <div className="text-center">
+            <p className="text-2xl font-bold text-ink">{formatPrice(me.billing.amount)}</p>
+            <p className="text-sm text-ink-muted mt-1">
+              {me.billing.period} · {me.billing.plan_name}
+            </p>
+          </div>
+        )}
+
+        {me.message && me.message !== '이용 가능' && (
+          <p className="text-sm text-ink-muted text-center">{me.message}</p>
+        )}
+
+        {me.pending_cancellation && (
+          <p className="text-xs text-ink-faint text-center">
+            {me.pending_cancellation.effective_period}부터 중단 예정
+          </p>
+        )}
+      </div>
+
+      {canViewSchedule && (
+        <div className="space-y-3">
+          <ReservationSummaryCard
+            title="월신청 현황"
+            reservations={monthlyReservations}
+            username={username}
+            type="monthly"
+            allowedHours={me.subscription?.allowed_hours}
+            subtitle={
+              me.reservation_target_period
+                ? `예약 대상 · ${me.reservation_target_period}`
+                : undefined
+            }
+          />
+          <button
+            type="button"
+            className="btn-primary shadow-lg shadow-sage/20"
+            onClick={() => setScheduleModalOpen(true)}
+          >
+            {scheduleButtonLabel}
+          </button>
+        </div>
       )}
+
       {applyPlan && (
         <PlanApplyModal
           plan={applyPlan}
@@ -308,6 +332,7 @@ export default function UserApp({
       )}
       {planModal}
       {profileModal}
+      {scheduleModal}
       <Toast message={toast.message} type={toast.type} />
     </AppShell>
   );
