@@ -113,11 +113,10 @@ export function FreeReservationGrid({
       </div>
 
       <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
-        <div className="schedule-grid-card">
-          <table className="schedule-grid-table w-full text-center text-[11px] sm:text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-line">
-                <th className="schedule-grid-th-corner p-2 w-11 font-medium text-ink-faint">시</th>
+        <table className="schedule-grid-table text-center text-[11px] sm:text-xs">
+          <thead>
+            <tr>
+              <th className="schedule-grid-th-corner p-2 w-11 font-medium text-ink-faint">시</th>
                 {DAYS.map((d) => (
                   <th key={d} className={dayHeaderClass(isLastDay(d, DAYS))}>{DAY_LABELS[d]}</th>
                 ))}
@@ -125,7 +124,7 @@ export function FreeReservationGrid({
             </thead>
             <tbody>
               {Array.from({ length: 24 }, (_, time) => (
-                <tr key={time} className="border-b border-line/50 last:border-0">
+                <tr key={time}>
                   <td className="schedule-grid-td-time p-1.5 font-medium text-ink-faint tabular-nums">{time}</td>
                   {DAYS.map((day) => {
                     const slot = getSlot(reservations, day, time);
@@ -163,7 +162,6 @@ export function FreeReservationGrid({
               ))}
             </tbody>
           </table>
-        </div>
       </div>
 
       {bookingOpen && (

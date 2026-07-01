@@ -131,11 +131,10 @@ export function AdminFreeReservationGrid({
       </div>
 
       <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
-        <div className="schedule-grid-card">
-          <table className="schedule-grid-table w-full text-center text-[11px] sm:text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-line">
-                <th className="schedule-grid-th-corner p-2 w-11 text-ink-faint">시</th>
+        <table className="schedule-grid-table text-center text-[11px] sm:text-xs">
+          <thead>
+            <tr>
+              <th className="schedule-grid-th-corner p-2 w-11 text-ink-faint">시</th>
                 {DAYS.map((d) => (
                   <th key={d} className={dayHeaderClass(isLastDay(d, DAYS))}>{DAY_LABELS[d]}</th>
                 ))}
@@ -143,7 +142,7 @@ export function AdminFreeReservationGrid({
             </thead>
             <tbody>
               {Array.from({ length: 24 }, (_, time) => (
-                <tr key={time} className="border-b border-line/50">
+                <tr key={time}>
                   <td className="schedule-grid-td-time p-1.5 text-ink-faint">{time}</td>
                   {DAYS.map((day) => {
                     const slot = getSlot(reservations, day, time);
@@ -177,7 +176,6 @@ export function AdminFreeReservationGrid({
               ))}
             </tbody>
           </table>
-        </div>
       </div>
       <p className="text-xs text-ink-faint shrink-0 pt-2">{selected.size}칸 선택 · 월간 예약 칸은 선택할 수 없습니다</p>
     </div>
