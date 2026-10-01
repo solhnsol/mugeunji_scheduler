@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { DAYS, DAY_LABELS, Reservation, ValidDay } from '../types';
+import { useConfirm } from './ConfirmDialog';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { dayCellClass, dayHeaderClass, isLastDay } from './scheduleGridClasses';
 
@@ -23,6 +24,7 @@ export function AdminReservationGrid({
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [selected, setSelected] = useState<Set<SlotKey>>(new Set());
   const [busy, setBusy] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const handleSocketMessage = useCallback((msg: { type: string; data: unknown }) => {
     if (msg.type === 'RESERVATION_UPDATE') setReservations(msg.data as Reservation[]);
@@ -78,7 +80,7 @@ export function AdminReservationGrid({
           삭제
         </button>
         <button type="button" className="btn-ghost text-[#c45c5c]" disabled={busy} onClick={async () => {
-          if (!confirm('전체 초기화하시겠습니까?')) return;
+          if (!(await confirm({ title: '월 예약을 전체 초기화할까요?', message: '모든 월 예약이 삭제돼요. 되돌릴 수 없어요.', confirmLabel: '전체 초기화', danger: true }))) return;
           setBusy(true);
           try { await onClearAll(); setSelected(new Set()); } finally { setBusy(false); }
         }}>
@@ -127,6 +129,7 @@ export function AdminReservationGrid({
           </table>
       </div>
       <p className="text-xs text-ink-faint shrink-0 pt-2">{selected.size}칸 선택</p>
+      {confirmDialog}
     </div>
   );
 }

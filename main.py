@@ -132,7 +132,7 @@ class LoginInfo(BaseModel):
 
 class RegisterInfo(BaseModel):
     username: str = Field(..., min_length=2)
-    password: str = Field(..., min_length=4)
+    password: str = Field(..., min_length=6)
     name: str = Field(..., min_length=2)
     phone: str = Field(..., min_length=9)
 
@@ -539,6 +539,23 @@ async def reserve_time(
     username = current_user["username"]
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     is_success, message = await reserve_manager.create_reservation(username, reserve_times_list)
+    if is_success:
+        await broadcast_reservation_updates(conn)
+        return {"status": "success", "message": str(message)}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/reserve/cancel")
+async def cancel_reservation(
+    data: ReservationList,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    reserve_manager = ReservationManager(conn)
+    reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
+    is_success, message = await reserve_manager.cancel_own_reservations(
+        current_user["username"], reserve_times_list
+    )
     if is_success:
         await broadcast_reservation_updates(conn)
         return {"status": "success", "message": str(message)}

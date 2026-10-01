@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, HeaderActions, PlanGrid, ScheduleModeNav, Toast } from '../components/ui';
 import { buildSteps, GuideCard, isFreeOnly, UsageGuideModal } from '../components/GuideCard';
+import { useConfirm } from '../components/ConfirmDialog';
 import { PlanApplyModal } from '../components/PlanApplyModal';
 import { PlanManageModal } from '../components/PlanManageModal';
 import { ProfileModal } from '../components/ProfileModal';
@@ -12,17 +13,9 @@ import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
 import { MonthlyPlanHero } from '../components/ScheduleHero';
 import { ScheduleModal } from '../components/ScheduleModal';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
+import { useToast } from '../hooks/useToast';
 import { MeResponse, Plan } from '../types';
 import { summarizeReservations } from '../utils/reservationSummary';
-
-function useToast() {
-  const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
-  const show = useCallback((message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast({ message: '', type: '' }), 4000);
-  }, []);
-  return { toast, show };
-}
 
 export default function UserApp({
   token,
@@ -47,6 +40,8 @@ export default function UserApp({
   const monthlyReservations = useMonthlyReservations();
   const mySummary = summarizeReservations(monthlyReservations, { username, type: 'monthly' });
   const { toast, show } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const refresh = useCallback(async () => {
     const [meData, planData, settings] = await Promise.all([
@@ -62,9 +57,17 @@ export default function UserApp({
     setPaymentGuide(settings.payment_guide ?? null);
   }, [token]);
 
-  useEffect(() => {
-    refresh().catch((err) => show(err instanceof ApiError ? err.message : '로드 실패', 'error'));
+  const load = useCallback(() => {
+    setLoadFailed(false);
+    refresh().catch((err) => {
+      setLoadFailed(true);
+      show(err instanceof ApiError ? err.message : '불러오지 못했어요', 'error');
+    });
   }, [refresh, show]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useEffect(() => {
     if (!scheduleModalOpen) return;
@@ -97,7 +100,13 @@ export default function UserApp({
   };
 
   const handleCancelPlan = async () => {
-    if (!confirm('다음 달부터 요금제를 중단하시겠습니까?')) return;
+    const ok = await confirm({
+      title: '요금제를 중단할까요?',
+      message: '다음 달부터 요금제가 중단돼요. 중단 예약은 이후 취소할 수 있어요.',
+      confirmLabel: '중단하기',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const res = await api.cancelPlan(token);
       show(res.message, 'success');
@@ -119,8 +128,19 @@ export default function UserApp({
 
   if (!me) {
     return (
-      <AppShell title="묵은지 작업실">
-        <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+      <AppShell title="묵은지 작업실" actions={loadFailed ? <HeaderActions items={[{ id: 'logout', label: '로그아웃', onClick: onLogout }]} /> : undefined}>
+        {loadFailed ? (
+          <div className="text-center py-16 space-y-4">
+            <p className="text-ink-muted">정보를 불러오지 못했어요.</p>
+            <div className="flex justify-center gap-2">
+              <button type="button" className="btn-primary !w-auto !px-6" onClick={load}>다시 시도</button>
+              <button type="button" className="btn-secondary !w-auto !px-6" onClick={onLogout}>로그아웃</button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+        )}
+        <Toast message={toast.message} type={toast.type} />
       </AppShell>
     );
   }
@@ -230,6 +250,29 @@ export default function UserApp({
         reservationOpen={reservationOpen}
         scheduleMessage={gridMessage}
         allowedHours={me.subscription?.allowed_hours}
+        allowDawn={me.role === 'free' || me.role === 'admin'}
+        onCancel={
+          canReserve
+            ? async (slots) => {
+                const hours = slots.length;
+                const ok = await confirm({
+                  title: '예약을 취소할까요?',
+                  message: `선택한 ${hours}시간 예약이 취소돼요. 취소한 시간은 다른 회원이 신청할 수 있어요.`,
+                  confirmLabel: '예약 취소',
+                  cancelLabel: '돌아가기',
+                  danger: true,
+                });
+                if (!ok) throw new Error('cancelled');
+                try {
+                  const res = await api.cancelReservations(token, slots);
+                  show(res.message, 'success');
+                } catch (err) {
+                  show(err instanceof ApiError ? err.message : '취소 실패', 'error');
+                  throw err;
+                }
+              }
+            : undefined
+        }
         onSubmit={
           canReserve
             ? async (slots) => {
@@ -284,6 +327,7 @@ export default function UserApp({
         {planModal}
         {profileModal}
         {guideModal}
+        {confirmDialog}
         <Toast message={toast.message} type={toast.type} />
       </AppShell>
     );
@@ -351,6 +395,7 @@ export default function UserApp({
       {profileModal}
       {guideModal}
       {scheduleModal}
+      {confirmDialog}
       <Toast message={toast.message} type={toast.type} />
     </AppShell>
   );

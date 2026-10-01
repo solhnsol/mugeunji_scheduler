@@ -317,6 +317,38 @@ class ReservationManager:
     async def clear_reservations(self) -> Tuple[bool, str]:
         return await self.clear_monthly_reservations()
 
+    async def cancel_own_reservations(
+        self, username: str, reserve_times: List[Dict]
+    ) -> Tuple[bool, str]:
+        """본인의 월 예약만 취소. 예약 가능 기간에만 허용 (닫힌 뒤 취소로 빈 시간이 생기는 것을 막는다)."""
+        is_available, message, _ = await self.check_reservation_availability()
+        if not is_available:
+            return False, f"예약 가능 기간에만 취소할 수 있습니다. ({message})"
+
+        slots = {(t['day'], int(t['time_index'])) for t in reserve_times}
+        # 새벽(0~3시)은 4시간 묶음으로만 신청되므로 취소도 같은 날 묶음 전체를 대상으로 한다.
+        for day in {d for d, t in slots if 0 <= t <= 3}:
+            slots.update((day, t) for t in range(4))
+
+        try:
+            deleted = 0
+            for day, time_index in slots:
+                cursor = await self.conn.execute(
+                    """DELETE FROM reservations
+                       WHERE username = ? AND reservation_day = ? AND time_index = ?
+                         AND reservation_type = ?""",
+                    (username, day, time_index, RESERVATION_MONTHLY),
+                )
+                deleted += cursor.rowcount
+            if deleted == 0:
+                await self.conn.rollback()
+                return False, "취소할 내 예약이 없습니다."
+            await self.conn.commit()
+            return True, f"{deleted}시간 예약을 취소했습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"취소 중 오류 발생: {str(e)}"
+
     async def delete_reservations(self, reserve_times: List[Dict]) -> Tuple[bool, str]:
         try:
             for time_slot in reserve_times:

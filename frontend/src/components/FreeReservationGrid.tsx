@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DAYS, DAY_LABELS, Reservation, ValidDay } from '../types';
 import { useReservationSocket } from '../hooks/useReservationSocket';
+import { parseSlotKey, slotKey, useSlotPicker } from '../hooks/useSlotPicker';
 import { SelectionBar } from './SelectionBar';
 import { dayCellClass, dayHeaderClass, isLastDay } from './scheduleGridClasses';
-
-type SlotKey = `${ValidDay}-${number}`;
 
 function getSlot(reservations: Reservation[], day: ValidDay, time: number) {
   return reservations.find((r) => r.reservation_day === day && r.time_index === time);
@@ -34,7 +33,6 @@ export function FreeReservationGrid({
   const [reservations, setReservations] = useState<Reservation[]>(() =>
     mergeReservations(initialMonthly, initialFree),
   );
-  const [selected, setSelected] = useState<Set<SlotKey>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -68,27 +66,20 @@ export function FreeReservationGrid({
     [reservations],
   );
 
-  const toggle = (day: ValidDay, time: number) => {
-    if (!bookingOpen || !isBookable(day, time) || isTaken(day, time)) return;
-    const key: SlotKey = `${day}-${time}`;
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
+  const picker = useSlotPicker({
+    isPickable: (day, time) => bookingOpen && isBookable(day, time) && !isTaken(day, time),
+  });
+  const selected = picker.selected;
 
   const handleSubmit = async () => {
-    const slots = Array.from(selected).map((key) => {
-      const [day, time] = key.split('-') as [ValidDay, string];
-      return { day, time_index: Number(time) };
-    });
+    const slots = Array.from(selected).map(parseSlotKey);
     if (!slots.length) return;
     setSubmitting(true);
     try {
       await onSubmit(slots);
-      setSelected(new Set());
+      picker.clear();
+    } catch {
+      // 실패/취소 안내는 호출한 쪽(토스트·확인창)에서 처리하고, 선택은 그대로 둔다
     } finally {
       setSubmitting(false);
     }
@@ -105,21 +96,31 @@ export function FreeReservationGrid({
 
   return (
     <div className={`flex flex-col min-h-0 ${fillHeight ? 'flex-1' : 'space-y-4'}`}>
-      <div className="flex flex-wrap gap-3 text-xs text-ink-muted shrink-0 mb-3">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted shrink-0 mb-3">
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-mine inline-block" />내 자유이용</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-taken inline-block" />자유이용</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-[#d4cfc4] inline-block" />월간</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded border-2 border-dashed border-sage/40 inline-block" />신청 가능</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-pick inline-block" />선택</span>
+        {bookingOpen && (
+          <span className="text-ink-faint">칸을 누르거나 끌어서 선택 · 요일을 누르면 그날 전체 선택</span>
+        )}
       </div>
 
       <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
-        <table className="schedule-grid-table text-center text-[11px] sm:text-xs">
+        <table className={`schedule-grid-table text-center text-[11px] sm:text-xs ${bookingOpen ? 'select-none' : ''}`}>
           <thead>
             <tr>
               <th className="schedule-grid-th-corner p-2 w-11 font-medium text-ink-faint">시</th>
                 {DAYS.map((d) => (
-                  <th key={d} className={dayHeaderClass(isLastDay(d, DAYS))}>{DAY_LABELS[d]}</th>
+                  <th
+                    key={d}
+                    className={`${dayHeaderClass(isLastDay(d, DAYS))} ${bookingOpen ? 'cursor-pointer hover:text-sage' : ''}`}
+                    onClick={bookingOpen ? () => picker.toggleDay(d) : undefined}
+                    title={bookingOpen ? `${DAY_LABELS[d]} 전체 선택/해제` : undefined}
+                  >
+                    {DAY_LABELS[d]}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -132,7 +133,7 @@ export function FreeReservationGrid({
                     const isMonthly = slot?.reservation_type === 'monthly';
                     const mine = slot?.username === username && slot?.reservation_type === 'free';
                     const label = slot?.display_name || slot?.username || '';
-                    const key: SlotKey = `${day}-${time}`;
+                    const key = slotKey(day, time);
                     const isSelected = selected.has(key);
                     const taken = !!slot;
                     const bookable = isBookable(day, time) && !taken;
@@ -147,7 +148,7 @@ export function FreeReservationGrid({
                     else cellClass += ' bg-white/60 text-ink-faint';
 
                     return (
-                      <td key={key} className={cellClass} onClick={() => toggle(day, time)}>
+                      <td key={key} className={cellClass} {...(bookable ? picker.cellProps(day, time) : {})}>
                         <span
                           className={`block truncate px-0.5 leading-tight ${
                             mine || isSelected ? 'text-white font-medium' : taken ? 'text-ink-muted' : ''
@@ -170,7 +171,7 @@ export function FreeReservationGrid({
           selectedCount={selected.size}
           submitting={submitting}
           idleLabel={`신청 가능한 시간 ${bookableCount}칸`}
-          onClear={() => setSelected(new Set())}
+          onClear={picker.clear}
           onSubmit={handleSubmit}
         />
       )}

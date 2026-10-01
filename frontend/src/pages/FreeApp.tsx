@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, HeaderActions, ScheduleModeNav, Toast } from '../components/ui';
+import { useToast } from '../hooks/useToast';
 import { FreeReservationGrid } from '../components/FreeReservationGrid';
 import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
 import { FreeScheduleHero } from '../components/ScheduleHero';
@@ -9,15 +10,6 @@ import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
 import { MeResponse, Reservation } from '../types';
 import { summarizeReservations } from '../utils/reservationSummary';
-
-function useToast() {
-  const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
-  const show = useCallback((message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast({ message: '', type: '' }), 4000);
-  }, []);
-  return { toast, show };
-}
 
 function formatWindow(start: string, end: string) {
   const s = new Date(start);

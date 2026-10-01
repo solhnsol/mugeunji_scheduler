@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { SESSION } from '../api';
 import { AppShell, Toast } from '../components/ui';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useToast } from '../hooks/useToast';
 import { useSession } from '../hooks/useSession';
 import { AdminReservationGrid } from '../components/AdminReservationGrid';
 import { AdminFreeReservationGrid } from '../components/AdminFreeReservationGrid';
@@ -33,12 +35,7 @@ function formatFreeWindow(start: string, end: string) {
 
 export default function AdminPage() {
   const { session, refresh, logout } = useSession();
-  const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
-
-  const show = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast({ message: '', type: '' }), 4000);
-  };
+  const { toast, show } = useToast();
 
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -100,6 +97,7 @@ function AdminDashboard({
   show: (m: string, t: 'success' | 'error') => void;
   toast: { message: string; type: 'success' | 'error' | '' };
 }) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [tab, setTab] = useState<'roster' | 'schedule' | 'free' | 'automation' | 'users'>('roster');
   const [reloadKey, setReloadKey] = useState(0);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -352,7 +350,7 @@ function AdminDashboard({
                   }
                 }}
                 onDelete={async (slots) => {
-                  if (!confirm(`${slots.length}칸 삭제?`)) return;
+                  if (!(await confirm({ title: `${slots.length}칸을 삭제할까요?`, confirmLabel: '삭제', danger: true }))) return;
                   try {
                     const res = await api.adminDeleteReservations(token, slots);
                     show(res.message, 'success');
@@ -460,7 +458,7 @@ function AdminDashboard({
                       }
                     }}
                     onDelete={async (slots) => {
-                      if (!confirm(`${slots.length}칸 삭제?`)) return;
+                      if (!(await confirm({ title: `${slots.length}칸을 삭제할까요?`, confirmLabel: '삭제', danger: true }))) return;
                       try {
                         const res = await api.adminDeleteReservations(token, slots);
                         show(res.message, 'success');
@@ -591,6 +589,7 @@ function AdminDashboard({
         />
       )}
 
+      {confirmDialog}
       <Toast message={toast.message} type={toast.type} />
     </AppShell>
   );

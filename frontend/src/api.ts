@@ -152,6 +152,15 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
+  async cancelReservations(token: string, reservations: { day: string; time_index: number }[]) {
+    const res = await fetch('/reserve/cancel', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ reservations }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
   async getSettings() {
     const res = await fetch('/settings');
     return parseResponse<{
