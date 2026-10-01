@@ -5,12 +5,14 @@ export class ApiError extends Error {
   }
 }
 
+/** 로그인 상태는 httpOnly 쿠키가 들고 있다. 이 값은 호출부 시그니처 호환용 표식이며 Authorization 헤더로 보내지 않는다. */
+export const SESSION = 'cookie-session';
+
 async function parseResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => ({}));
   if (response.status === 401 && !/\/(admin\/)?login$/.test(response.url)) {
-    // 토큰 만료/무효: 저장된 세션을 비우고 로그인 화면으로 돌려보낸다.
-    ['accessToken', 'adminAccessToken'].forEach((k) => sessionStorage.removeItem(k));
-    window.location.reload();
+    // 세션 만료/무효: 서버 쿠키를 비우고 로그인 화면으로 돌려보낸다.
+    void fetch('/logout', { method: 'POST' }).finally(() => window.location.reload());
   }
   if (!response.ok) {
     const detail = (data as { detail?: string | { msg?: string }[] }).detail;
@@ -25,11 +27,27 @@ async function parseResponse<T>(response: Response): Promise<T> {
 function authHeaders(token: string | null, json = true): HeadersInit {
   const headers: Record<string, string> = {};
   if (json) headers['Content-Type'] = 'application/json';
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token && token !== SESSION) headers['Authorization'] = `Bearer ${token}`;
   return headers;
 }
 
 export const api = {
+  /** 쿠키 세션 확인. 로그인되어 있지 않으면 null. */
+  async sessionInfo(): Promise<{ username: string; role: string } | null> {
+    try {
+      const res = await fetch('/me');
+      if (!res.ok) return null;
+      const data = (await res.json()) as { username: string; role: string };
+      return { username: data.username, role: data.role };
+    } catch {
+      return null;
+    }
+  },
+
+  async logout() {
+    await fetch('/logout', { method: 'POST' }).catch(() => undefined);
+  },
+
   async register(body: {
     username: string;
     password: string;

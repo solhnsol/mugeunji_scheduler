@@ -10,6 +10,7 @@ from fastapi import (
     Depends,
     FastAPI,
     Request,
+    Response,
     File,
     HTTPException,
     UploadFile,
@@ -18,7 +19,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
@@ -35,14 +36,15 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 로그인 유지 30일
+SESSION_COOKIE = "session"
 
 if SECRET_KEY == "change-me-in-production":
     print("[WARN] SECRET_KEY가 기본값입니다. .env에 긴 임의 문자열을 설정하세요.")
 if not os.getenv("ADMIN_PASSWORD"):
     print("[WARN] ADMIN_PASSWORD가 없어 새 DB에서는 admin 계정이 생성되지 않습니다.")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
 
 
 class ConnectionManager:
@@ -78,23 +80,33 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # 단일 DB 연결을 공유하므로 쓰기 요청은 직렬화해 트랜잭션 간 commit/rollback 간섭을 막는다.
 _write_lock = asyncio.Lock()
-_LOCK_EXEMPT = {"/login", "/admin/login"}
+_LOCK_EXEMPT = {"/login", "/admin/login", "/logout"}
 
 
 @app.middleware("http")
 async def serialize_writes(request: Request, call_next):
-    if request.method in ("GET", "HEAD", "OPTIONS") or request.url.path in _LOCK_EXEMPT:
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+    # 쿠키 인증 요청의 CSRF 방어: 다른 사이트에서 온 쓰기 요청은 거부 (SameSite=Lax와 이중 방어)
+    origin = request.headers.get("origin")
+    if origin and request.cookies.get(SESSION_COOKIE):
+        host = request.headers.get("host", "")
+        if origin.split("://", 1)[-1] != host and origin not in _cors_origins:
+            return JSONResponse(status_code=403, content={"detail": "허용되지 않은 요청 출처입니다."})
+    if request.url.path in _LOCK_EXEMPT:
         return await call_next(request)
     async with _write_lock:
         return await call_next(request)
@@ -257,15 +269,35 @@ class SettingsResponse(BaseModel):
     payment_guide: Optional[str] = None
 
 
+def set_session_cookie(response: Response, request: Request, token: str) -> None:
+    secure = (
+        request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https"
+    )
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+        path="/",
+    )
+
+
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
+    token = token or request.cookies.get(SESSION_COOKIE)
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="인증이 필요합니다. 다시 로그인해주세요.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token:
+        raise credentials_exception
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
@@ -409,13 +441,19 @@ async def revoke_plan_cancellation(
 
 
 @app.post("/login")
-async def login_user(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_db_conn)):
+async def login_user(
+    data: LoginInfo,
+    request: Request,
+    response: Response,
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
     auth_manager = AuthManager(conn)
     user_data = await auth_manager.login(data.username.strip(), data.password)
     if not user_data:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
     access_token_data = {"sub": user_data["username"], "role": user_data["role"]}
     access_token = create_access_token(data=access_token_data)
+    set_session_cookie(response, request, access_token)
     membership = MembershipManager(conn)
     access = await membership.get_access_status(user_data["username"])
     return {
@@ -428,13 +466,25 @@ async def login_user(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_d
 
 
 @app.post("/admin/login")
-async def admin_login(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_db_conn)):
+async def admin_login(
+    data: LoginInfo,
+    request: Request,
+    response: Response,
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
     auth_manager = AuthManager(conn)
     user_data = await auth_manager.login(data.username.strip(), data.password)
     if not user_data or user_data["role"] != "admin":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="관리자 인증에 실패했습니다.")
     access_token = create_access_token(data={"sub": user_data["username"], "role": user_data["role"]})
+    set_session_cookie(response, request, access_token)
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"status": "success"}
 
 
 @app.get("/settings", response_model=SettingsResponse)

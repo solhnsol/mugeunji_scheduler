@@ -7,6 +7,7 @@ import { PlanApplyModal } from '../components/PlanApplyModal';
 import { PlanManageModal } from '../components/PlanManageModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { ReservationGrid } from '../components/ReservationGrid';
+import { ScheduleStatus } from '../components/ScheduleStatus';
 import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
 import { MonthlyPlanHero } from '../components/ScheduleHero';
 import { ScheduleModal } from '../components/ScheduleModal';
@@ -36,6 +37,7 @@ export default function UserApp({
   const [plans, setPlans] = useState<Plan[]>([]);
   const [reservationOpen, setReservationOpen] = useState(true);
   const [scheduleMessage, setScheduleMessage] = useState('');
+  const [nextOpenAt, setNextOpenAt] = useState<string | null>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [applyPlan, setApplyPlan] = useState<Plan | null>(null);
@@ -56,6 +58,7 @@ export default function UserApp({
     setPlans(planData);
     setReservationOpen(settings.reservation_enabled);
     setScheduleMessage(settings.schedule_message || '');
+    setNextOpenAt(settings.next_monthly_open_at ?? null);
     setPaymentGuide(settings.payment_guide ?? null);
   }, [token]);
 
@@ -226,12 +229,14 @@ export default function UserApp({
         mode={canReserve ? 'reserve' : 'view'}
         reservationOpen={reservationOpen}
         scheduleMessage={gridMessage}
+        allowedHours={me.subscription?.allowed_hours}
         onSubmit={
           canReserve
             ? async (slots) => {
                 try {
                   const res = await api.reserve(token, slots);
                   show(res.message, 'success');
+                  setScheduleModalOpen(false);
                 } catch (err) {
                   show(err instanceof ApiError ? err.message : '신청 실패', 'error');
                   throw err;
@@ -315,6 +320,7 @@ export default function UserApp({
 
         {canViewSchedule && !isFreeOnly(me) && (
           <>
+            <ScheduleStatus open={canReserve} message={gridMessage} nextOpenAt={nextOpenAt} />
             <ReservationSummaryCard
               title="이번 달 예약"
               reservations={monthlyReservations}

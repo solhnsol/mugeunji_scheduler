@@ -1,7 +1,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
+import { SESSION } from '../api';
 import { AppShell, Toast } from '../components/ui';
+import { useSession } from '../hooks/useSession';
 import { AdminReservationGrid } from '../components/AdminReservationGrid';
 import { AdminFreeReservationGrid } from '../components/AdminFreeReservationGrid';
 import { AdminAutomationTab } from '../components/AdminAutomationTab';
@@ -13,9 +15,6 @@ import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { Plan, Reservation, UserInfo } from '../types';
 import { formatPhone } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
-
-const ADMIN_TOKEN_KEY = 'adminAccessToken';
-const ADMIN_USER_KEY = 'adminUsername';
 
 const TABS = [
   { id: 'settlement' as const, label: '정산' },
@@ -33,8 +32,7 @@ function formatFreeWindow(start: string, end: string) {
 }
 
 export default function AdminPage() {
-  const [token, setToken] = useState(sessionStorage.getItem(ADMIN_TOKEN_KEY));
-  const [adminUser, setAdminUser] = useState(sessionStorage.getItem(ADMIN_USER_KEY) || '');
+  const { session, refresh, logout } = useSession();
   const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
 
   const show = (message: string, type: 'success' | 'error') => {
@@ -46,24 +44,23 @@ export default function AdminPage() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     try {
-      const data = await api.adminLogin(String(fd.get('username')), String(fd.get('password')));
-      sessionStorage.setItem(ADMIN_TOKEN_KEY, data.access_token);
-      sessionStorage.setItem(ADMIN_USER_KEY, String(fd.get('username')));
-      setToken(data.access_token);
-      setAdminUser(String(fd.get('username')));
+      await api.adminLogin(String(fd.get('username')), String(fd.get('password')));
+      await refresh();
       show('로그인 성공', 'success');
     } catch (err) {
       show(err instanceof ApiError ? err.message : '로그인 실패', 'error');
     }
   };
 
-  const logout = () => {
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    sessionStorage.removeItem(ADMIN_USER_KEY);
-    setToken(null);
-  };
+  if (session.status === 'loading') {
+    return (
+      <AppShell title="관리자">
+        <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+      </AppShell>
+    );
+  }
 
-  if (!token) {
+  if (session.status !== 'authed' || session.role !== 'admin') {
     return (
       <AppShell title="관리자">
         <form onSubmit={handleLogin} className="card p-6 max-w-sm mx-auto mt-4 space-y-4">
@@ -85,7 +82,9 @@ export default function AdminPage() {
     );
   }
 
-  return <AdminDashboard token={token} adminUser={adminUser} onLogout={logout} show={show} toast={toast} />;
+  return (
+    <AdminDashboard token={SESSION} adminUser={session.username} onLogout={logout} show={show} toast={toast} />
+  );
 }
 
 function AdminDashboard({

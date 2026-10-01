@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { DAYS, DAY_LABELS, Reservation, ValidDay } from '../types';
 import { useReservationSocket } from '../hooks/useReservationSocket';
+import { SelectionBar } from './SelectionBar';
 import { dayCellClass, dayHeaderClass, isLastDay } from './scheduleGridClasses';
 
 type SlotKey = `${ValidDay}-${number}`;
@@ -16,6 +17,7 @@ export function ReservationGrid({
   mode = 'reserve',
   fillHeight = false,
   scheduleMessage,
+  allowedHours,
 }: {
   username: string;
   onSubmit?: (slots: { day: ValidDay; time_index: number }[]) => Promise<void>;
@@ -23,6 +25,8 @@ export function ReservationGrid({
   mode?: 'view' | 'reserve';
   fillHeight?: boolean;
   scheduleMessage?: string;
+  /** 월 신청 한도(주당 시간). 있으면 남은 시간과 초과 여부를 보여준다. */
+  allowedHours?: number;
 }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [selected, setSelected] = useState<Set<SlotKey>>(new Set());
@@ -38,6 +42,8 @@ export function ReservationGrid({
     (day: ValidDay, time: number) => !!getSlot(reservations, day, time),
     [reservations],
   );
+
+  const myCount = reservations.filter((r) => r.username === username && r.reservation_type !== 'free').length;
 
   const canInteract = mode === 'reserve' && reservationOpen !== false && !!onSubmit;
 
@@ -90,11 +96,14 @@ export function ReservationGrid({
           {scheduleMessage}
         </p>
       )}
-      <div className="flex gap-4 text-xs text-ink-muted shrink-0 mb-3">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted shrink-0 mb-3">
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-mine inline-block" />내 예약</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-taken inline-block" />예약됨</span>
         {canInteract && (
           <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-pick inline-block" />선택</span>
+        )}
+        {canInteract && (
+          <span className="text-ink-faint">새벽 0~3시는 4시간이 함께 선택돼요</span>
         )}
         {mode === 'view' && (
           <span className="text-ink-faint">조회 전용</span>
@@ -152,16 +161,15 @@ export function ReservationGrid({
       </div>
 
       {canInteract && (
-        <div className="shrink-0 pt-3">
-          <button
-            type="button"
-            className="btn-primary shadow-lg shadow-sage/20"
-            disabled={submitting || selected.size === 0}
-            onClick={handleSubmit}
-          >
-            {submitting ? '신청 중…' : selected.size > 0 ? `${selected.size}칸 신청` : '시간을 선택하세요'}
-          </button>
-        </div>
+        <SelectionBar
+          selectedCount={selected.size}
+          usedCount={allowedHours != null ? myCount : undefined}
+          limit={allowedHours}
+          submitting={submitting}
+          idleLabel="시간을 선택하세요"
+          onClear={() => setSelected(new Set())}
+          onSubmit={handleSubmit}
+        />
       )}
     </div>
   );

@@ -1,70 +1,45 @@
-import { useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { SESSION } from './api';
+import { AppShell } from './components/ui';
+import { useSession } from './hooks/useSession';
 import LoginPage, { RegisterPage } from './pages/auth';
 import UserApp from './pages/UserApp';
 import AdminPage from './pages/AdminPage';
 import FreeApp from './pages/FreeApp';
 
-export const TOKEN_KEY = 'accessToken';
-export const USER_KEY = 'username';
-export const ADMIN_TOKEN_KEY = 'adminAccessToken';
-export const ADMIN_USER_KEY = 'adminUsername';
+function Splash() {
+  return (
+    <AppShell title="묵은지 작업실">
+      <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+    </AppShell>
+  );
+}
 
 function UserRoute() {
-  const [token, setToken] = useState<string | null>(sessionStorage.getItem(TOKEN_KEY));
-  const [username, setUsername] = useState(sessionStorage.getItem(USER_KEY) || '');
+  const { session, refresh, logout } = useSession();
 
-  const onLogin = (t: string, u: string) => {
-    sessionStorage.setItem(TOKEN_KEY, t);
-    sessionStorage.setItem(USER_KEY, u);
-    setToken(t);
-    setUsername(u);
-  };
-
-  const onLogout = () => {
-    sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(USER_KEY);
-    setToken(null);
-    setUsername('');
-  };
-
-  if (!token) {
-    return <LoginPage onLogin={onLogin} />;
-  }
-
-  return <UserApp token={token} username={username} onLogout={onLogout} />;
+  if (session.status === 'loading') return <Splash />;
+  if (session.status === 'anon') return <LoginPage onLogin={refresh} />;
+  return <UserApp token={SESSION} username={session.username} onLogout={logout} />;
 }
 
 function FreeRoute() {
   const navigate = useNavigate();
-  const adminToken = sessionStorage.getItem(ADMIN_TOKEN_KEY);
-  const userToken = sessionStorage.getItem(TOKEN_KEY);
-  const isAdminSession = Boolean(adminToken);
-  const token = adminToken || userToken;
-  const username = isAdminSession
-    ? sessionStorage.getItem(ADMIN_USER_KEY) || ''
-    : sessionStorage.getItem(USER_KEY) || '';
+  const { session, logout } = useSession();
 
-  if (!token) {
-    return <Navigate to={isAdminSession ? '/admin' : '/'} replace />;
-  }
+  if (session.status === 'loading') return <Splash />;
+  if (session.status === 'anon') return <Navigate to="/" replace />;
 
-  const onLogout = () => {
-    if (isAdminSession) {
-      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-      sessionStorage.removeItem(ADMIN_USER_KEY);
-      navigate('/admin');
-      return;
-    }
-    sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(USER_KEY);
-    navigate('/');
+  const isAdminSession = session.role === 'admin';
+  const onLogout = async () => {
+    await logout();
+    navigate(isAdminSession ? '/admin' : '/');
   };
 
   return (
     <FreeApp
-      token={token}
-      username={username}
+      token={SESSION}
+      username={session.username}
       isAdminSession={isAdminSession}
       onLogout={onLogout}
     />

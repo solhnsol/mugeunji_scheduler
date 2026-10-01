@@ -7,7 +7,7 @@ import { formatPhone } from '../utils';
 export default function LoginPage({
   onLogin,
 }: {
-  onLogin: (token: string, username: string) => void;
+  onLogin: () => void | Promise<void>;
 }) {
   const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
 
@@ -24,7 +24,8 @@ export default function LoginPage({
         String(fd.get('username')),
         String(fd.get('password')),
       );
-      onLogin(data.access_token, String(fd.get('username')));
+      void data;
+      await onLogin();
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : '로그인 실패', 'error');
     }
@@ -43,6 +44,7 @@ export default function LoginPage({
             <input className="input" id="password" name="password" type="password" required autoComplete="current-password" />
           </div>
           <button type="submit" className="btn-primary">로그인</button>
+          <p className="text-center text-xs text-ink-faint">로그인하면 이 기기에서 30일 동안 유지돼요.</p>
         </form>
         <div className="mt-4 flex justify-center gap-4 text-sm">
           <Link to="/register" className="text-sage font-medium hover:underline">회원가입</Link>
