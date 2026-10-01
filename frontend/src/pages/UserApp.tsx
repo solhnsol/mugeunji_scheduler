@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, HeaderActions, PlanGrid, ScheduleModeNav, Toast } from '../components/ui';
+import { buildSteps, GuideCard, isFreeOnly, UsageGuideModal } from '../components/GuideCard';
 import { PlanApplyModal } from '../components/PlanApplyModal';
 import { PlanManageModal } from '../components/PlanManageModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { ReservationGrid } from '../components/ReservationGrid';
+import { ScheduleStatus } from '../components/ScheduleStatus';
 import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
 import { MonthlyPlanHero } from '../components/ScheduleHero';
 import { ScheduleModal } from '../components/ScheduleModal';
@@ -34,10 +37,13 @@ export default function UserApp({
   const [plans, setPlans] = useState<Plan[]>([]);
   const [reservationOpen, setReservationOpen] = useState(true);
   const [scheduleMessage, setScheduleMessage] = useState('');
+  const [nextOpenAt, setNextOpenAt] = useState<string | null>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [applyPlan, setApplyPlan] = useState<Plan | null>(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
   const monthlyReservations = useMonthlyReservations();
   const mySummary = summarizeReservations(monthlyReservations, { username, type: 'monthly' });
   const { toast, show } = useToast();
@@ -52,6 +58,8 @@ export default function UserApp({
     setPlans(planData);
     setReservationOpen(settings.reservation_enabled);
     setScheduleMessage(settings.schedule_message || '');
+    setNextOpenAt(settings.next_monthly_open_at ?? null);
+    setPaymentGuide(settings.payment_guide ?? null);
   }, [token]);
 
   useEffect(() => {
@@ -139,6 +147,7 @@ export default function UserApp({
       onClick: () => setPlanModalOpen(true),
       hidden: !hasSubscription,
     },
+    { id: 'guide', label: '이용 안내', onClick: () => setGuideOpen(true) },
     { id: 'logout', label: '로그아웃', onClick: onLogout },
   ];
 
@@ -176,7 +185,23 @@ export default function UserApp({
     />
   );
 
-  const profileBanner = !me.profile_complete && (
+  const steps = buildSteps(me, {
+    hasReservations: mySummary.hasReservations,
+    onProfile: () => setProfileOpen(true),
+    onSchedule: () => setScheduleModalOpen(true),
+    paymentGuide,
+  });
+  if (isFreeOnly(me)) {
+    const reserve = steps[steps.length - 1];
+    reserve.done = steps[steps.length - 2].done;
+  }
+  const guideVisible = steps.some((s) => !s.done);
+  const guideCard = guideVisible ? <GuideCard steps={steps} /> : null;
+  const guideModal = guideOpen && (
+    <UsageGuideModal onClose={() => setGuideOpen(false)} paymentGuide={paymentGuide} />
+  );
+
+  const profileBanner = !guideVisible && !me.profile_complete && (
     <div className="card p-4 mb-3 flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50/80 shrink-0">
       <p className="text-sm text-amber-900">전화번호 등 내 정보를 등록해주세요.</p>
       <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm" onClick={() => setProfileOpen(true)}>
@@ -204,12 +229,14 @@ export default function UserApp({
         mode={canReserve ? 'reserve' : 'view'}
         reservationOpen={reservationOpen}
         scheduleMessage={gridMessage}
+        allowedHours={me.subscription?.allowed_hours}
         onSubmit={
           canReserve
             ? async (slots) => {
                 try {
                   const res = await api.reserve(token, slots);
                   show(res.message, 'success');
+                  setScheduleModalOpen(false);
                 } catch (err) {
                   show(err instanceof ApiError ? err.message : '신청 실패', 'error');
                   throw err;
@@ -228,15 +255,25 @@ export default function UserApp({
         nav={headerNav}
         actions={<HeaderActions items={headerMenuItems} />}
       >
-        {profileBanner}
-        <p className="text-sm text-ink-muted mb-6">이용할 요금제를 선택하세요</p>
-        <PlanGrid
-          plans={plans}
-          onSelect={(planId) => {
-            const plan = plans.find((p) => p.id === planId);
-            if (plan) setApplyPlan(plan);
-          }}
-        />
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">환영합니다 👋</h2>
+            <p className="text-sm text-ink-muted mt-1">
+              아래 순서대로 진행하면 시간표를 이용할 수 있어요. 막히면 상단 메뉴의 &quot;이용 안내&quot;를 확인해보세요.
+            </p>
+          </div>
+          {guideCard}
+          <div>
+            <h3 className="text-sm font-semibold text-ink mb-3">요금제 선택</h3>
+            <PlanGrid
+              plans={plans}
+              onSelect={(planId) => {
+                const plan = plans.find((p) => p.id === planId);
+                if (plan) setApplyPlan(plan);
+              }}
+            />
+          </div>
+        </div>
         {applyPlan && (
           <PlanApplyModal
             plan={applyPlan}
@@ -246,6 +283,7 @@ export default function UserApp({
         )}
         {planModal}
         {profileModal}
+        {guideModal}
         <Toast message={toast.message} type={toast.type} />
       </AppShell>
     );
@@ -259,9 +297,11 @@ export default function UserApp({
     >
       <div className="space-y-4">
         {profileBanner}
+        {guideCard}
 
         {me.subscription && (
           <MonthlyPlanHero
+            paymentGuide={showBillingHero ? paymentGuide : undefined}
             planName={me.subscription.plan_name}
             allowedHours={me.subscription.allowed_hours}
             startPeriod={me.subscription.start_period}
@@ -272,8 +312,15 @@ export default function UserApp({
           />
         )}
 
-        {canViewSchedule && (
+        {isFreeOnly(me) && me.can_access_free_schedule && (
+          <Link to="/free" className="btn-primary shadow-lg shadow-sage/20 inline-flex items-center justify-center">
+            자유이용 시간표 열기
+          </Link>
+        )}
+
+        {canViewSchedule && !isFreeOnly(me) && (
           <>
+            <ScheduleStatus open={canReserve} message={gridMessage} nextOpenAt={nextOpenAt} />
             <ReservationSummaryCard
               title="이번 달 예약"
               reservations={monthlyReservations}
@@ -302,6 +349,7 @@ export default function UserApp({
       )}
       {planModal}
       {profileModal}
+      {guideModal}
       {scheduleModal}
       <Toast message={toast.message} type={toast.type} />
     </AppShell>

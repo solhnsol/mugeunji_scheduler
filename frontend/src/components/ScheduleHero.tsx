@@ -8,6 +8,7 @@ export function MonthlyPlanHero({
   pendingBilling,
   pendingCancellation,
   notice,
+  paymentGuide,
 }: {
   planName: string;
   allowedHours: number;
@@ -16,6 +17,7 @@ export function MonthlyPlanHero({
   pendingBilling?: { amount: number; period: string; plan_name: string } | null;
   pendingCancellation?: { effective_period: string } | null;
   notice?: string;
+  paymentGuide?: string | null;
 }) {
   if (pendingBilling) {
     return (
@@ -28,6 +30,11 @@ export function MonthlyPlanHero({
           {pendingBilling.period} · {planName}
         </p>
         {notice && <p className="text-sm text-amber-900/80 mt-4 leading-relaxed">{notice}</p>}
+        {paymentGuide && (
+          <p className="text-sm text-amber-900 mt-3 pt-3 border-t border-amber-200/80 leading-relaxed whitespace-pre-line">
+            {paymentGuide}
+          </p>
+        )}
       </div>
     );
   }
@@ -35,15 +42,21 @@ export function MonthlyPlanHero({
   return (
     <div className="rounded-3xl bg-gradient-to-br from-sage via-[#345045] to-sage-light text-white p-6 sm:p-8 shadow-[0_10px_40px_rgba(58,82,72,0.22)]">
       <p className="text-sm font-medium text-white/55">내 요금제</p>
-      <div className="flex items-end gap-2 mt-3">
-        <span className="text-[4.25rem] sm:text-7xl font-bold tabular-nums leading-[0.88] tracking-tight">
-          {allowedHours}
-        </span>
-        <span className="text-base sm:text-lg text-white/65 font-medium pb-1.5 sm:pb-2">
-          시간<span className="text-white/40">/주</span>
-        </span>
-      </div>
-      <p className="text-xl sm:text-2xl font-semibold mt-5">{planName}</p>
+      {allowedHours === 0 ? (
+        <p className="text-4xl sm:text-5xl font-bold mt-3 leading-tight">자유이용 전용</p>
+      ) : (
+        <div className="flex items-end gap-2 mt-3">
+          <span className="text-[4.25rem] sm:text-7xl font-bold tabular-nums leading-[0.88] tracking-tight">
+            {allowedHours}
+          </span>
+          <span className="text-base sm:text-lg text-white/65 font-medium pb-1.5 sm:pb-2">
+            시간<span className="text-white/40">/주</span>
+          </span>
+        </div>
+      )}
+      <p className="text-xl sm:text-2xl font-semibold mt-5">
+        {allowedHours === 0 ? '월 신청 없이 자유이용 시간표로 예약해요' : planName}
+      </p>
       {(startPeriod || targetPeriod) && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-white/50">
           {startPeriod && <span>{startPeriod}부터</span>}

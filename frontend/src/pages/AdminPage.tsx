@@ -1,23 +1,23 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
+import { SESSION } from '../api';
 import { AppShell, Toast } from '../components/ui';
+import { useSession } from '../hooks/useSession';
 import { AdminReservationGrid } from '../components/AdminReservationGrid';
 import { AdminFreeReservationGrid } from '../components/AdminFreeReservationGrid';
 import { AdminAutomationTab } from '../components/AdminAutomationTab';
+import { AdminRosterTab } from '../components/AdminRosterTab';
 import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
 import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
-import { Plan, Reservation, SettlementOverview, UserInfo } from '../types';
-import { formatPrice } from '../utils';
+import { Plan, Reservation, UserInfo } from '../types';
+import { formatPhone } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 
-const ADMIN_TOKEN_KEY = 'adminAccessToken';
-const ADMIN_USER_KEY = 'adminUsername';
-
 const TABS = [
-  { id: 'settlement' as const, label: '정산' },
+  { id: 'roster' as const, label: '정산' },
   { id: 'schedule' as const, label: '월신청' },
   { id: 'free' as const, label: '자유이용' },
   { id: 'automation' as const, label: '자동화' },
@@ -32,8 +32,7 @@ function formatFreeWindow(start: string, end: string) {
 }
 
 export default function AdminPage() {
-  const [token, setToken] = useState(sessionStorage.getItem(ADMIN_TOKEN_KEY));
-  const [adminUser, setAdminUser] = useState(sessionStorage.getItem(ADMIN_USER_KEY) || '');
+  const { session, refresh, logout } = useSession();
   const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
 
   const show = (message: string, type: 'success' | 'error') => {
@@ -45,24 +44,23 @@ export default function AdminPage() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     try {
-      const data = await api.adminLogin(String(fd.get('username')), String(fd.get('password')));
-      sessionStorage.setItem(ADMIN_TOKEN_KEY, data.access_token);
-      sessionStorage.setItem(ADMIN_USER_KEY, String(fd.get('username')));
-      setToken(data.access_token);
-      setAdminUser(String(fd.get('username')));
+      await api.adminLogin(String(fd.get('username')), String(fd.get('password')));
+      await refresh();
       show('로그인 성공', 'success');
     } catch (err) {
       show(err instanceof ApiError ? err.message : '로그인 실패', 'error');
     }
   };
 
-  const logout = () => {
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    sessionStorage.removeItem(ADMIN_USER_KEY);
-    setToken(null);
-  };
+  if (session.status === 'loading') {
+    return (
+      <AppShell title="관리자">
+        <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+      </AppShell>
+    );
+  }
 
-  if (!token) {
+  if (session.status !== 'authed' || session.role !== 'admin') {
     return (
       <AppShell title="관리자">
         <form onSubmit={handleLogin} className="card p-6 max-w-sm mx-auto mt-4 space-y-4">
@@ -84,7 +82,9 @@ export default function AdminPage() {
     );
   }
 
-  return <AdminDashboard token={token} adminUser={adminUser} onLogout={logout} show={show} toast={toast} />;
+  return (
+    <AdminDashboard token={SESSION} adminUser={session.username} onLogout={logout} show={show} toast={toast} />
+  );
 }
 
 function AdminDashboard({
@@ -100,12 +100,11 @@ function AdminDashboard({
   show: (m: string, t: 'success' | 'error') => void;
   toast: { message: string; type: 'success' | 'error' | '' };
 }) {
-  const [tab, setTab] = useState<'settlement' | 'schedule' | 'free' | 'automation' | 'users'>('settlement');
-  const [settlement, setSettlement] = useState<SettlementOverview | null>(null);
+  const [tab, setTab] = useState<'roster' | 'schedule' | 'free' | 'automation' | 'users'>('roster');
+  const [reloadKey, setReloadKey] = useState(0);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [admins, setAdmins] = useState<UserInfo[]>([]);
-  const [periodInput, setPeriodInput] = useState('');
   const [targetUser, setTargetUser] = useState('');
   const [freeTargetUser, setFreeTargetUser] = useState('');
   const [freeSchedule, setFreeSchedule] = useState<{
@@ -118,6 +117,7 @@ function AdminDashboard({
     window_end: string;
   } | null>(null);
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
+  const [paymentGuide, setPaymentGuide] = useState('');
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [freeScheduleModalOpen, setFreeScheduleModalOpen] = useState(false);
   const monthlyReservations = useMonthlyReservations();
@@ -134,20 +134,18 @@ function AdminDashboard({
     });
   }, [admins, users]);
 
-  const load = useCallback(async (periodOverride?: string) => {
-    const period = periodOverride ?? (periodInput.trim() || undefined);
-    const [s, p, u, a] = await Promise.all([
-      api.getSettlement(token, period),
+  const load = useCallback(async () => {
+    const [p, u, a, pub] = await Promise.all([
       api.getPlans(),
       api.getUsers(token),
       api.getAdmins(token),
+      api.getSettings(),
     ]);
-    setSettlement(s);
+    setPaymentGuide(pub.payment_guide ?? '');
     setPlans(p);
     setUsers(u);
     setAdmins(a);
-    if (!periodInput && s.period) setPeriodInput(s.period);
-  }, [token, periodInput]);
+  }, [token]);
 
   useEffect(() => {
     load().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
@@ -163,11 +161,21 @@ function AdminDashboard({
     loadFreeSchedule().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
   }, [tab, loadFreeSchedule, show]);
 
+  const savePaymentGuide = async () => {
+    try {
+      const res = await api.updatePaymentGuide(token, paymentGuide);
+      show(res.message, 'success');
+    } catch (e) {
+      show(e instanceof ApiError ? e.message : '저장 실패', 'error');
+    }
+  };
+
   const savePlanPrice = async (planId: number, price: number) => {
     try {
       const res = await api.updatePlanPrice(token, planId, price);
       show(res.message, 'success');
       await load();
+      setReloadKey((k) => k + 1);
     } catch (e) {
       show(e instanceof ApiError ? e.message : '저장 실패', 'error');
     }
@@ -200,8 +208,41 @@ function AdminDashboard({
         </div>
       </div>
 
-      {tab === 'settlement' && settlement && (
+      {tab === 'roster' && (
         <div className="space-y-5">
+          <AdminRosterTab
+            token={token}
+            plans={plans}
+            reloadKey={reloadKey}
+            show={show}
+            onEdit={(username) => {
+              const u = users.find((x) => x.username === username);
+              if (u) setEditUser(u);
+            }}
+          />
+
+          <details className="group">
+            <summary className="cursor-pointer text-sm font-medium text-ink-muted py-2 select-none">
+              정산 설정 (입금 안내 문구 · 요금제 가격)
+            </summary>
+            <div className="space-y-5 mt-3">
+          <section className="card p-5">
+            <h2 className="font-semibold text-ink mb-1">입금 안내 문구</h2>
+            <p className="text-xs text-ink-faint mb-3">
+              회원의 시작 가이드·입금 대기 화면·이용 안내에 표시됩니다. (계좌, 입금자명 규칙 등)
+            </p>
+            <textarea
+              className="input min-h-[88px]"
+              maxLength={1000}
+              value={paymentGuide}
+              onChange={(e) => setPaymentGuide(e.target.value)}
+              placeholder="예) 토스뱅크 1000-0000-0000 (홍길동) · 입금자명은 가입한 이름으로 해주세요."
+            />
+            <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm mt-3" onClick={savePaymentGuide}>
+              저장
+            </button>
+          </section>
+
           <section className="card p-5">
             <h2 className="font-semibold text-ink mb-4">요금제 가격</h2>
             <div className="space-y-3">
@@ -210,197 +251,8 @@ function AdminDashboard({
               ))}
             </div>
           </section>
-
-          <section className="card p-5">
-            <h2 className="font-semibold text-ink mb-4">정산</h2>
-            <input
-              className="input mb-3"
-              value={periodInput}
-              onChange={(e) => setPeriodInput(e.target.value)}
-              placeholder="YYYY-MM"
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn-secondary !w-auto !px-5"
-                onClick={() => load(periodInput.trim() || undefined)}
-              >
-                조회
-              </button>
-              <button
-                type="button"
-                className="btn-primary !w-auto !px-5"
-                onClick={async () => {
-                  try {
-                    const res = await api.openSettlement(token, periodInput || undefined);
-                    show(res.message, 'success');
-                    await load();
-                  } catch (e) {
-                    show(e instanceof ApiError ? e.message : '실패', 'error');
-                  }
-                }}
-              >
-                열기
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={async () => {
-                  if (!confirm('정산을 마감하시겠습니까?')) return;
-                  try {
-                    const res = await api.closeSettlement(token, periodInput || undefined);
-                    show(res.message, 'success');
-                    await load();
-                  } catch (e) {
-                    show(e instanceof ApiError ? e.message : '실패', 'error');
-                  }
-                }}
-              >
-                마감
-              </button>
-              {settlement.settlement?.status === 'closed' && (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={async () => {
-                    const period = periodInput.trim() || settlement.period;
-                    if (!confirm(`${period} 정산을 다시 여시겠습니까?`)) return;
-                    try {
-                      const res = await api.reopenSettlement(token, period);
-                      show(res.message, 'success');
-                      await load(period);
-                    } catch (e) {
-                      show(e instanceof ApiError ? e.message : '실패', 'error');
-                    }
-                  }}
-                >
-                  다시 열기
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={async () => {
-                  try {
-                    const res = await api.getSettlementCopyText(token, settlement.period);
-                    await navigator.clipboard.writeText(res.text);
-                    show('복사됨', 'success');
-                  } catch (e) {
-                    show(e instanceof ApiError ? e.message : '복사 실패', 'error');
-                  }
-                }}
-              >
-                문구 복사
-              </button>
             </div>
-            <p className="mt-4 text-xs text-ink-faint">
-              {settlement.period} · 미입금 {settlement.summary.pending ?? 0} · 완료 {settlement.summary.paid ?? 0}
-              {settlement.open_settlement ? ` · 열림` : settlement.settlement?.status === 'closed' ? ' · 마감' : ''}
-            </p>
-            {settlement.usage_period && (
-              <p className="mt-3 text-xs text-ink-muted">
-                이용 중 기간: <strong className="text-ink">{settlement.usage_period}</strong>
-                <span className="text-ink-faint"> · 이번 달 입금 확인 기준</span>
-              </p>
-            )}
-          </section>
-
-          <section className="card p-5 overflow-x-auto">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="font-semibold text-ink">입금</h2>
-              {(settlement.summary.paid ?? 0) > 0 && (
-                <button
-                  type="button"
-                  className="text-xs border border-[#e8c4c4] text-[#8b4040] rounded-full px-3 py-1.5 min-h-[32px] hover:bg-[#fdf5f5]"
-                  onClick={async () => {
-                    if (
-                      !confirm(
-                        `${settlement.period} 입금 확인 ${settlement.summary.paid}건을 모두 취소하시겠습니까?\n해당 월 이용 권한이 회수됩니다.`,
-                      )
-                    ) {
-                      return;
-                    }
-                    try {
-                      const res = await api.undoConfirmPayment(token, { period: settlement.period });
-                      show(res.message, 'success');
-                      await load();
-                    } catch (e) {
-                      show(e instanceof ApiError ? e.message : '취소 실패', 'error');
-                    }
-                  }}
-                >
-                  전체 입금 확인 취소
-                </button>
-              )}
-            </div>
-            {settlement.items.length === 0 ? (
-              <p className="text-ink-faint text-sm">내역 없음</p>
-            ) : (
-              <table className="w-full text-sm min-w-[480px]">
-                <thead>
-                  <tr className="text-left text-ink-faint border-b border-line text-xs">
-                    <th className="py-2 font-medium">회원</th>
-                    <th className="font-medium">요금제</th>
-                    <th className="font-medium">금액</th>
-                    <th className="font-medium">상태</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {settlement.items.map((item) => (
-                    <tr key={item.id} className="border-b border-line/50">
-                      <td className="py-3">
-                        <div className="font-medium text-ink">{item.name || item.username}</div>
-                        <div className="text-xs text-ink-faint">{item.phone || item.username}</div>
-                      </td>
-                      <td className="text-ink-muted">{item.plan_name}</td>
-                      <td className="tabular-nums">{formatPrice(item.amount)}</td>
-                      <td className={item.status === 'paid' ? 'text-sage font-medium' : 'text-amber-700'}>
-                        {item.status === 'paid' ? '완료' : '대기'}
-                      </td>
-                      <td>
-                        {item.status !== 'paid' ? (
-                          <button
-                            type="button"
-                            className="text-xs bg-sage text-white rounded-full px-3 py-1.5 min-h-[32px]"
-                            onClick={async () => {
-                              if (!confirm('입금 확인?')) return;
-                              try {
-                                const res = await api.confirmPayment(token, item.id);
-                                show(res.message, 'success');
-                                await load();
-                              } catch (e) {
-                                show(e instanceof ApiError ? e.message : '실패', 'error');
-                              }
-                            }}
-                          >
-                            확인
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="text-xs border border-line text-ink-muted rounded-full px-3 py-1.5 min-h-[32px] hover:bg-cream-dark/60"
-                            onClick={async () => {
-                              if (!confirm(`${item.name || item.username}님 입금 확인을 취소하시겠습니까?`)) return;
-                              try {
-                                const res = await api.undoConfirmPayment(token, { billing_id: item.id });
-                                show(res.message, 'success');
-                                await load();
-                              } catch (e) {
-                                show(e instanceof ApiError ? e.message : '취소 실패', 'error');
-                              }
-                            }}
-                          >
-                            취소
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
+          </details>
         </div>
       )}
 
@@ -697,10 +549,10 @@ function AdminDashboard({
               {users.map((u) => (
                 <tr key={u.username} className="border-b border-line/50">
                   <td className="py-3 font-medium">{u.name || '-'}</td>
-                  <td className="text-ink-muted">{u.phone || '-'}</td>
+                  <td className="text-ink-muted">{u.phone ? formatPhone(u.phone) : '-'}</td>
                   <td className="text-ink-muted">{u.username}</td>
                   <td>
-                    {u.allowed_hours ? `${u.allowed_hours}h` : '-'}
+                    {u.allowed_hours ? `${u.allowed_hours}h` : u.subscription_status ? '자유전용' : '-'}
                     {u.custom_allowed_hours != null && (
                       <span className="text-xs text-amber-700 ml-1">개별</span>
                     )}
@@ -725,7 +577,7 @@ function AdminDashboard({
           plans={plans}
           token={token}
           onClose={() => setEditUser(null)}
-          onSaved={async () => { setEditUser(null); await load(); show('저장됨', 'success'); }}
+          onSaved={async () => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show('저장됨', 'success'); }}
           onError={(m) => show(m, 'error')}
         />
       ) : editUser && (
@@ -734,7 +586,7 @@ function AdminDashboard({
           plans={plans}
           token={token}
           onClose={() => setEditUser(null)}
-          onSaved={async () => { setEditUser(null); await load(); show('저장됨', 'success'); }}
+          onSaved={async () => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show('저장됨', 'success'); }}
           onError={(m) => show(m, 'error')}
         />
       )}
@@ -859,8 +711,8 @@ function EditUserModal({
   onSaved: () => void;
   onError: (m: string) => void;
 }) {
-  const hourOptions = [...new Set(plans.map((p) => p.allowed_hours))].sort((a, b) => a - b);
-  const fallbackHours = hourOptions[0] ?? 4;
+  const hourOptions = [0, ...new Set(plans.map((p) => p.allowed_hours))].sort((a, b) => a - b);
+  const fallbackHours = hourOptions.find((h) => h > 0) ?? 4;
 
   const initialPlanId = user.plan_id ?? plans.find((p) => p.allowed_hours === user.plan_allowed_hours)?.id ?? plans[0]?.id;
   const usesCustomHours = user.custom_allowed_hours != null;
@@ -872,16 +724,21 @@ function EditUserModal({
   );
   const [freeAccess, setFreeAccess] = useState(user.free_access ?? user.role === 'free');
   const [customFee, setCustomFee] = useState(
-    user.monthly_price != null ? String(user.monthly_price) : '',
+    user.custom_monthly_fee != null ? String(user.custom_monthly_fee) : '',
   );
-  const [useCustomFee, setUseCustomFee] = useState(user.monthly_price != null && user.monthly_price > 0);
+  const [useCustomFee, setUseCustomFee] = useState(user.custom_monthly_fee != null);
 
   const selectedPlan = plans.find((p) => p.id === planId);
 
   const save = async () => {
     try {
+      if (useCustomFee && (customFee === '' || Number(customFee) < 0)) {
+        onError('커스텀 월 비용을 0원 이상으로 입력해주세요.');
+        return;
+      }
+      const freeOnly = useCustomHours && allowedHours === 0;
       const body: Record<string, unknown> = {
-        free_access: freeAccess,
+        free_access: freeOnly ? true : freeAccess,
         clear_custom_fee: !useCustomFee,
         ...(useCustomFee && customFee !== '' ? { custom_monthly_fee: Number(customFee) } : {}),
       };
@@ -938,7 +795,8 @@ function EditUserModal({
               <span className="font-medium">월 예약 시간 개별 설정</span>
             </label>
             {useCustomHours ? (
-              <div className="grid grid-cols-3 gap-2">
+              <>
+              <div className="grid grid-cols-4 gap-2">
                 {hourOptions.map((h) => (
                   <button
                     key={h}
@@ -950,10 +808,28 @@ function EditUserModal({
                     }`}
                     onClick={() => setAllowedHours(h)}
                   >
-                    {h}h
+                    {h === 0 ? '없음' : `${h}h`}
                   </button>
                 ))}
               </div>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs text-ink-faint">직접 입력</span>
+                <input
+                  className="input !py-2 max-w-[88px]"
+                  type="number"
+                  min={0}
+                  max={24}
+                  value={allowedHours}
+                  onChange={(e) => setAllowedHours(Math.max(0, Math.min(24, Number(e.target.value) || 0)))}
+                />
+                <span className="text-xs text-ink-faint">시간/주</span>
+              </div>
+              {allowedHours === 0 && (
+                <p className="text-xs text-amber-800 mt-2">
+                  월 예약 없이 자유이용만 사용하는 계정이에요. 자유이용 권한이 자동으로 켜집니다.
+                </p>
+              )}
+              </>
             ) : (
               <p className="text-sm text-ink-muted rounded-2xl border border-line px-4 py-3">
                 요금제 기본 · 주 {selectedPlan?.allowed_hours ?? user.allowed_hours}시간

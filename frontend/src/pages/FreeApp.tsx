@@ -165,6 +165,7 @@ export default function FreeApp({
               try {
                 const res = await api.reserveFree(token, slots);
                 show(res.message, 'success');
+                setScheduleModalOpen(false);
                 setUsageRefreshKey((k) => k + 1);
                 await load();
               } catch (err) {

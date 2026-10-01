@@ -131,13 +131,6 @@ class MembershipManager:
             await self.conn.rollback()
             return False, f"설정 실패: {str(e)}"
 
-    async def get_open_settlement(self) -> Optional[Dict]:
-        async with self.conn.execute(
-            "SELECT * FROM settlement_periods WHERE status = 'open' ORDER BY period DESC LIMIT 1"
-        ) as cursor:
-            row = await cursor.fetchone()
-        return dict(row) if row else None
-
     async def get_billing_cycle(self, username: str, period: str) -> Optional[Dict]:
         async with self.conn.execute(
             """
@@ -240,7 +233,6 @@ class MembershipManager:
         hours, price, _ = await self.get_effective_hours_and_price(username)
 
         pending_change = await self._get_pending_plan_change(username)
-        open_settlement = await self.get_open_settlement()
         pending_cancellation = self._pending_cancellation(sub)
         start_period = sub.get("start_period") or current_period
 
@@ -298,7 +290,6 @@ class MembershipManager:
             "start_period": start_period,
             "pending_plan_change": pending_change,
             "pending_cancellation": pending_cancellation,
-            "open_settlement_period": open_settlement["period"] if open_settlement else None,
         }
 
     def _pending_cancellation(self, sub: Optional[Dict]) -> Optional[Dict]:
@@ -414,8 +405,7 @@ class MembershipManager:
             if not await cursor.fetchone():
                 return False, "존재하지 않는 요금제입니다."
 
-        open_settlement = await self.get_open_settlement()
-        effective_period = open_settlement["period"] if open_settlement else period_from_offset(1)
+        effective_period = period_from_offset(1)
 
         try:
             await self.conn.execute(
@@ -442,8 +432,7 @@ class MembershipManager:
         if sub.get("cancellation_effective_period"):
             return False, "이미 중단이 예약되어 있습니다."
 
-        open_settlement = await self.get_open_settlement()
-        effective_period = open_settlement["period"] if open_settlement else period_from_offset(1)
+        effective_period = period_from_offset(1)
         now = datetime.now(KST).isoformat()
 
         try:
@@ -545,100 +534,232 @@ class MembershipManager:
         )
         return await self.get_billing_cycle(username, period)
 
-    async def open_settlement(self, period: str, admin_username: str) -> Tuple[bool, str]:
-        if not period or len(period) != 7:
-            return False, "정산 기간 형식이 올바르지 않습니다. (YYYY-MM)"
-
-        existing_open = await self.get_open_settlement()
-        if existing_open:
-            return False, f"이미 {existing_open['period']} 정산이 열려 있습니다. 먼저 마감하거나 입금을 처리해주세요."
-
+    async def generate_billing(self, period: str) -> Tuple[bool, str]:
+        """period(YYYY-MM) 명단 전원에게 청구를 만든다. 여러 번 눌러도 안전(이미 있으면 건너뜀)."""
+        if not period or len(period) != 7 or period[4] != "-":
+            return False, "기간 형식이 올바르지 않습니다. (YYYY-MM)"
         try:
-            await self.conn.execute(
-                """
-                INSERT INTO settlement_periods (period, status, opened_at, opened_by)
-                VALUES (?, 'open', ?, ?)
-                """,
-                (period, datetime.now(KST).isoformat(), admin_username),
-            )
-
-            async with self.conn.execute(
-                """
-                SELECT username, start_period, cancellation_effective_period
-                FROM subscriptions
-                WHERE status IN ('active', 'pending_payment')
-                """
-            ) as cursor:
-                subscribers = await cursor.fetchall()
-
+            roster = await self._roster_usernames(period)
             created = 0
-            for row in subscribers:
-                username = row["username"]
-                user = await self.get_user_row(username)
-                if not user or user["role"] == "admin":
-                    continue
-                start = row["start_period"] or usage_period()
-                if start > period:
-                    continue
-                cancel = row["cancellation_effective_period"]
-                if cancel and cancel <= period:
+            for username in roster:
+                if await self.get_billing_cycle(username, period):
                     continue
                 plan_id = await self._resolve_plan_for_period(username, period)
                 await self.conn.execute(
                     "UPDATE subscriptions SET plan_id = ? WHERE username = ?",
                     (plan_id, username),
                 )
-                billing = await self._ensure_billing_cycle(username, period)
-                if billing:
-                    created += 1
+                await self._ensure_billing_cycle(username, period)
                 await self.sync_user_entitlements(username)
-
+                created += 1
             await self.conn.commit()
-            return True, f"{period} 다음 달 정산이 열렸습니다. 청구 대상 {created}명"
-        except aiosqlite.IntegrityError:
-            await self.conn.rollback()
-            return False, f"{period} 정산 기간이 이미 존재합니다."
+            return True, f"{period} 청구 {created}건을 새로 만들었습니다. (명단 {len(roster)}명)"
         except Exception as e:
             await self.conn.rollback()
-            return False, f"정산 열기 실패: {str(e)}"
+            return False, f"청구 생성 실패: {str(e)}"
 
-    async def close_settlement(self, period: str) -> Tuple[bool, str]:
+    def _in_roster(self, sub: Optional[Dict], period: str) -> bool:
+        if not sub:
+            return False
+        if (sub.get("start_period") or "0000-00") > period:
+            return False
+        cancel = sub.get("cancellation_effective_period")
+        return not (cancel and cancel <= period)
+
+    async def _roster_usernames(self, period: str) -> List[str]:
+        async with self.conn.execute(
+            """
+            SELECT s.username, s.start_period, s.cancellation_effective_period
+            FROM subscriptions s JOIN users u ON u.username = s.username
+            WHERE u.role != 'admin'
+            """
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [r["username"] for r in rows if self._in_roster(dict(r), period)]
+
+    async def get_roster(self, period: str) -> Dict:
+        """period 기준 명단(신청자)과 추가 후보(미신청자)."""
+        members: List[Dict] = []
+        candidates: List[Dict] = []
+        users = await self.list_users_with_membership()
+
+        # 회원마다 쿼리하지 않도록 구독/청구를 한 번에 가져온다.
+        async with self.conn.execute(
+            """
+            SELECT s.*, p.name AS plan_name, p.allowed_hours AS plan_allowed_hours,
+                   p.monthly_price AS plan_monthly_price
+            FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+            """
+        ) as cursor:
+            subs = {r["username"]: dict(r) for r in await cursor.fetchall()}
+        async with self.conn.execute(
+            "SELECT * FROM billing_cycles WHERE period = ?", (period,)
+        ) as cursor:
+            billings = {r["username"]: dict(r) for r in await cursor.fetchall()}
+
+        for user in users:
+            username = user["username"]
+            sub = subs.get(username)
+            if self._in_roster(sub, period):
+                custom_hours = user.get("custom_allowed_hours")
+                custom_fee = user.get("custom_monthly_fee")
+                hours = custom_hours if custom_hours is not None else sub["plan_allowed_hours"]
+                price = custom_fee if custom_fee is not None else sub["plan_monthly_price"]
+                billing = billings.get(username)
+                members.append({
+                    "username": username,
+                    "name": user.get("name"),
+                    "phone": user.get("phone"),
+                    "plan_id": sub["plan_id"],
+                    "plan_name": sub["plan_name"],
+                    "allowed_hours": hours,
+                    "monthly_price": price,
+                    "custom_allowed_hours": user.get("custom_allowed_hours"),
+                    "custom_monthly_fee": user.get("custom_monthly_fee"),
+                    "free_access": user["role"] == "free",
+                    "billing_id": billing["id"] if billing else None,
+                    "billing_status": billing["status"] if billing else "none",
+                    "billing_amount": billing["amount"] if billing else None,
+                    "paid_at": billing.get("paid_at") if billing else None,
+                })
+            else:
+                note = "요금제 없음"
+                if sub and sub.get("cancellation_effective_period"):
+                    note = f"{sub['cancellation_effective_period']}부터 제외됨"
+                elif sub and (sub.get("start_period") or "") > period:
+                    note = f"{sub['start_period']}부터 시작 예정"
+                candidates.append({
+                    "username": username,
+                    "name": user.get("name"),
+                    "phone": user.get("phone"),
+                    "note": note,
+                    "had_plan": bool(sub),
+                })
+
+        counts = {
+            "members": len(members),
+            "unbilled": sum(1 for m in members if m["billing_status"] == "none"),
+            "pending": sum(1 for m in members if m["billing_status"] == "pending"),
+            "paid": sum(1 for m in members if m["billing_status"] == "paid"),
+            "total_amount": sum((m["billing_amount"] if m["billing_amount"] is not None else m["monthly_price"]) or 0 for m in members),
+            "paid_amount": sum((m["billing_amount"] or 0) for m in members if m["billing_status"] == "paid"),
+        }
+        return {"period": period, "members": members, "candidates": candidates, "summary": counts}
+
+    async def add_to_roster(
+        self,
+        username: str,
+        period: str,
+        plan_id: int,
+        allowed_hours: Optional[int] = None,
+        custom_monthly_fee: Optional[int] = None,
+        free_access: Optional[bool] = None,
+    ) -> Tuple[bool, str]:
+        user = await self.get_user_row(username)
+        if not user:
+            return False, "사용자를 찾을 수 없습니다."
+        if user["role"] == "admin":
+            return False, "관리자 계정은 명단에 추가할 수 없습니다."
+        async with self.conn.execute("SELECT id FROM plans WHERE id = ?", (plan_id,)) as cursor:
+            if not await cursor.fetchone():
+                return False, "존재하지 않는 요금제입니다."
+        if not period or len(period) != 7 or period[4] != "-":
+            return False, "기간 형식이 올바르지 않습니다. (YYYY-MM)"
+        if period < usage_period():
+            return False, "지난 달은 명단에 추가할 수 없습니다. 이번 달 이후만 가능합니다."
+
+        now_iso = datetime.now(KST).isoformat()
+        try:
+            sub = await self.get_subscription(username)
+            if sub:
+                # 아직 이용 중인 회원의 제외를 되돌리는 경우엔 시작 월을 유지해 연속성을 보존한다.
+                cancel = sub.get("cancellation_effective_period")
+                still_active = not cancel or cancel > usage_period()
+                start = sub.get("start_period") if still_active and sub.get("start_period") else period
+                start = min(start, period)
+                await self.conn.execute(
+                    """
+                    UPDATE subscriptions
+                    SET plan_id = ?, start_period = ?, cancellation_effective_period = NULL,
+                        auto_renew = 1, updated_at = ?
+                    WHERE username = ?
+                    """,
+                    (plan_id, start, now_iso, username),
+                )
+            else:
+                await self.conn.execute(
+                    """
+                    INSERT INTO subscriptions
+                    (username, plan_id, status, auto_renew, start_period, created_at, updated_at)
+                    VALUES (?, ?, 'pending_payment', 1, ?, ?, ?)
+                    """,
+                    (username, plan_id, period, now_iso, now_iso),
+                )
+            await self.conn.execute(
+                "UPDATE plan_change_requests SET status = 'cancelled' WHERE username = ? AND status = 'pending'",
+                (username,),
+            )
+
+            ok, msg = await self.update_user_membership(
+                username,
+                plan_id=plan_id,
+                allowed_hours=allowed_hours,
+                clear_custom_hours=allowed_hours is None,
+                custom_monthly_fee=custom_monthly_fee,
+                clear_custom_fee=custom_monthly_fee is None,
+                free_access=free_access,
+                commit=False,
+            )
+            if not ok:
+                await self.conn.rollback()
+                return False, msg
+
+            await self._ensure_billing_cycle(username, period)
+            await self._sync_subscription_payment_status(username)
+            await self.sync_user_entitlements(username)
+            # 구독 생성/수정, 회원 설정, 청구 생성을 한 번에 커밋 — 중간 실패 시 전부 롤백
+            await self.conn.commit()
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"명단 추가 실패: {str(e)}"
+        return True, f"'{username}'님을 {period} 명단에 추가했습니다."
+
+    async def remove_from_roster(self, username: str, period: str) -> Tuple[bool, str]:
+        """period부터 명단에서 제외(요금제 해제). 계정과 과거 기록은 유지."""
+        if not period or len(period) != 7 or period[4] != "-":
+            return False, "기간 형식이 올바르지 않습니다. (YYYY-MM)"
+        if period < usage_period():
+            return False, "지난 달은 명단에서 제외할 수 없습니다. 이번 달 이후만 가능합니다."
+        sub = await self.get_subscription(username)
+        if not sub or not self._in_roster(sub, period):
+            return False, "이 기간 명단에 없는 회원입니다."
+        billing = await self.get_billing_cycle(username, period)
+        if billing and billing["status"] == "paid":
+            return False, "이미 입금 확인된 회원입니다. 먼저 입금 확인을 취소한 뒤 제외해주세요."
+        now_iso = datetime.now(KST).isoformat()
         try:
             await self.conn.execute(
-                "UPDATE settlement_periods SET status = 'closed', closed_at = ? WHERE period = ? AND status = 'open'",
-                (datetime.now(KST).isoformat(), period),
+                "DELETE FROM billing_cycles WHERE username = ? AND period >= ? AND status = 'pending'",
+                (username, period),
             )
-            if self.conn.total_changes == 0:
-                await self.conn.rollback()
-                return False, "열린 정산 기간을 찾을 수 없습니다."
-            await self.conn.commit()
-            return True, f"{period} 정산이 마감되었습니다."
-        except Exception as e:
-            await self.conn.rollback()
-            return False, f"정산 마감 실패: {str(e)}"
-
-    async def reopen_settlement(self, period: str) -> Tuple[bool, str]:
-        existing_open = await self.get_open_settlement()
-        if existing_open:
-            return False, f"이미 {existing_open['period']} 정산이 열려 있습니다."
-
-        try:
             await self.conn.execute(
                 """
-                UPDATE settlement_periods
-                SET status = 'open', closed_at = NULL
-                WHERE period = ? AND status = 'closed'
+                UPDATE subscriptions
+                SET cancellation_effective_period = ?, auto_renew = 0, updated_at = ?
+                WHERE username = ?
                 """,
-                (period,),
+                (period, now_iso, username),
             )
-            if self.conn.total_changes == 0:
-                await self.conn.rollback()
-                return False, "마감된 정산 기간을 찾을 수 없습니다."
+            await self.conn.execute(
+                "UPDATE plan_change_requests SET status = 'cancelled' WHERE username = ? AND status = 'pending'",
+                (username,),
+            )
+            await self._sync_subscription_payment_status(username)
             await self.conn.commit()
-            return True, f"{period} 정산이 다시 열렸습니다."
+            return True, f"'{username}'님을 {period}부터 명단에서 제외했습니다."
         except Exception as e:
             await self.conn.rollback()
-            return False, f"정산 다시 열기 실패: {str(e)}"
+            return False, f"제외 실패: {str(e)}"
 
     async def confirm_payment(self, billing_id: int, admin_username: str) -> Tuple[bool, str]:
         try:
@@ -816,17 +937,8 @@ class MembershipManager:
                 "prev_plan_name": prev["plan_name"] if prev else None,
             })
 
-        settlement = None
-        async with self.conn.execute(
-            "SELECT * FROM settlement_periods WHERE period = ?", (period,)
-        ) as cursor:
-            row = await cursor.fetchone()
-            if row:
-                settlement = dict(row)
-
         return {
             "period": period,
-            "settlement": settlement,
             "summary": counts,
             "items": items,
         }
@@ -901,7 +1013,9 @@ class MembershipManager:
         clear_custom_hours: bool = False,
         clear_custom_fee: bool = False,
         auto_renew: Optional[bool] = None,
+        commit: bool = True,
     ) -> Tuple[bool, str]:
+        """commit=False면 커밋/롤백을 호출자에게 맡긴다 (여러 단계를 한 트랜잭션으로 묶을 때)."""
         user = await self.get_user_row(username)
         if not user:
             return False, "사용자를 찾을 수 없습니다."
@@ -909,30 +1023,53 @@ class MembershipManager:
             return False, "관리자 계정은 수정할 수 없습니다."
 
         hours_to_set = allowed_hours if allowed_hours is not None else custom_allowed_hours
+        now_iso = datetime.now(KST).isoformat()
 
         try:
-            if plan_id is not None:
-                sub = await self.get_subscription(username)
-                if sub:
-                    await self.conn.execute(
-                        "UPDATE subscriptions SET plan_id = ?, updated_at = ? WHERE username = ?",
-                        (plan_id, datetime.now(KST).isoformat(), username),
-                    )
-                else:
-                    await self.conn.execute(
-                        """
-                        INSERT INTO subscriptions (username, plan_id, status, auto_renew, created_at, updated_at)
-                        VALUES (?, ?, 'pending_payment', 1, ?, ?)
-                        """,
-                        (username, plan_id, datetime.now(KST).isoformat(), datetime.now(KST).isoformat()),
-                    )
-                if hours_to_set is None and not clear_custom_hours:
+            sub = await self.get_subscription(username)
+            created_subscription = False
+
+            # 요금제를 지정하지 않았더라도, 개별 시간/요금/자유이용을 설정하려면 구독이 있어야
+            # 청구·입금 확인·이용 권한 흐름이 동작한다. 없으면 가장 가까운 요금제로 만든다.
+            needs_subscription = (
+                plan_id is not None
+                or hours_to_set is not None
+                or custom_monthly_fee is not None
+                or bool(free_access)
+            )
+            if not sub and needs_subscription:
+                if plan_id is None:
                     async with self.conn.execute(
-                        "SELECT allowed_hours FROM plans WHERE id = ?", (plan_id,)
+                        "SELECT id FROM plans ORDER BY ABS(allowed_hours - ?), sort_order LIMIT 1",
+                        (hours_to_set or 0,),
                     ) as cursor:
                         plan_row = await cursor.fetchone()
-                    if plan_row:
-                        hours_to_set = plan_row["allowed_hours"]
+                    if not plan_row:
+                        return False, "등록된 요금제가 없습니다."
+                    plan_id = plan_row["id"]
+                async with self.conn.execute("SELECT id FROM plans WHERE id = ?", (plan_id,)) as cursor:
+                    if not await cursor.fetchone():
+                        return False, "존재하지 않는 요금제입니다."
+                await self.conn.execute(
+                    """
+                    INSERT INTO subscriptions
+                    (username, plan_id, status, auto_renew, start_period, created_at, updated_at)
+                    VALUES (?, ?, 'pending_payment', 1, ?, ?, ?)
+                    """,
+                    (username, plan_id, usage_period(), now_iso, now_iso),
+                )
+                created_subscription = True
+            elif sub and plan_id is not None:
+                async with self.conn.execute("SELECT id FROM plans WHERE id = ?", (plan_id,)) as cursor:
+                    if not await cursor.fetchone():
+                        return False, "존재하지 않는 요금제입니다."
+                await self.conn.execute(
+                    "UPDATE subscriptions SET plan_id = ?, updated_at = ? WHERE username = ?",
+                    (plan_id, now_iso, username),
+                )
+                # 요금제를 바꾸면서 시간을 따로 지정하지 않으면 새 요금제의 기본 시간을 따른다.
+                if hours_to_set is None:
+                    clear_custom_hours = True
 
             if clear_custom_hours:
                 await self.conn.execute(
@@ -965,23 +1102,33 @@ class MembershipManager:
                     (1 if auto_renew else 0, username),
                 )
 
-            open_settlement = await self.get_open_settlement()
-            if open_settlement:
-                billing = await self.get_billing_cycle(username, open_settlement["period"])
-                if billing and billing["status"] == "pending":
-                    _, price, _ = await self.get_effective_hours_and_price(username)
-                    resolved_plan = plan_id if plan_id is not None else billing["plan_id"]
+            if created_subscription:
+                await self._ensure_billing_cycle(username, usage_period(), billing_type="new")
+
+            # 아직 입금 전인 청구서는 바뀐 요금제/요금을 반영한다.
+            if await self.get_subscription(username):
+                _, price, sub_now = await self.get_effective_hours_and_price(username)
+                async with self.conn.execute(
+                    "SELECT id, period, plan_id FROM billing_cycles WHERE username = ? AND status = 'pending'",
+                    (username,),
+                ) as cursor:
+                    pending_cycles = await cursor.fetchall()
+                for cycle in pending_cycles:
+                    resolved_plan = plan_id if plan_id is not None else cycle["plan_id"]
                     await self.conn.execute(
                         "UPDATE billing_cycles SET plan_id = ?, amount = ? WHERE id = ?",
-                        (resolved_plan, price, billing["id"]),
+                        (resolved_plan, price, cycle["id"]),
                     )
 
             await self.sync_user_entitlements(username)
-            await self.conn.commit()
+            if commit:
+                await self.conn.commit()
             return True, f"'{username}' 회원 정보가 수정되었습니다."
         except Exception as e:
-            await self.conn.rollback()
-            return False, f"회원 수정 실패: {str(e)}"
+            if commit:
+                await self.conn.rollback()
+                return False, f"회원 수정 실패: {str(e)}"
+            raise
 
     def build_settlement_copy_text(self, summary: Dict) -> str:
         lines = [f"[묵은지 작업실 {summary['period']} 정산 안내]"]

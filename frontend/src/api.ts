@@ -5,8 +5,15 @@ export class ApiError extends Error {
   }
 }
 
+/** 로그인 상태는 httpOnly 쿠키가 들고 있다. 이 값은 호출부 시그니처 호환용 표식이며 Authorization 헤더로 보내지 않는다. */
+export const SESSION = 'cookie-session';
+
 async function parseResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => ({}));
+  if (response.status === 401 && !/\/(admin\/)?login$/.test(response.url)) {
+    // 세션 만료/무효: 서버 쿠키를 비우고 로그인 화면으로 돌려보낸다.
+    void fetch('/logout', { method: 'POST' }).finally(() => window.location.reload());
+  }
   if (!response.ok) {
     const detail = (data as { detail?: string | { msg?: string }[] }).detail;
     const message = Array.isArray(detail)
@@ -20,11 +27,27 @@ async function parseResponse<T>(response: Response): Promise<T> {
 function authHeaders(token: string | null, json = true): HeadersInit {
   const headers: Record<string, string> = {};
   if (json) headers['Content-Type'] = 'application/json';
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token && token !== SESSION) headers['Authorization'] = `Bearer ${token}`;
   return headers;
 }
 
 export const api = {
+  /** 쿠키 세션 확인. 로그인되어 있지 않으면 null. */
+  async sessionInfo(): Promise<{ username: string; role: string } | null> {
+    try {
+      const res = await fetch('/me');
+      if (!res.ok) return null;
+      const data = (await res.json()) as { username: string; role: string };
+      return { username: data.username, role: data.role };
+    } catch {
+      return null;
+    }
+  },
+
+  async logout() {
+    await fetch('/logout', { method: 'POST' }).catch(() => undefined);
+  },
+
   async register(body: {
     username: string;
     password: string;
@@ -136,7 +159,17 @@ export const api = {
       reservation_opens_at?: string;
       schedule_message?: string;
       next_monthly_open_at?: string;
+      payment_guide?: string | null;
     }>(res);
+  },
+
+  async updatePaymentGuide(token: string, paymentGuide: string) {
+    const res = await fetch('/admin/settings/payment-guide', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ payment_guide: paymentGuide }),
+    });
+    return parseResponse<{ message: string }>(res);
   },
 
   async getFreeWeeklyUsage(token: string) {
@@ -158,30 +191,6 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
-  async getSettlement(token: string, period?: string) {
-    const q = period ? `?period=${period}` : '';
-    const res = await fetch(`/admin/settlement${q}`, { headers: authHeaders(token) });
-    return parseResponse<import('./types').SettlementOverview>(res);
-  },
-
-  async openSettlement(token: string, period?: string) {
-    const res = await fetch('/admin/settlement/open', {
-      method: 'POST',
-      headers: authHeaders(token),
-      body: JSON.stringify({ period: period || null }),
-    });
-    return parseResponse<{ message: string }>(res);
-  },
-
-  async reopenSettlement(token: string, period: string) {
-    const res = await fetch('/admin/settlement/reopen', {
-      method: 'POST',
-      headers: authHeaders(token),
-      body: JSON.stringify({ period }),
-    });
-    return parseResponse<{ message: string }>(res);
-  },
-
   async setAccessPeriod(token: string, period: string) {
     const res = await fetch('/admin/settings/access-period', {
       method: 'PUT',
@@ -191,11 +200,45 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
-  async closeSettlement(token: string, period?: string) {
-    const res = await fetch('/admin/settlement/close', {
+  async getRoster(token: string, period?: string) {
+    const q = period ? `?period=${period}` : '';
+    const res = await fetch(`/admin/roster${q}`, { headers: authHeaders(token) });
+    return parseResponse<import('./types').RosterResponse>(res);
+  },
+
+  async rosterAdd(
+    token: string,
+    body: {
+      username: string;
+      period: string;
+      plan_id: number;
+      allowed_hours?: number;
+      custom_monthly_fee?: number;
+      free_access?: boolean;
+    },
+  ) {
+    const res = await fetch('/admin/roster/add', {
       method: 'POST',
       headers: authHeaders(token),
-      body: JSON.stringify({ period: period || null }),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async rosterRemove(token: string, username: string, period: string) {
+    const res = await fetch('/admin/roster/remove', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ username, period }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async generateBilling(token: string, period: string) {
+    const res = await fetch('/admin/billing/generate', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ period }),
     });
     return parseResponse<{ message: string }>(res);
   },
@@ -328,7 +371,7 @@ export const api = {
   },
 
   async adminClearFreeReservations(token: string) {
-    const res = await fetch('/admin/reservations/clear-free', { headers: authHeaders(token) });
+    const res = await fetch('/admin/reservations/clear-free', { method: 'POST', headers: authHeaders(token) });
     return parseResponse<{ message: string }>(res);
   },
 
@@ -345,7 +388,7 @@ export const api = {
   },
 
   async adminClearReservations(token: string) {
-    const res = await fetch('/admin/reservations/clear', { headers: authHeaders(token) });
+    const res = await fetch('/admin/reservations/clear', { method: 'POST', headers: authHeaders(token) });
     return parseResponse<{ message: string }>(res);
   },
 
@@ -359,7 +402,7 @@ export const api = {
         ? '/admin/reservations/clear'
         : `/admin/reservations/${path}`;
     const res = await fetch(url, {
-      method: path === 'clear' ? 'GET' : 'POST',
+      method: 'POST',
       headers: authHeaders(token),
       body: body ? JSON.stringify(body) : undefined,
     });

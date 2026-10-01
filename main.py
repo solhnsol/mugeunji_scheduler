@@ -1,4 +1,6 @@
+import asyncio
 import os
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import List, Optional, Literal
@@ -8,6 +10,8 @@ from dotenv import load_dotenv
 from fastapi import (
     Depends,
     FastAPI,
+    Request,
+    Response,
     File,
     HTTPException,
     UploadFile,
@@ -16,7 +20,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
@@ -33,9 +37,15 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 로그인 유지 30일
+SESSION_COOKIE = "session"
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+if SECRET_KEY == "change-me-in-production":
+    print("[WARN] SECRET_KEY가 기본값입니다. .env에 긴 임의 문자열을 설정하세요.")
+if not os.getenv("ADMIN_PASSWORD"):
+    print("[WARN] ADMIN_PASSWORD가 없어 새 DB에서는 admin 계정이 생성되지 않습니다.")
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
 
 
 class ConnectionManager:
@@ -71,13 +81,37 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+
+# 단일 DB 연결을 공유하므로 쓰기 요청은 직렬화해 트랜잭션 간 commit/rollback 간섭을 막는다.
+# 이 락은 프로세스 단위이므로 uvicorn 워커는 반드시 1개로 실행해야 한다 (Dockerfile 참고).
+_write_lock = asyncio.Lock()
+_LOCK_EXEMPT = {"/login", "/admin/login", "/logout"}
+
+
+@app.middleware("http")
+async def serialize_writes(request: Request, call_next):
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+    # 쿠키 인증 요청의 CSRF 방어: 다른 사이트에서 온 쓰기 요청은 거부 (SameSite=Lax와 이중 방어)
+    origin = request.headers.get("origin")
+    if origin and request.cookies.get(SESSION_COOKIE):
+        host = request.headers.get("host", "")
+        if origin.split("://", 1)[-1] != host and origin not in _cors_origins:
+            return JSONResponse(status_code=403, content={"detail": "허용되지 않은 요청 출처입니다."})
+    if request.url.path in _LOCK_EXEMPT:
+        return await call_next(request)
+    async with _write_lock:
+        return await call_next(request)
 
 
 async def get_db_conn():
@@ -87,7 +121,7 @@ async def get_db_conn():
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "jti": uuid.uuid4().hex})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -115,8 +149,22 @@ class PlanApplyRequest(BaseModel):
     start_period: Optional[Literal["current", "next"]] = "next"
 
 
-class OpenSettlementRequest(BaseModel):
+class BillingPeriodRequest(BaseModel):
     period: Optional[str] = None
+
+
+class RosterAddRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    period: str = Field(..., min_length=7, max_length=7)
+    plan_id: int = Field(..., ge=1)
+    allowed_hours: Optional[int] = Field(None, ge=0, le=24)
+    custom_monthly_fee: Optional[int] = Field(None, ge=0)
+    free_access: Optional[bool] = None
+
+
+class RosterRemoveRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    period: str = Field(..., min_length=7, max_length=7)
 
 
 class ConfirmPaymentRequest(BaseModel):
@@ -133,7 +181,7 @@ class SetAccessPeriodRequest(BaseModel):
 
 
 class UpdateUserMembershipRequest(BaseModel):
-    allowed_hours: Optional[int] = Field(None, ge=1, le=24)
+    allowed_hours: Optional[int] = Field(None, ge=0, le=24)
     plan_id: Optional[int] = Field(None, ge=1)
     free_access: Optional[bool] = None
     custom_monthly_fee: Optional[int] = Field(None, ge=0)
@@ -152,6 +200,10 @@ class UpdatePlanPriceRequest(BaseModel):
 class UpdateSettingsRequest(BaseModel):
     reservation_enabled: bool
     reservation_opens_at: Optional[str] = None
+
+
+class UpdatePaymentGuideRequest(BaseModel):
+    payment_guide: str = Field("", max_length=1000)
 
 
 class UpdateAutomationRequest(BaseModel):
@@ -173,17 +225,17 @@ class UpdateAutomationRequest(BaseModel):
 
 
 class ReservationItem(BaseModel):
-    day: str
-    time_index: int
+    day: Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    time_index: int = Field(..., ge=0, le=23)
 
 
 class ReservationList(BaseModel):
-    reservations: List[ReservationItem]
+    reservations: List[ReservationItem] = Field(..., min_length=1, max_length=200)
 
 
 class ForceReservationRequest(BaseModel):
-    target_username: str
-    reservations: List[ReservationItem]
+    target_username: str = Field(..., min_length=1)
+    reservations: List[ReservationItem] = Field(..., min_length=1, max_length=200)
     reservation_type: Literal["monthly", "free"] = "monthly"
 
 
@@ -198,6 +250,10 @@ class UserInfoResponse(BaseModel):
     plan_name: Optional[str] = None
     subscription_status: Optional[str] = None
     monthly_price: Optional[int] = None
+    custom_monthly_fee: Optional[int] = None
+    custom_allowed_hours: Optional[int] = None
+    plan_id: Optional[int] = None
+    plan_allowed_hours: Optional[int] = None
 
 
 class PlanResponse(BaseModel):
@@ -212,27 +268,59 @@ class SettingsResponse(BaseModel):
     reservation_opens_at: Optional[str] = None
     next_monthly_open_at: Optional[str] = None
     schedule_message: Optional[str] = None
+    payment_guide: Optional[str] = None
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+def set_session_cookie(response: Response, request: Request, token: str) -> None:
+    secure = (
+        request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https"
+    )
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+        path="/",
+    )
+
+
+async def get_current_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    token = token or request.cookies.get(SESSION_COOKIE)
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="인증이 필요합니다.",
+        detail="인증이 필요합니다. 다시 로그인해주세요.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token:
+        raise credentials_exception
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        role: str = payload.get("role")
         if username is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    return {"username": username, "role": role}
+    jti = payload.get("jti")
+    if jti:
+        async with conn.execute("SELECT 1 FROM revoked_tokens WHERE jti = ?", (jti,)) as cursor:
+            if await cursor.fetchone():
+                raise credentials_exception
+    # 역할은 토큰이 아닌 DB 기준 (관리자가 권한을 바꾸거나 계정이 삭제된 경우 즉시 반영)
+    async with conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
+        row = await cursor.fetchone()
+    if row is None:
+        raise credentials_exception
+    return {"username": username, "role": row["role"]}
 
 
-async def get_current_admin_user(token: str = Depends(oauth2_scheme)):
-    user = await get_current_user(token)
+async def get_current_admin_user(user: dict = Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 권한이 필요합니다.")
     return user
@@ -360,13 +448,19 @@ async def revoke_plan_cancellation(
 
 
 @app.post("/login")
-async def login_user(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_db_conn)):
+async def login_user(
+    data: LoginInfo,
+    request: Request,
+    response: Response,
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
     auth_manager = AuthManager(conn)
-    user_data = await auth_manager.login(data.username, data.password)
+    user_data = await auth_manager.login(data.username.strip(), data.password)
     if not user_data:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
     access_token_data = {"sub": user_data["username"], "role": user_data["role"]}
     access_token = create_access_token(data=access_token_data)
+    set_session_cookie(response, request, access_token)
     membership = MembershipManager(conn)
     access = await membership.get_access_status(user_data["username"])
     return {
@@ -379,13 +473,51 @@ async def login_user(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_d
 
 
 @app.post("/admin/login")
-async def admin_login(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_db_conn)):
+async def admin_login(
+    data: LoginInfo,
+    request: Request,
+    response: Response,
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
     auth_manager = AuthManager(conn)
-    user_data = await auth_manager.login(data.username, data.password)
+    user_data = await auth_manager.login(data.username.strip(), data.password)
     if not user_data or user_data["role"] != "admin":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="관리자 인증에 실패했습니다.")
     access_token = create_access_token(data={"sub": user_data["username"], "role": user_data["role"]})
+    set_session_cookie(response, request, access_token)
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/logout")
+async def logout(
+    request: Request,
+    response: Response,
+    token: Optional[str] = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    token = token or request.cookies.get(SESSION_COOKIE)
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    if token:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        except JWTError:
+            payload = None
+        if payload and payload.get("jti") and payload.get("exp"):
+            expires_at = datetime.utcfromtimestamp(payload["exp"]).isoformat()
+            async with _write_lock:
+                try:
+                    # 만료된 항목은 함께 정리
+                    await conn.execute(
+                        "DELETE FROM revoked_tokens WHERE expires_at < ?", (datetime.utcnow().isoformat(),)
+                    )
+                    await conn.execute(
+                        "INSERT OR IGNORE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)",
+                        (payload["jti"], expires_at),
+                    )
+                    await conn.commit()
+                except Exception:
+                    await conn.rollback()
+    return {"status": "success"}
 
 
 @app.get("/settings", response_model=SettingsResponse)
@@ -400,12 +532,11 @@ async def get_public_settings(conn: aiosqlite.Connection = Depends(get_db_conn))
 @app.post("/reserve")
 async def reserve_time(
     data: ReservationList,
-    token: str = Depends(oauth2_scheme),
+    current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     reserve_manager = ReservationManager(conn)
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    username = payload.get("sub")
+    username = current_user["username"]
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     is_success, message = await reserve_manager.create_reservation(username, reserve_times_list)
     if is_success:
@@ -417,12 +548,11 @@ async def reserve_time(
 @app.post("/free/reserve")
 async def reserve_free_time(
     data: ReservationList,
-    token: str = Depends(oauth2_scheme),
+    current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     reserve_manager = ReservationManager(conn)
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    username = payload.get("sub")
+    username = current_user["username"]
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     is_success, message = await reserve_manager.create_free_reservation(username, reserve_times_list)
     if is_success:
@@ -483,6 +613,7 @@ async def get_all_users_by_admin(
             "plan_name": user.get("plan_name"),
             "subscription_status": user.get("subscription_status"),
             "monthly_price": price,
+            "custom_monthly_fee": user.get("custom_monthly_fee"),
         })
     return result
 
@@ -551,53 +682,66 @@ async def update_user_membership(
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
-@app.get("/admin/settlement")
-async def get_settlement_overview(
+@app.get("/admin/roster")
+async def get_roster(
     period: Optional[str] = None,
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     membership = MembershipManager(conn)
-    open_settlement = await membership.get_open_settlement()
-    target_period = period or (open_settlement or {}).get("period") or period_from_offset(1)
-    summary = await membership.get_settlement_summary(target_period)
+    target = period or period_from_offset(1)
+    roster = await membership.get_roster(target)
     return {
+        **roster,
         "suggested_next_period": period_from_offset(1),
-        "open_settlement": open_settlement,
         "usage_period": usage_period(),
-        "current_access_period": await membership.get_access_period(),
-        **summary,
     }
 
 
-@app.post("/admin/settlement/open")
-async def open_settlement(
-    data: OpenSettlementRequest,
+@app.post("/admin/roster/add")
+async def roster_add(
+    data: RosterAddRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    membership = MembershipManager(conn)
+    ok, message = await membership.add_to_roster(
+        data.username,
+        data.period,
+        data.plan_id,
+        allowed_hours=data.allowed_hours,
+        custom_monthly_fee=data.custom_monthly_fee,
+        free_access=data.free_access,
+    )
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/roster/remove")
+async def roster_remove(
+    data: RosterRemoveRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    membership = MembershipManager(conn)
+    ok, message = await membership.remove_from_roster(data.username, data.period)
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/billing/generate")
+async def generate_billing(
+    data: BillingPeriodRequest,
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     membership = MembershipManager(conn)
     period = data.period or period_from_offset(1)
-    is_success, message = await membership.open_settlement(period, admin_user["username"])
-    if is_success:
+    ok, message = await membership.generate_billing(period)
+    if ok:
         return {"status": "success", "message": message, "period": period}
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
-
-
-@app.post("/admin/settlement/close")
-async def close_settlement(
-    data: OpenSettlementRequest,
-    admin_user: dict = Depends(get_current_admin_user),
-    conn: aiosqlite.Connection = Depends(get_db_conn),
-):
-    membership = MembershipManager(conn)
-    open_settlement = await membership.get_open_settlement()
-    if not open_settlement:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="열려 있는 정산이 없습니다.")
-    period = data.period or open_settlement["period"]
-    is_success, message = await membership.close_settlement(period)
-    if is_success:
-        return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
@@ -620,21 +764,6 @@ async def confirm_billing_payment(
 ):
     membership = MembershipManager(conn)
     is_success, message = await membership.confirm_payment(data.billing_id, admin_user["username"])
-    if is_success:
-        return {"status": "success", "message": message}
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
-
-
-@app.post("/admin/settlement/reopen")
-async def reopen_settlement(
-    data: OpenSettlementRequest,
-    admin_user: dict = Depends(get_current_admin_user),
-    conn: aiosqlite.Connection = Depends(get_db_conn),
-):
-    if not data.period:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="period를 지정해주세요.")
-    membership = MembershipManager(conn)
-    is_success, message = await membership.reopen_settlement(data.period)
     if is_success:
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
@@ -710,6 +839,7 @@ async def get_admin_settings(
     return {
         "reservation_enabled": settings.get("reservation_enabled") == "true",
         "reservation_opens_at": settings.get("reservation_opens_at"),
+        "payment_guide": settings.get("payment_guide"),
     }
 
 
@@ -730,6 +860,20 @@ async def update_admin_settings(
     is_success, message = await settings_manager.upsert_settings(payload)
     if is_success:
         return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
+
+
+@app.put("/admin/settings/payment-guide")
+async def update_payment_guide(
+    data: UpdatePaymentGuideRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    settings_manager = SettingsManager(conn)
+    text = data.payment_guide.strip()
+    is_success, message = await settings_manager.upsert_settings({"payment_guide": text or None})
+    if is_success:
+        return {"status": "success", "message": "입금 안내 문구가 저장되었습니다."}
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
 
 
@@ -818,7 +962,7 @@ async def admin_delete_reservations(
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
-@app.get("/admin/reservations/clear")
+@app.post("/admin/reservations/clear")
 async def admin_clear_reservations(
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
@@ -849,7 +993,7 @@ async def admin_get_free_schedule(
     }
 
 
-@app.get("/admin/reservations/clear-free")
+@app.post("/admin/reservations/clear-free")
 async def admin_clear_free_reservations(
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),

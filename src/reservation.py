@@ -138,6 +138,7 @@ class ReservationManager:
             "schedule_message": message,
             "next_monthly_open_at": next_open.isoformat() if next_open else None,
             "reservation_opens_at": next_open.isoformat() if next_open else settings.get("reservation_opens_at"),
+            "payment_guide": settings.get("payment_guide") or None,
             "did_clear": did_clear,
         }
 
@@ -194,14 +195,24 @@ class ReservationManager:
             row = await cursor.fetchone()
             existing_reservations_count = row[0] if row else 0
 
-            time_indices = {slot['time_index'] for slot in reserve_times}
+            reserve_times = list(
+                {(s['day'], s['time_index']): s for s in reserve_times}.values()
+            )
             group_to_check = {0, 1, 2, 3}
+            by_day: Dict[str, set] = {}
+            for slot in reserve_times:
+                by_day.setdefault(slot['day'], set()).add(slot['time_index'])
 
-            if not group_to_check.isdisjoint(time_indices):
+            for day_indices in by_day.values():
+                if group_to_check.isdisjoint(day_indices):
+                    continue
                 if user_role != 'admin' and user_role != 'free':
                     return False, "새벽 예약은 자유이용권 사용자만 신청할 수 있습니다."
-                if not group_to_check.issubset(time_indices):
-                    return False, "새벽 예약은 한꺼번에만 신청할 수 있습니다."
+                if not group_to_check.issubset(day_indices):
+                    return False, "새벽 예약은 같은 날 0~3시를 한꺼번에만 신청할 수 있습니다."
+
+            if user_allowed_hours <= 0:
+                return False, "이 계정은 월 예약 없이 자유이용으로만 이용할 수 있습니다."
 
             if existing_reservations_count + len(reserve_times) > user_allowed_hours:
                 return False, f"예약 가능 시간({user_allowed_hours}시간)을 초과합니다."
@@ -237,6 +248,9 @@ class ReservationManager:
         if not is_available:
             return False, message
 
+        reserve_times = list(
+            {(s['day'], s['time_index']): s for s in reserve_times}.values()
+        )
         window_slots = {
             slot_key(s['day'], int(s['time_index']))
             for s in slots_in_booking_window(now_kst(), await self.get_schedule_config())
@@ -322,6 +336,11 @@ class ReservationManager:
         reserve_times: List[Dict],
         reservation_type: str = RESERVATION_MONTHLY,
     ) -> Tuple[bool, str]:
+        cursor = await self.conn.execute(
+            "SELECT 1 FROM users WHERE username = ?", (target_username,)
+        )
+        if await cursor.fetchone() is None:
+            return False, f"'{target_username}' 사용자를 찾을 수 없습니다."
         try:
             for time_slot in reserve_times:
                 await self.conn.execute(

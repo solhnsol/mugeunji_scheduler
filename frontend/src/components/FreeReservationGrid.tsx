@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DAYS, DAY_LABELS, Reservation, ValidDay } from '../types';
 import { useReservationSocket } from '../hooks/useReservationSocket';
+import { SelectionBar } from './SelectionBar';
 import { dayCellClass, dayHeaderClass, isLastDay } from './scheduleGridClasses';
 
 type SlotKey = `${ValidDay}-${number}`;
@@ -165,16 +166,13 @@ export function FreeReservationGrid({
       </div>
 
       {bookingOpen && (
-        <div className="shrink-0 pt-3">
-          <button
-            type="button"
-            className="btn-primary shadow-lg shadow-sage/20"
-            disabled={submitting || selected.size === 0}
-            onClick={handleSubmit}
-          >
-            {submitting ? '신청 중…' : selected.size > 0 ? `${selected.size}칸 신청` : `예약 창 ${bookableCount}칸`}
-          </button>
-        </div>
+        <SelectionBar
+          selectedCount={selected.size}
+          submitting={submitting}
+          idleLabel={`신청 가능한 시간 ${bookableCount}칸`}
+          onClear={() => setSelected(new Set())}
+          onSubmit={handleSubmit}
+        />
       )}
     </div>
   );

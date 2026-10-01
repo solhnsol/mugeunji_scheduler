@@ -191,27 +191,40 @@ class AuthManager:
             if not rows:
                 return False, "CSV에 데이터가 없습니다."
 
-            await self.conn.execute("DELETE FROM users WHERE role != 'admin'")
+            created = updated = skipped = 0
             for row in rows:
-                if row["username"] == "admin":
+                username = (row["username"] or "").strip()
+                role = (row["role"] or "").strip()
+                if not username or username == "admin" or role == "admin" or not row["password"]:
+                    skipped += 1
                     continue
-                pw_hash = await self._run_sync(
-                    bcrypt.hashpw, row["password"].encode("utf-8"), bcrypt.gensalt()
-                )
-                await self.conn.execute(
-                    """
-                    INSERT INTO users (username, password, allowed_hours, role)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        row["username"],
-                        pw_hash.decode("utf-8"),
-                        int(row["allowed_hours"]),
-                        row["role"],
-                    ),
-                )
+                hours = int(row["allowed_hours"])
+                pw_hash = (
+                    await self._run_sync(
+                        bcrypt.hashpw, row["password"].encode("utf-8"), bcrypt.gensalt()
+                    )
+                ).decode("utf-8")
+                async with self.conn.execute(
+                    "SELECT role FROM users WHERE username = ?", (username,)
+                ) as cursor:
+                    existing = await cursor.fetchone()
+                if existing and existing["role"] == "admin":
+                    skipped += 1
+                    continue
+                if existing:
+                    await self.conn.execute(
+                        "UPDATE users SET password = ?, allowed_hours = ?, role = ? WHERE username = ?",
+                        (pw_hash, hours, role, username),
+                    )
+                    updated += 1
+                else:
+                    await self.conn.execute(
+                        "INSERT INTO users (username, password, allowed_hours, role) VALUES (?, ?, ?, ?)",
+                        (username, pw_hash, hours, role),
+                    )
+                    created += 1
             await self.conn.commit()
-            return True, f"{len(rows)}명의 사용자 정보가 업데이트되었습니다."
+            return True, f"신규 {created}명, 갱신 {updated}명, 건너뜀 {skipped}명 (기존 사용자·예약·정산 기록은 삭제하지 않습니다)."
         except Exception as e:
             await self.conn.rollback()
             return False, f"CSV 업로드 실패: {str(e)}"

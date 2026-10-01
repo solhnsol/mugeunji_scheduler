@@ -7,8 +7,10 @@ from src.membership import DEFAULT_PLANS, period_from_offset
 from src.automation_config import AUTOMATION_SETTING_DEFAULTS
 from src.legacy_migration import run_legacy_migration
 
-async def init_db(db_path: str = "data/reservation.db"):
+async def init_db(db_path: str = None):
     load_dotenv()
+    db_path = db_path or os.getenv("DB_PATH", "data/reservation.db")
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     conn = await aiosqlite.connect(db_path)
     conn.row_factory = aiosqlite.Row
     await setup_database(conn)
@@ -119,8 +121,6 @@ async def setup_database(conn: aiosqlite.Connection):
             FOREIGN KEY (plan_id) REFERENCES plans(id)
         );
     """)
-    await _migrate_subscriptions_table(conn)
-
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS billing_cycles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,6 +139,8 @@ async def setup_database(conn: aiosqlite.Connection):
         );
     """)
 
+    await _migrate_subscriptions_table(conn)
+
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS plan_change_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,12 +155,9 @@ async def setup_database(conn: aiosqlite.Connection):
     """)
 
     await conn.execute("""
-        CREATE TABLE IF NOT EXISTS settlement_periods (
-            period TEXT PRIMARY KEY NOT NULL,
-            status TEXT NOT NULL,
-            opened_at TEXT,
-            opened_by TEXT,
-            closed_at TEXT
+        CREATE TABLE IF NOT EXISTS revoked_tokens (
+            jti TEXT PRIMARY KEY NOT NULL,
+            expires_at TEXT NOT NULL
         );
     """)
 
@@ -176,6 +175,7 @@ async def setup_database(conn: aiosqlite.Connection):
         ('last_cleared_for', None),
         ('current_access_period', None),
         ('last_free_reset_at', None),
+        ('payment_guide', None),
         *[(k, v) for k, v in AUTOMATION_SETTING_DEFAULTS.items()],
     ]
     for key, value in settings_defaults:
