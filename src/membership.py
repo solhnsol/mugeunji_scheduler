@@ -665,8 +665,8 @@ class MembershipManager:
                 return False, "존재하지 않는 요금제입니다."
         if not period or len(period) != 7 or period[4] != "-":
             return False, "기간 형식이 올바르지 않습니다. (YYYY-MM)"
-        if period <= usage_period():
-            return False, "이미 시작된 달은 명단에 추가할 수 없습니다. 시작 전인 달만 가능합니다."
+        if period < usage_period():
+            return False, "지난 달은 명단에 추가할 수 없습니다. 이번 달 이후만 가능합니다."
 
         now_iso = datetime.now(KST).isoformat()
         try:
@@ -728,8 +728,8 @@ class MembershipManager:
         """period부터 명단에서 제외(요금제 해제). 계정과 과거 기록은 유지."""
         if not period or len(period) != 7 or period[4] != "-":
             return False, "기간 형식이 올바르지 않습니다. (YYYY-MM)"
-        if period <= usage_period():
-            return False, "이미 시작된 달은 명단에서 제외할 수 없습니다. 시작 전인 달만 가능합니다."
+        if period < usage_period():
+            return False, "지난 달은 명단에서 제외할 수 없습니다. 이번 달 이후만 가능합니다."
         sub = await self.get_subscription(username)
         if not sub or not self._in_roster(sub, period):
             return False, "이 기간 명단에 없는 회원입니다."
