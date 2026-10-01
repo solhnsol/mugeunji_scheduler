@@ -333,7 +333,7 @@ export const api = {
   },
 
   async adminClearFreeReservations(token: string) {
-    const res = await fetch('/admin/reservations/clear-free', { headers: authHeaders(token) });
+    const res = await fetch('/admin/reservations/clear-free', { method: 'POST', headers: authHeaders(token) });
     return parseResponse<{ message: string }>(res);
   },
 
@@ -350,7 +350,7 @@ export const api = {
   },
 
   async adminClearReservations(token: string) {
-    const res = await fetch('/admin/reservations/clear', { headers: authHeaders(token) });
+    const res = await fetch('/admin/reservations/clear', { method: 'POST', headers: authHeaders(token) });
     return parseResponse<{ message: string }>(res);
   },
 
@@ -364,7 +364,7 @@ export const api = {
         ? '/admin/reservations/clear'
         : `/admin/reservations/${path}`;
     const res = await fetch(url, {
-      method: path === 'clear' ? 'GET' : 'POST',
+      method: 'POST',
       headers: authHeaders(token),
       body: body ? JSON.stringify(body) : undefined,
     });

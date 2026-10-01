@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -8,6 +9,7 @@ from dotenv import load_dotenv
 from fastapi import (
     Depends,
     FastAPI,
+    Request,
     File,
     HTTPException,
     UploadFile,
@@ -34,6 +36,11 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
+
+if SECRET_KEY == "change-me-in-production":
+    print("[WARN] SECRET_KEY가 기본값입니다. .env에 긴 임의 문자열을 설정하세요.")
+if not os.getenv("ADMIN_PASSWORD"):
+    print("[WARN] ADMIN_PASSWORD가 없어 새 DB에서는 admin 계정이 생성되지 않습니다.")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -78,6 +85,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# 단일 DB 연결을 공유하므로 쓰기 요청은 직렬화해 트랜잭션 간 commit/rollback 간섭을 막는다.
+_write_lock = asyncio.Lock()
+_LOCK_EXEMPT = {"/login", "/admin/login"}
+
+
+@app.middleware("http")
+async def serialize_writes(request: Request, call_next):
+    if request.method in ("GET", "HEAD", "OPTIONS") or request.url.path in _LOCK_EXEMPT:
+        return await call_next(request)
+    async with _write_lock:
+        return await call_next(request)
 
 
 async def get_db_conn():
@@ -822,7 +842,7 @@ async def admin_delete_reservations(
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
-@app.get("/admin/reservations/clear")
+@app.post("/admin/reservations/clear")
 async def admin_clear_reservations(
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
@@ -853,7 +873,7 @@ async def admin_get_free_schedule(
     }
 
 
-@app.get("/admin/reservations/clear-free")
+@app.post("/admin/reservations/clear-free")
 async def admin_clear_free_reservations(
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
