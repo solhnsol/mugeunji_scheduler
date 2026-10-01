@@ -221,7 +221,7 @@ export default function UserApp({
     <UsageGuideModal onClose={() => setGuideOpen(false)} paymentGuide={paymentGuide} />
   );
 
-  const profileBanner = !guideVisible && !me.profile_complete && (
+  const profileBanner = !guideVisible && !me.profile_complete && me.role !== 'admin' && (
     <div className="card p-4 mb-3 flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50/80 shrink-0">
       <p className="text-sm text-amber-900">전화번호 등 내 정보를 등록해주세요.</p>
       <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm" onClick={() => setProfileOpen(true)}>
