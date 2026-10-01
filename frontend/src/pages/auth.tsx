@@ -5,6 +5,33 @@ import { AppShell, Toast } from '../components/ui';
 import { useToast } from '../hooks/useToast';
 import { formatPhone } from '../utils';
 
+function ForgotPassword() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        className="w-full text-center text-sm text-ink-muted hover:text-sage underline underline-offset-2"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        비밀번호를 잊어버렸어요
+      </button>
+      {open && (
+        <div className="card mt-3 p-5 space-y-3" role="region" aria-label="비밀번호 분실 안내">
+          <p className="text-sm text-ink leading-relaxed">
+            RYU 단톡방이나 작업실 이용자 톡방에서 <b>&apos;정한솔&apos;</b>에게 연락해주세요. 비밀번호를
+            초기화하고 <b>새 비밀번호를 알려드릴게요.</b>
+          </p>
+          <p className="text-xs text-ink-muted leading-relaxed">
+            새 계정을 따로 만들면 기존 예약·요금제와 연결되지 않으니, 계정을 새로 만들지 말고 연락해주세요.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PasswordInput({
   id,
   name,
@@ -83,6 +110,7 @@ export default function LoginPage({
           <button type="submit" className="btn-primary" disabled={busy}>{busy ? '로그인 중…' : '로그인'}</button>
           <p className="text-center text-xs text-ink-faint">로그인하면 이 기기에서 30일 동안 유지돼요.</p>
         </form>
+        <ForgotPassword />
         <div className="mt-4 flex justify-center gap-4 text-sm">
           <Link to="/register" className="text-sage font-medium hover:underline">회원가입</Link>
           <Link to="/admin" className="text-ink-faint hover:text-ink-muted">관리자</Link>
@@ -186,6 +214,10 @@ export function RegisterPage() {
             <li>시간표가 열리면 원하는 시간 신청</li>
           </ol>
         </div>
+        <p className="text-xs text-ink-muted text-center leading-relaxed">
+          이미 가입했는데 비밀번호가 기억나지 않나요? 새로 가입하지 말고 RYU 단톡방이나 작업실 이용자
+          톡방에서 &apos;정한솔&apos;에게 연락해주세요.
+        </p>
         <p className="text-center">
           <Link to="/" className="text-sm text-ink-faint hover:text-sage">로그인</Link>
         </p>
