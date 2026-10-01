@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DAYS, DAY_LABELS, Reservation, ValidDay } from '../types';
+import { useConfirm } from './ConfirmDialog';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { dayCellClass, dayHeaderClass, isLastDay } from './scheduleGridClasses';
 
@@ -33,6 +34,7 @@ export function AdminFreeReservationGrid({
   );
   const [selected, setSelected] = useState<Set<SlotKey>>(new Set());
   const [busy, setBusy] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   useEffect(() => {
     setReservations(mergeReservations(initialMonthly, initialFree));
@@ -116,7 +118,7 @@ export function AdminFreeReservationGrid({
           className="btn-ghost text-[#c45c5c]"
           disabled={busy}
           onClick={async () => {
-            if (!confirm('자유이용 예약을 전체 초기화하시겠습니까? (월간 예약은 유지)')) return;
+            if (!(await confirm({ title: '자유이용 예약을 전체 초기화할까요?', message: '자유이용 예약이 모두 삭제돼요. 월간 예약은 유지돼요.', confirmLabel: '전체 초기화', danger: true }))) return;
             setBusy(true);
             try {
               await onClearAll();
@@ -178,6 +180,7 @@ export function AdminFreeReservationGrid({
           </table>
       </div>
       <p className="text-xs text-ink-faint shrink-0 pt-2">{selected.size}칸 선택 · 월간 예약 칸은 선택할 수 없습니다</p>
+      {confirmDialog}
     </div>
   );
 }

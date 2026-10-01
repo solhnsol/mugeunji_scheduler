@@ -2,32 +2,69 @@ import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, Toast } from '../components/ui';
+import { useToast } from '../hooks/useToast';
 import { formatPhone } from '../utils';
+
+function PasswordInput({
+  id,
+  name,
+  autoComplete,
+  minLength,
+  value,
+  onChange,
+}: {
+  id: string;
+  name: string;
+  autoComplete: string;
+  minLength?: number;
+  value?: string;
+  onChange?: (v: string) => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        className="input !pr-16"
+        id={id}
+        name={name}
+        type={visible ? 'text' : 'password'}
+        required
+        minLength={minLength}
+        autoComplete={autoComplete}
+        {...(onChange ? { value, onChange: (e) => onChange(e.target.value) } : {})}
+      />
+      <button
+        type="button"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-faint hover:text-sage"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? '비밀번호 숨기기' : '비밀번호 보기'}
+      >
+        {visible ? '숨기기' : '보기'}
+      </button>
+    </div>
+  );
+}
 
 export default function LoginPage({
   onLogin,
 }: {
   onLogin: () => void | Promise<void>;
 }) {
-  const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast({ message: '', type: '' }), 4000);
-  };
+  const { toast, show: showToast } = useToast();
+  const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (busy) return;
     const fd = new FormData(e.currentTarget);
+    setBusy(true);
     try {
-      const data = await api.login(
-        String(fd.get('username')),
-        String(fd.get('password')),
-      );
-      void data;
+      await api.login(String(fd.get('username')), String(fd.get('password')));
       await onLogin();
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : '로그인 실패', 'error');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -41,9 +78,9 @@ export default function LoginPage({
           </div>
           <div>
             <label className="label" htmlFor="password">비밀번호</label>
-            <input className="input" id="password" name="password" type="password" required autoComplete="current-password" />
+            <PasswordInput id="password" name="password" autoComplete="current-password" />
           </div>
-          <button type="submit" className="btn-primary">로그인</button>
+          <button type="submit" className="btn-primary" disabled={busy}>{busy ? '로그인 중…' : '로그인'}</button>
           <p className="text-center text-xs text-ink-faint">로그인하면 이 기기에서 30일 동안 유지돼요.</p>
         </form>
         <div className="mt-4 flex justify-center gap-4 text-sm">
@@ -57,21 +94,26 @@ export default function LoginPage({
 }
 
 export function RegisterPage() {
-  const [toast, setToast] = useState({ message: '', type: '' as 'success' | 'error' | '' });
+  const { toast, show: showToast } = useToast();
   const [phone, setPhone] = useState('');
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast({ message: '', type: '' }), 4000);
-  };
+  const [busy, setBusy] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (busy) return;
     const fd = new FormData(e.currentTarget);
+    if (password !== passwordConfirm) {
+      setPasswordError('비밀번호가 서로 달라요.');
+      return;
+    }
+    setBusy(true);
     try {
       const data = await api.register({
         username: String(fd.get('username')),
-        password: String(fd.get('password')),
+        password,
         name: String(fd.get('name')),
         phone: phone.replace(/\D/g, ''),
       });
@@ -79,6 +121,7 @@ export function RegisterPage() {
       setTimeout(() => { window.location.href = '/'; }, 1200);
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : '가입 실패', 'error');
+      setBusy(false);
     }
   };
 
@@ -107,9 +150,34 @@ export function RegisterPage() {
         </div>
         <div>
           <label className="label" htmlFor="password">비밀번호</label>
-          <input className="input" id="password" name="password" type="password" required minLength={4} />
+          <PasswordInput
+            id="password"
+            name="password"
+            autoComplete="new-password"
+            minLength={6}
+            value={password}
+            onChange={(v) => {
+              setPassword(v);
+              setPasswordError('');
+            }}
+          />
+          <p className="text-xs text-ink-faint mt-1">6자 이상</p>
         </div>
-        <button type="submit" className="btn-primary">가입하기</button>
+        <div>
+          <label className="label" htmlFor="password-confirm">비밀번호 확인</label>
+          <PasswordInput
+            id="password-confirm"
+            name="password-confirm"
+            autoComplete="new-password"
+            value={passwordConfirm}
+            onChange={(v) => {
+              setPasswordConfirm(v);
+              setPasswordError('');
+            }}
+          />
+          {passwordError && <p className="text-xs text-[#b04040] mt-1" role="alert">{passwordError}</p>}
+        </div>
+        <button type="submit" className="btn-primary" disabled={busy}>{busy ? '가입 중…' : '가입하기'}</button>
         <div className="rounded-2xl bg-cream-dark/60 px-4 py-3 text-xs text-ink-muted leading-relaxed">
           <p className="font-medium text-ink mb-1">가입 후 이렇게 진행돼요</p>
           <ol className="list-decimal pl-4 space-y-0.5">
