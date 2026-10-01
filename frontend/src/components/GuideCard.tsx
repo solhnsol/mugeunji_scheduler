@@ -23,7 +23,8 @@ export function buildSteps(
     paymentGuide?: string | null;
   },
 ): Step[] {
-  const hasPlan = me.access_status !== 'no_plan' && !!me.subscription;
+  // 관리자는 요금제·내 정보 등록 없이 이용하므로 해당 단계를 완료로 처리한다.
+  const hasPlan = me.role === 'admin' || (me.access_status !== 'no_plan' && !!me.subscription);
   const paid = !!(
     me.can_reserve_monthly ||
     me.can_access_current_month ||
@@ -36,7 +37,7 @@ export function buildSteps(
     {
       id: 'profile',
       title: '내 정보 등록',
-      done: !!me.profile_complete,
+      done: me.role === 'admin' || !!me.profile_complete,
       hint: '이름과 전화번호를 등록하면 입금 확인과 안내를 받을 수 있어요.',
       action: { label: '정보 입력', onClick: opts.onProfile },
     },
@@ -84,7 +85,7 @@ export function GuideCard({ steps }: { steps: Step[] }) {
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-base font-semibold text-ink">시작 가이드</h2>
         <span className="text-xs text-ink-faint tabular-nums">
-          {currentIdx}/{steps.length} 완료
+          {steps.filter((s) => s.done).length}/{steps.length} 완료
         </span>
       </div>
       <ol className="mt-4 space-y-3">
