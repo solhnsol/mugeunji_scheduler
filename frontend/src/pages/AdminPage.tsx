@@ -17,7 +17,7 @@ import { formatPhone } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 
 const TABS = [
-  { id: 'settlement' as const, label: '정산' },
+  { id: 'roster' as const, label: '정산' },
   { id: 'schedule' as const, label: '월신청' },
   { id: 'free' as const, label: '자유이용' },
   { id: 'automation' as const, label: '자동화' },
@@ -100,7 +100,7 @@ function AdminDashboard({
   show: (m: string, t: 'success' | 'error') => void;
   toast: { message: string; type: 'success' | 'error' | '' };
 }) {
-  const [tab, setTab] = useState<'settlement' | 'schedule' | 'free' | 'automation' | 'users'>('settlement');
+  const [tab, setTab] = useState<'roster' | 'schedule' | 'free' | 'automation' | 'users'>('roster');
   const [reloadKey, setReloadKey] = useState(0);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
@@ -208,7 +208,7 @@ function AdminDashboard({
         </div>
       </div>
 
-      {tab === 'settlement' && (
+      {tab === 'roster' && (
         <div className="space-y-5">
           <AdminRosterTab
             token={token}

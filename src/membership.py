@@ -582,12 +582,30 @@ class MembershipManager:
         members: List[Dict] = []
         candidates: List[Dict] = []
         users = await self.list_users_with_membership()
+
+        # 회원마다 쿼리하지 않도록 구독/청구를 한 번에 가져온다.
+        async with self.conn.execute(
+            """
+            SELECT s.*, p.name AS plan_name, p.allowed_hours AS plan_allowed_hours,
+                   p.monthly_price AS plan_monthly_price
+            FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+            """
+        ) as cursor:
+            subs = {r["username"]: dict(r) for r in await cursor.fetchall()}
+        async with self.conn.execute(
+            "SELECT * FROM billing_cycles WHERE period = ?", (period,)
+        ) as cursor:
+            billings = {r["username"]: dict(r) for r in await cursor.fetchall()}
+
         for user in users:
             username = user["username"]
-            sub = await self.get_subscription(username)
+            sub = subs.get(username)
             if self._in_roster(sub, period):
-                hours, price, _ = await self.get_effective_hours_and_price(username)
-                billing = await self.get_billing_cycle(username, period)
+                custom_hours = user.get("custom_allowed_hours")
+                custom_fee = user.get("custom_monthly_fee")
+                hours = custom_hours if custom_hours is not None else sub["plan_allowed_hours"]
+                price = custom_fee if custom_fee is not None else sub["plan_monthly_price"]
+                billing = billings.get(username)
                 members.append({
                     "username": username,
                     "name": user.get("name"),
@@ -708,6 +726,10 @@ class MembershipManager:
 
     async def remove_from_roster(self, username: str, period: str) -> Tuple[bool, str]:
         """period부터 명단에서 제외(요금제 해제). 계정과 과거 기록은 유지."""
+        if not period or len(period) != 7 or period[4] != "-":
+            return False, "기간 형식이 올바르지 않습니다. (YYYY-MM)"
+        if period < usage_period():
+            return False, "이미 시작된 달 이전 기간은 명단에서 제외할 수 없습니다."
         sub = await self.get_subscription(username)
         if not sub or not self._in_roster(sub, period):
             return False, "이 기간 명단에 없는 회원입니다."

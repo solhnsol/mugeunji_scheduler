@@ -155,12 +155,9 @@ async def setup_database(conn: aiosqlite.Connection):
     """)
 
     await conn.execute("""
-        CREATE TABLE IF NOT EXISTS settlement_periods (
-            period TEXT PRIMARY KEY NOT NULL,
-            status TEXT NOT NULL,
-            opened_at TEXT,
-            opened_by TEXT,
-            closed_at TEXT
+        CREATE TABLE IF NOT EXISTS revoked_tokens (
+            jti TEXT PRIMARY KEY NOT NULL,
+            expires_at TEXT NOT NULL
         );
     """)
 

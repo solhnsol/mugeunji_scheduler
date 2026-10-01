@@ -1,5 +1,6 @@
 import asyncio
 import os
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import List, Optional, Literal
@@ -92,6 +93,7 @@ if _cors_origins:
 
 
 # 단일 DB 연결을 공유하므로 쓰기 요청은 직렬화해 트랜잭션 간 commit/rollback 간섭을 막는다.
+# 이 락은 프로세스 단위이므로 uvicorn 워커는 반드시 1개로 실행해야 한다 (Dockerfile 참고).
 _write_lock = asyncio.Lock()
 _LOCK_EXEMPT = {"/login", "/admin/login", "/logout"}
 
@@ -119,7 +121,7 @@ async def get_db_conn():
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "jti": uuid.uuid4().hex})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -147,7 +149,7 @@ class PlanApplyRequest(BaseModel):
     start_period: Optional[Literal["current", "next"]] = "next"
 
 
-class OpenSettlementRequest(BaseModel):
+class BillingPeriodRequest(BaseModel):
     period: Optional[str] = None
 
 
@@ -305,6 +307,11 @@ async def get_current_user(
             raise credentials_exception
     except JWTError:
         raise credentials_exception
+    jti = payload.get("jti")
+    if jti:
+        async with conn.execute("SELECT 1 FROM revoked_tokens WHERE jti = ?", (jti,)) as cursor:
+            if await cursor.fetchone():
+                raise credentials_exception
     # 역할은 토큰이 아닌 DB 기준 (관리자가 권한을 바꾸거나 계정이 삭제된 경우 즉시 반영)
     async with conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
         row = await cursor.fetchone()
@@ -482,8 +489,34 @@ async def admin_login(
 
 
 @app.post("/logout")
-async def logout(response: Response):
+async def logout(
+    request: Request,
+    response: Response,
+    token: Optional[str] = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    token = token or request.cookies.get(SESSION_COOKIE)
     response.delete_cookie(SESSION_COOKIE, path="/")
+    if token:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        except JWTError:
+            payload = None
+        if payload and payload.get("jti") and payload.get("exp"):
+            expires_at = datetime.utcfromtimestamp(payload["exp"]).isoformat()
+            async with _write_lock:
+                try:
+                    # 만료된 항목은 함께 정리
+                    await conn.execute(
+                        "DELETE FROM revoked_tokens WHERE expires_at < ?", (datetime.utcnow().isoformat(),)
+                    )
+                    await conn.execute(
+                        "INSERT OR IGNORE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)",
+                        (payload["jti"], expires_at),
+                    )
+                    await conn.commit()
+                except Exception:
+                    await conn.rollback()
     return {"status": "success"}
 
 
@@ -700,7 +733,7 @@ async def roster_remove(
 
 @app.post("/admin/billing/generate")
 async def generate_billing(
-    data: OpenSettlementRequest,
+    data: BillingPeriodRequest,
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
