@@ -5,12 +5,13 @@ import { AppShell, Toast } from '../components/ui';
 import { AdminReservationGrid } from '../components/AdminReservationGrid';
 import { AdminFreeReservationGrid } from '../components/AdminFreeReservationGrid';
 import { AdminAutomationTab } from '../components/AdminAutomationTab';
+import { AdminRosterTab } from '../components/AdminRosterTab';
 import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
 import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
-import { Plan, Reservation, SettlementOverview, UserInfo } from '../types';
-import { formatPhone, formatPrice } from '../utils';
+import { Plan, Reservation, UserInfo } from '../types';
+import { formatPhone } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 
 const ADMIN_TOKEN_KEY = 'adminAccessToken';
@@ -101,11 +102,10 @@ function AdminDashboard({
   toast: { message: string; type: 'success' | 'error' | '' };
 }) {
   const [tab, setTab] = useState<'settlement' | 'schedule' | 'free' | 'automation' | 'users'>('settlement');
-  const [settlement, setSettlement] = useState<SettlementOverview | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [admins, setAdmins] = useState<UserInfo[]>([]);
-  const [periodInput, setPeriodInput] = useState('');
   const [targetUser, setTargetUser] = useState('');
   const [freeTargetUser, setFreeTargetUser] = useState('');
   const [freeSchedule, setFreeSchedule] = useState<{
@@ -135,22 +135,18 @@ function AdminDashboard({
     });
   }, [admins, users]);
 
-  const load = useCallback(async (periodOverride?: string) => {
-    const period = periodOverride ?? (periodInput.trim() || undefined);
-    const [s, p, u, a, pub] = await Promise.all([
-      api.getSettlement(token, period),
+  const load = useCallback(async () => {
+    const [p, u, a, pub] = await Promise.all([
       api.getPlans(),
       api.getUsers(token),
       api.getAdmins(token),
       api.getSettings(),
     ]);
     setPaymentGuide(pub.payment_guide ?? '');
-    setSettlement(s);
     setPlans(p);
     setUsers(u);
     setAdmins(a);
-    if (!periodInput && s.period) setPeriodInput(s.period);
-  }, [token, periodInput]);
+  }, [token]);
 
   useEffect(() => {
     load().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
@@ -180,6 +176,7 @@ function AdminDashboard({
       const res = await api.updatePlanPrice(token, planId, price);
       show(res.message, 'success');
       await load();
+      setReloadKey((k) => k + 1);
     } catch (e) {
       show(e instanceof ApiError ? e.message : '저장 실패', 'error');
     }
@@ -212,8 +209,24 @@ function AdminDashboard({
         </div>
       </div>
 
-      {tab === 'settlement' && settlement && (
+      {tab === 'settlement' && (
         <div className="space-y-5">
+          <AdminRosterTab
+            token={token}
+            plans={plans}
+            reloadKey={reloadKey}
+            show={show}
+            onEdit={(username) => {
+              const u = users.find((x) => x.username === username);
+              if (u) setEditUser(u);
+            }}
+          />
+
+          <details className="group">
+            <summary className="cursor-pointer text-sm font-medium text-ink-muted py-2 select-none">
+              정산 설정 (입금 안내 문구 · 요금제 가격)
+            </summary>
+            <div className="space-y-5 mt-3">
           <section className="card p-5">
             <h2 className="font-semibold text-ink mb-1">입금 안내 문구</h2>
             <p className="text-xs text-ink-faint mb-3">
@@ -239,197 +252,8 @@ function AdminDashboard({
               ))}
             </div>
           </section>
-
-          <section className="card p-5">
-            <h2 className="font-semibold text-ink mb-4">정산</h2>
-            <input
-              className="input mb-3"
-              value={periodInput}
-              onChange={(e) => setPeriodInput(e.target.value)}
-              placeholder="YYYY-MM"
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn-secondary !w-auto !px-5"
-                onClick={() => load(periodInput.trim() || undefined)}
-              >
-                조회
-              </button>
-              <button
-                type="button"
-                className="btn-primary !w-auto !px-5"
-                onClick={async () => {
-                  try {
-                    const res = await api.openSettlement(token, periodInput || undefined);
-                    show(res.message, 'success');
-                    await load();
-                  } catch (e) {
-                    show(e instanceof ApiError ? e.message : '실패', 'error');
-                  }
-                }}
-              >
-                열기
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={async () => {
-                  if (!confirm('정산을 마감하시겠습니까?')) return;
-                  try {
-                    const res = await api.closeSettlement(token, periodInput || undefined);
-                    show(res.message, 'success');
-                    await load();
-                  } catch (e) {
-                    show(e instanceof ApiError ? e.message : '실패', 'error');
-                  }
-                }}
-              >
-                마감
-              </button>
-              {settlement.settlement?.status === 'closed' && (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={async () => {
-                    const period = periodInput.trim() || settlement.period;
-                    if (!confirm(`${period} 정산을 다시 여시겠습니까?`)) return;
-                    try {
-                      const res = await api.reopenSettlement(token, period);
-                      show(res.message, 'success');
-                      await load(period);
-                    } catch (e) {
-                      show(e instanceof ApiError ? e.message : '실패', 'error');
-                    }
-                  }}
-                >
-                  다시 열기
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={async () => {
-                  try {
-                    const res = await api.getSettlementCopyText(token, settlement.period);
-                    await navigator.clipboard.writeText(res.text);
-                    show('복사됨', 'success');
-                  } catch (e) {
-                    show(e instanceof ApiError ? e.message : '복사 실패', 'error');
-                  }
-                }}
-              >
-                문구 복사
-              </button>
             </div>
-            <p className="mt-4 text-xs text-ink-faint">
-              {settlement.period} · 미입금 {settlement.summary.pending ?? 0} · 완료 {settlement.summary.paid ?? 0}
-              {settlement.open_settlement ? ` · 열림` : settlement.settlement?.status === 'closed' ? ' · 마감' : ''}
-            </p>
-            {settlement.usage_period && (
-              <p className="mt-3 text-xs text-ink-muted">
-                이용 중 기간: <strong className="text-ink">{settlement.usage_period}</strong>
-                <span className="text-ink-faint"> · 이번 달 입금 확인 기준</span>
-              </p>
-            )}
-          </section>
-
-          <section className="card p-5 overflow-x-auto">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="font-semibold text-ink">입금</h2>
-              {(settlement.summary.paid ?? 0) > 0 && (
-                <button
-                  type="button"
-                  className="text-xs border border-[#e8c4c4] text-[#8b4040] rounded-full px-3 py-1.5 min-h-[32px] hover:bg-[#fdf5f5]"
-                  onClick={async () => {
-                    if (
-                      !confirm(
-                        `${settlement.period} 입금 확인 ${settlement.summary.paid}건을 모두 취소하시겠습니까?\n해당 월 이용 권한이 회수됩니다.`,
-                      )
-                    ) {
-                      return;
-                    }
-                    try {
-                      const res = await api.undoConfirmPayment(token, { period: settlement.period });
-                      show(res.message, 'success');
-                      await load();
-                    } catch (e) {
-                      show(e instanceof ApiError ? e.message : '취소 실패', 'error');
-                    }
-                  }}
-                >
-                  전체 입금 확인 취소
-                </button>
-              )}
-            </div>
-            {settlement.items.length === 0 ? (
-              <p className="text-ink-faint text-sm">내역 없음</p>
-            ) : (
-              <table className="w-full text-sm min-w-[480px]">
-                <thead>
-                  <tr className="text-left text-ink-faint border-b border-line text-xs">
-                    <th className="py-2 font-medium">회원</th>
-                    <th className="font-medium">요금제</th>
-                    <th className="font-medium">금액</th>
-                    <th className="font-medium">상태</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {settlement.items.map((item) => (
-                    <tr key={item.id} className="border-b border-line/50">
-                      <td className="py-3">
-                        <div className="font-medium text-ink">{item.name || item.username}</div>
-                        <div className="text-xs text-ink-faint">{item.phone ? formatPhone(item.phone) : item.username}</div>
-                      </td>
-                      <td className="text-ink-muted">{item.plan_name}</td>
-                      <td className="tabular-nums">{formatPrice(item.amount)}</td>
-                      <td className={item.status === 'paid' ? 'text-sage font-medium' : 'text-amber-700'}>
-                        {item.status === 'paid' ? '완료' : '대기'}
-                      </td>
-                      <td>
-                        {item.status !== 'paid' ? (
-                          <button
-                            type="button"
-                            className="text-xs bg-sage text-white rounded-full px-3 py-1.5 min-h-[32px]"
-                            onClick={async () => {
-                              if (!confirm('입금 확인?')) return;
-                              try {
-                                const res = await api.confirmPayment(token, item.id);
-                                show(res.message, 'success');
-                                await load();
-                              } catch (e) {
-                                show(e instanceof ApiError ? e.message : '실패', 'error');
-                              }
-                            }}
-                          >
-                            확인
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="text-xs border border-line text-ink-muted rounded-full px-3 py-1.5 min-h-[32px] hover:bg-cream-dark/60"
-                            onClick={async () => {
-                              if (!confirm(`${item.name || item.username}님 입금 확인을 취소하시겠습니까?`)) return;
-                              try {
-                                const res = await api.undoConfirmPayment(token, { billing_id: item.id });
-                                show(res.message, 'success');
-                                await load();
-                              } catch (e) {
-                                show(e instanceof ApiError ? e.message : '취소 실패', 'error');
-                              }
-                            }}
-                          >
-                            취소
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
+          </details>
         </div>
       )}
 
@@ -754,7 +578,7 @@ function AdminDashboard({
           plans={plans}
           token={token}
           onClose={() => setEditUser(null)}
-          onSaved={async () => { setEditUser(null); await load(); show('저장됨', 'success'); }}
+          onSaved={async () => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show('저장됨', 'success'); }}
           onError={(m) => show(m, 'error')}
         />
       ) : editUser && (
@@ -763,7 +587,7 @@ function AdminDashboard({
           plans={plans}
           token={token}
           onClose={() => setEditUser(null)}
-          onSaved={async () => { setEditUser(null); await load(); show('저장됨', 'success'); }}
+          onSaved={async () => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show('저장됨', 'success'); }}
           onError={(m) => show(m, 'error')}
         />
       )}

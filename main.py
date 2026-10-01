@@ -139,6 +139,20 @@ class OpenSettlementRequest(BaseModel):
     period: Optional[str] = None
 
 
+class RosterAddRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    period: str = Field(..., min_length=7, max_length=7)
+    plan_id: int = Field(..., ge=1)
+    allowed_hours: Optional[int] = Field(None, ge=0, le=24)
+    custom_monthly_fee: Optional[int] = Field(None, ge=0)
+    free_access: Optional[bool] = None
+
+
+class RosterRemoveRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    period: str = Field(..., min_length=7, max_length=7)
+
+
 class ConfirmPaymentRequest(BaseModel):
     billing_id: int
 
@@ -585,53 +599,66 @@ async def update_user_membership(
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
-@app.get("/admin/settlement")
-async def get_settlement_overview(
+@app.get("/admin/roster")
+async def get_roster(
     period: Optional[str] = None,
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     membership = MembershipManager(conn)
-    open_settlement = await membership.get_open_settlement()
-    target_period = period or (open_settlement or {}).get("period") or period_from_offset(1)
-    summary = await membership.get_settlement_summary(target_period)
+    target = period or period_from_offset(1)
+    roster = await membership.get_roster(target)
     return {
+        **roster,
         "suggested_next_period": period_from_offset(1),
-        "open_settlement": open_settlement,
         "usage_period": usage_period(),
-        "current_access_period": await membership.get_access_period(),
-        **summary,
     }
 
 
-@app.post("/admin/settlement/open")
-async def open_settlement(
+@app.post("/admin/roster/add")
+async def roster_add(
+    data: RosterAddRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    membership = MembershipManager(conn)
+    ok, message = await membership.add_to_roster(
+        data.username,
+        data.period,
+        data.plan_id,
+        allowed_hours=data.allowed_hours,
+        custom_monthly_fee=data.custom_monthly_fee,
+        free_access=data.free_access,
+    )
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/roster/remove")
+async def roster_remove(
+    data: RosterRemoveRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    membership = MembershipManager(conn)
+    ok, message = await membership.remove_from_roster(data.username, data.period)
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/billing/generate")
+async def generate_billing(
     data: OpenSettlementRequest,
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     membership = MembershipManager(conn)
     period = data.period or period_from_offset(1)
-    is_success, message = await membership.open_settlement(period, admin_user["username"])
-    if is_success:
+    ok, message = await membership.generate_billing(period)
+    if ok:
         return {"status": "success", "message": message, "period": period}
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
-
-
-@app.post("/admin/settlement/close")
-async def close_settlement(
-    data: OpenSettlementRequest,
-    admin_user: dict = Depends(get_current_admin_user),
-    conn: aiosqlite.Connection = Depends(get_db_conn),
-):
-    membership = MembershipManager(conn)
-    open_settlement = await membership.get_open_settlement()
-    if not open_settlement:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="열려 있는 정산이 없습니다.")
-    period = data.period or open_settlement["period"]
-    is_success, message = await membership.close_settlement(period)
-    if is_success:
-        return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
@@ -654,21 +681,6 @@ async def confirm_billing_payment(
 ):
     membership = MembershipManager(conn)
     is_success, message = await membership.confirm_payment(data.billing_id, admin_user["username"])
-    if is_success:
-        return {"status": "success", "message": message}
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
-
-
-@app.post("/admin/settlement/reopen")
-async def reopen_settlement(
-    data: OpenSettlementRequest,
-    admin_user: dict = Depends(get_current_admin_user),
-    conn: aiosqlite.Connection = Depends(get_db_conn),
-):
-    if not data.period:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="period를 지정해주세요.")
-    membership = MembershipManager(conn)
-    is_success, message = await membership.reopen_settlement(data.period)
     if is_success:
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)

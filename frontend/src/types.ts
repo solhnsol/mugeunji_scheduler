@@ -41,7 +41,6 @@ export interface MeResponse {
   access_period?: string | null;
   reservation_target_period?: string | null;
   start_period?: string | null;
-  open_settlement_period?: string | null;
   can_access_free_schedule?: boolean;
   pending_plan_change?: {
     new_plan_name: string;
@@ -71,26 +70,45 @@ export interface UserInfo {
 
 export const HOUR_OPTIONS = [4, 6, 8] as const;
 
-export interface SettlementItem {
-  id: number;
+export interface RosterMember {
   username: string;
-  name?: string;
-  phone?: string;
+  name?: string | null;
+  phone?: string | null;
+  plan_id: number;
   plan_name: string;
-  amount: number;
-  status: string;
-  change_label: string;
+  allowed_hours: number;
+  monthly_price: number;
+  custom_allowed_hours?: number | null;
+  custom_monthly_fee?: number | null;
+  free_access: boolean;
+  billing_id: number | null;
+  billing_status: 'none' | 'pending' | 'paid';
+  billing_amount: number | null;
+  paid_at?: string | null;
 }
 
-export interface SettlementOverview {
+export interface RosterCandidate {
+  username: string;
+  name?: string | null;
+  phone?: string | null;
+  note: string;
+  had_plan: boolean;
+}
+
+export interface RosterResponse {
   period: string;
   suggested_next_period: string;
-  current_access_period?: string;
-  usage_period?: string;
-  open_settlement?: { period: string; status: string } | null;
-  settlement?: { period: string; status: string } | null;
-  summary: Record<string, number>;
-  items: SettlementItem[];
+  usage_period: string;
+  members: RosterMember[];
+  candidates: RosterCandidate[];
+  summary: {
+    members: number;
+    unbilled: number;
+    pending: number;
+    paid: number;
+    total_amount: number;
+    paid_amount: number;
+  };
 }
 
 export type ValidDay =

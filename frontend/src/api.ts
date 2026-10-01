@@ -173,30 +173,6 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
-  async getSettlement(token: string, period?: string) {
-    const q = period ? `?period=${period}` : '';
-    const res = await fetch(`/admin/settlement${q}`, { headers: authHeaders(token) });
-    return parseResponse<import('./types').SettlementOverview>(res);
-  },
-
-  async openSettlement(token: string, period?: string) {
-    const res = await fetch('/admin/settlement/open', {
-      method: 'POST',
-      headers: authHeaders(token),
-      body: JSON.stringify({ period: period || null }),
-    });
-    return parseResponse<{ message: string }>(res);
-  },
-
-  async reopenSettlement(token: string, period: string) {
-    const res = await fetch('/admin/settlement/reopen', {
-      method: 'POST',
-      headers: authHeaders(token),
-      body: JSON.stringify({ period }),
-    });
-    return parseResponse<{ message: string }>(res);
-  },
-
   async setAccessPeriod(token: string, period: string) {
     const res = await fetch('/admin/settings/access-period', {
       method: 'PUT',
@@ -206,11 +182,45 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
-  async closeSettlement(token: string, period?: string) {
-    const res = await fetch('/admin/settlement/close', {
+  async getRoster(token: string, period?: string) {
+    const q = period ? `?period=${period}` : '';
+    const res = await fetch(`/admin/roster${q}`, { headers: authHeaders(token) });
+    return parseResponse<import('./types').RosterResponse>(res);
+  },
+
+  async rosterAdd(
+    token: string,
+    body: {
+      username: string;
+      period: string;
+      plan_id: number;
+      allowed_hours?: number;
+      custom_monthly_fee?: number;
+      free_access?: boolean;
+    },
+  ) {
+    const res = await fetch('/admin/roster/add', {
       method: 'POST',
       headers: authHeaders(token),
-      body: JSON.stringify({ period: period || null }),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async rosterRemove(token: string, username: string, period: string) {
+    const res = await fetch('/admin/roster/remove', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ username, period }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async generateBilling(token: string, period: string) {
+    const res = await fetch('/admin/billing/generate', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ period }),
     });
     return parseResponse<{ message: string }>(res);
   },
