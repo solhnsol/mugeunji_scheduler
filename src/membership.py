@@ -665,6 +665,8 @@ class MembershipManager:
                 return False, "존재하지 않는 요금제입니다."
         if not period or len(period) != 7 or period[4] != "-":
             return False, "기간 형식이 올바르지 않습니다. (YYYY-MM)"
+        if period <= usage_period():
+            return False, "이미 시작된 달은 명단에 추가할 수 없습니다. 시작 전인 달만 가능합니다."
 
         now_iso = datetime.now(KST).isoformat()
         try:
@@ -697,39 +699,37 @@ class MembershipManager:
                 "UPDATE plan_change_requests SET status = 'cancelled' WHERE username = ? AND status = 'pending'",
                 (username,),
             )
+
+            ok, msg = await self.update_user_membership(
+                username,
+                plan_id=plan_id,
+                allowed_hours=allowed_hours,
+                clear_custom_hours=allowed_hours is None,
+                custom_monthly_fee=custom_monthly_fee,
+                clear_custom_fee=custom_monthly_fee is None,
+                free_access=free_access,
+                commit=False,
+            )
+            if not ok:
+                await self.conn.rollback()
+                return False, msg
+
+            await self._ensure_billing_cycle(username, period)
+            await self._sync_subscription_payment_status(username)
+            await self.sync_user_entitlements(username)
+            # 구독 생성/수정, 회원 설정, 청구 생성을 한 번에 커밋 — 중간 실패 시 전부 롤백
             await self.conn.commit()
         except Exception as e:
             await self.conn.rollback()
             return False, f"명단 추가 실패: {str(e)}"
-
-        ok, msg = await self.update_user_membership(
-            username,
-            plan_id=plan_id,
-            allowed_hours=allowed_hours,
-            clear_custom_hours=allowed_hours is None,
-            custom_monthly_fee=custom_monthly_fee,
-            clear_custom_fee=custom_monthly_fee is None,
-            free_access=free_access,
-        )
-        if not ok:
-            return False, msg
-
-        try:
-            await self._ensure_billing_cycle(username, period)
-            await self._sync_subscription_payment_status(username)
-            await self.sync_user_entitlements(username)
-            await self.conn.commit()
-        except Exception as e:
-            await self.conn.rollback()
-            return False, f"청구 생성 실패: {str(e)}"
         return True, f"'{username}'님을 {period} 명단에 추가했습니다."
 
     async def remove_from_roster(self, username: str, period: str) -> Tuple[bool, str]:
         """period부터 명단에서 제외(요금제 해제). 계정과 과거 기록은 유지."""
         if not period or len(period) != 7 or period[4] != "-":
             return False, "기간 형식이 올바르지 않습니다. (YYYY-MM)"
-        if period < usage_period():
-            return False, "이미 시작된 달 이전 기간은 명단에서 제외할 수 없습니다."
+        if period <= usage_period():
+            return False, "이미 시작된 달은 명단에서 제외할 수 없습니다. 시작 전인 달만 가능합니다."
         sub = await self.get_subscription(username)
         if not sub or not self._in_roster(sub, period):
             return False, "이 기간 명단에 없는 회원입니다."
@@ -1013,7 +1013,9 @@ class MembershipManager:
         clear_custom_hours: bool = False,
         clear_custom_fee: bool = False,
         auto_renew: Optional[bool] = None,
+        commit: bool = True,
     ) -> Tuple[bool, str]:
+        """commit=False면 커밋/롤백을 호출자에게 맡긴다 (여러 단계를 한 트랜잭션으로 묶을 때)."""
         user = await self.get_user_row(username)
         if not user:
             return False, "사용자를 찾을 수 없습니다."
@@ -1119,11 +1121,14 @@ class MembershipManager:
                     )
 
             await self.sync_user_entitlements(username)
-            await self.conn.commit()
+            if commit:
+                await self.conn.commit()
             return True, f"'{username}' 회원 정보가 수정되었습니다."
         except Exception as e:
-            await self.conn.rollback()
-            return False, f"회원 수정 실패: {str(e)}"
+            if commit:
+                await self.conn.rollback()
+                return False, f"회원 수정 실패: {str(e)}"
+            raise
 
     def build_settlement_copy_text(self, summary: Dict) -> str:
         lines = [f"[묵은지 작업실 {summary['period']} 정산 안내]"]
