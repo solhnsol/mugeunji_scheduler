@@ -39,6 +39,8 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 로그인 유지 30일
 SESSION_COOKIE = "session"
+# 임시 비밀번호 상태에서도 허용하는 경로 (현재 상태 확인, 비밀번호 변경)
+MUST_CHANGE_ALLOWED_PATHS = {"/me", "/me/profile"}
 
 if SECRET_KEY == "change-me-in-production":
     print("[WARN] SECRET_KEY가 기본값입니다. .env에 긴 임의 문자열을 설정하세요.")
@@ -197,6 +199,11 @@ class UpdatePlanPriceRequest(BaseModel):
     monthly_price: int = Field(..., ge=0)
 
 
+class UpdateUserProfileRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=2)
+    phone: Optional[str] = Field(None, min_length=9)
+
+
 class UpdateSettingsRequest(BaseModel):
     reservation_enabled: bool
     reservation_opens_at: Optional[str] = None
@@ -313,10 +320,18 @@ async def get_current_user(
             if await cursor.fetchone():
                 raise credentials_exception
     # 역할은 토큰이 아닌 DB 기준 (관리자가 권한을 바꾸거나 계정이 삭제된 경우 즉시 반영)
-    async with conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
+    async with conn.execute(
+        "SELECT role, session_epoch, must_change_password FROM users WHERE username = ?", (username,)
+    ) as cursor:
         row = await cursor.fetchone()
     if row is None:
         raise credentials_exception
+    # 비밀번호 변경/초기화 이후에는 이전에 발급된 토큰을 받지 않는다
+    if int(payload.get("ep", 0)) != int(row["session_epoch"] or 0):
+        raise credentials_exception
+    # 임시 비밀번호로 로그인한 상태에서는 새 비밀번호를 설정하기 전까지 다른 기능을 막는다
+    if row["must_change_password"] and request.url.path not in MUST_CHANGE_ALLOWED_PATHS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="새 비밀번호를 먼저 설정해주세요.")
     return {"username": username, "role": row["role"]}
 
 
@@ -367,6 +382,7 @@ async def get_me(current_user: dict = Depends(get_current_user), conn: aiosqlite
         "name": user.get("name") if user else None,
         "phone": user.get("phone") if user else None,
         "profile_complete": profile_complete,
+        "must_change_password": bool(user and user.get("must_change_password")),
         "can_access_free_schedule": can_free,
         **access,
     }
@@ -375,6 +391,8 @@ async def get_me(current_user: dict = Depends(get_current_user), conn: aiosqlite
 @app.put("/me/profile")
 async def update_my_profile(
     data: UpdateProfileRequest,
+    request: Request,
+    response: Response,
     current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
@@ -388,6 +406,12 @@ async def update_my_profile(
     )
     if is_success:
         user = await auth_manager.get_user_row(current_user["username"])
+        if data.new_password and user:
+            # 비밀번호가 바뀌면 이전 토큰은 무효가 되므로, 지금 기기에는 새 세션을 발급한다
+            token = create_access_token(
+                data={"sub": user["username"], "role": user["role"], "ep": user.get("session_epoch", 0)}
+            )
+            set_session_cookie(response, request, token)
         return {
             "status": "success",
             "message": message,
@@ -458,7 +482,7 @@ async def login_user(
     user_data = await auth_manager.login(data.username.strip(), data.password)
     if not user_data:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
-    access_token_data = {"sub": user_data["username"], "role": user_data["role"]}
+    access_token_data = {"sub": user_data["username"], "role": user_data["role"], "ep": user_data.get("session_epoch", 0)}
     access_token = create_access_token(data=access_token_data)
     set_session_cookie(response, request, access_token)
     membership = MembershipManager(conn)
@@ -483,7 +507,9 @@ async def admin_login(
     user_data = await auth_manager.login(data.username.strip(), data.password)
     if not user_data or user_data["role"] != "admin":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="관리자 인증에 실패했습니다.")
-    access_token = create_access_token(data={"sub": user_data["username"], "role": user_data["role"]})
+    access_token = create_access_token(
+        data={"sub": user_data["username"], "role": user_data["role"], "ep": user_data.get("session_epoch", 0)}
+    )
     set_session_cookie(response, request, access_token)
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -695,6 +721,67 @@ async def update_user_membership(
         clear_custom_fee=data.clear_custom_fee,
     )
     if is_success:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.put("/admin/users/{username}/profile")
+async def update_user_profile(
+    username: str,
+    data: UpdateUserProfileRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    auth_manager = AuthManager(conn)
+    user = await auth_manager.get_user_row(username)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
+    if user["role"] == "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="관리자 계정은 수정할 수 없습니다.")
+    is_success, message = await auth_manager.update_profile(username, name=data.name, phone=data.phone)
+    if is_success:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/users/{username}/reset-password")
+async def reset_user_password(
+    username: str,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    auth_manager = AuthManager(conn)
+    is_success, result = await auth_manager.reset_password(username)
+    if is_success:
+        return {
+            "status": "success",
+            "message": "임시 비밀번호를 발급했습니다. 이 화면을 닫으면 다시 볼 수 없어요.",
+            "temp_password": result,
+        }
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result)
+
+
+@app.get("/admin/users/{username}/delete-preview")
+async def get_user_delete_preview(
+    username: str,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    preview = await AuthManager(conn).get_delete_preview(username)
+    if preview is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="삭제할 수 있는 회원이 아닙니다.")
+    return preview
+
+
+@app.delete("/admin/users/{username}")
+async def delete_user(
+    username: str,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    is_success, message = await AuthManager(conn).delete_user(username)
+    if is_success:
+        await broadcast_reservation_updates(conn)
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 

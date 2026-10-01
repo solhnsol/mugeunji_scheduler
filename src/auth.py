@@ -1,5 +1,6 @@
 import re
 import os
+import secrets
 import csv
 import io
 import asyncio
@@ -13,6 +14,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 KST = timezone(timedelta(hours=9))
+# 헷갈리기 쉬운 문자(0/O, 1/l/I)를 뺀 임시 비밀번호용 문자 집합
+TEMP_PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 PHONE_PATTERN = re.compile(r"^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$")
 
 
@@ -38,7 +41,7 @@ class AuthManager:
 
     async def _validate_user(self, username: str, password: str) -> Optional[Dict]:
         async with self.conn.execute(
-            "SELECT username, password, allowed_hours, role FROM users WHERE username = ?",
+            "SELECT username, password, allowed_hours, role, session_epoch FROM users WHERE username = ?",
             (username,),
         ) as cursor:
             row = await cursor.fetchone()
@@ -152,6 +155,9 @@ class AuthManager:
             )
             updates.append("password = ?")
             params.append(pw_hash.decode("utf-8"))
+            # 비밀번호를 바꾸면 임시 비밀번호 상태를 해제하고, 이전에 발급된 로그인 토큰은 무효화한다
+            updates.append("must_change_password = 0")
+            updates.append("session_epoch = session_epoch + 1")
 
         if not updates:
             return False, "변경할 항목이 없습니다."
@@ -167,6 +173,59 @@ class AuthManager:
         except Exception as e:
             await self.conn.rollback()
             return False, f"저장 실패: {str(e)}"
+
+    async def reset_password(self, username: str) -> Tuple[bool, str]:
+        """임시 비밀번호를 발급한다. 성공하면 두 번째 값이 임시 비밀번호(한 번만 보여줄 것)."""
+        user = await self.get_user_row(username)
+        if not user:
+            return False, "사용자를 찾을 수 없습니다."
+        if user["role"] == "admin":
+            return False, "관리자 계정의 비밀번호는 초기화할 수 없습니다."
+        temp = "".join(secrets.choice(TEMP_PASSWORD_ALPHABET) for _ in range(8))
+        pw_hash = await self._run_sync(bcrypt.hashpw, temp.encode("utf-8"), bcrypt.gensalt())
+        try:
+            await self.conn.execute(
+                """UPDATE users
+                   SET password = ?, must_change_password = 1, session_epoch = session_epoch + 1
+                   WHERE username = ?""",
+                (pw_hash.decode("utf-8"), username),
+            )
+            await self.conn.commit()
+            return True, temp
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"초기화 실패: {str(e)}"
+
+    async def get_delete_preview(self, username: str) -> Optional[Dict]:
+        user = await self.get_user_row(username)
+        if not user or user["role"] == "admin":
+            return None
+        counts: Dict[str, int] = {}
+        for key, sql in (
+            ("reservations", "SELECT COUNT(*) FROM reservations WHERE username = ?"),
+            ("billing", "SELECT COUNT(*) FROM billing_cycles WHERE username = ?"),
+            ("billing_paid", "SELECT COUNT(*) FROM billing_cycles WHERE username = ? AND status = 'paid'"),
+        ):
+            async with self.conn.execute(sql, (username,)) as cursor:
+                counts[key] = (await cursor.fetchone())[0]
+        return {"username": username, "name": user.get("name"), **counts}
+
+    async def delete_user(self, username: str) -> Tuple[bool, str]:
+        """회원과 그 예약·청구·구독 기록을 모두 삭제한다 (관리자 계정은 불가)."""
+        user = await self.get_user_row(username)
+        if not user:
+            return False, "사용자를 찾을 수 없습니다."
+        if user["role"] == "admin":
+            return False, "관리자 계정은 삭제할 수 없습니다."
+        try:
+            for table in ("reservations", "billing_cycles", "plan_change_requests", "subscriptions"):
+                await self.conn.execute(f"DELETE FROM {table} WHERE username = ?", (username,))
+            await self.conn.execute("DELETE FROM users WHERE username = ?", (username,))
+            await self.conn.commit()
+            return True, f"'{user.get('name') or username}' 회원을 삭제했습니다."
+        except Exception as e:
+            await self.conn.rollback()
+            return False, f"삭제 실패: {str(e)}"
 
     async def get_user_row(self, username: str) -> Optional[Dict]:
         async with self.conn.execute("SELECT * FROM users WHERE username = ?", (username,)) as cursor:
