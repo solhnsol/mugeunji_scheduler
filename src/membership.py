@@ -909,30 +909,53 @@ class MembershipManager:
             return False, "관리자 계정은 수정할 수 없습니다."
 
         hours_to_set = allowed_hours if allowed_hours is not None else custom_allowed_hours
+        now_iso = datetime.now(KST).isoformat()
 
         try:
-            if plan_id is not None:
-                sub = await self.get_subscription(username)
-                if sub:
-                    await self.conn.execute(
-                        "UPDATE subscriptions SET plan_id = ?, updated_at = ? WHERE username = ?",
-                        (plan_id, datetime.now(KST).isoformat(), username),
-                    )
-                else:
-                    await self.conn.execute(
-                        """
-                        INSERT INTO subscriptions (username, plan_id, status, auto_renew, created_at, updated_at)
-                        VALUES (?, ?, 'pending_payment', 1, ?, ?)
-                        """,
-                        (username, plan_id, datetime.now(KST).isoformat(), datetime.now(KST).isoformat()),
-                    )
-                if hours_to_set is None and not clear_custom_hours:
+            sub = await self.get_subscription(username)
+            created_subscription = False
+
+            # 요금제를 지정하지 않았더라도, 개별 시간/요금/자유이용을 설정하려면 구독이 있어야
+            # 청구·입금 확인·이용 권한 흐름이 동작한다. 없으면 가장 가까운 요금제로 만든다.
+            needs_subscription = (
+                plan_id is not None
+                or hours_to_set is not None
+                or custom_monthly_fee is not None
+                or bool(free_access)
+            )
+            if not sub and needs_subscription:
+                if plan_id is None:
                     async with self.conn.execute(
-                        "SELECT allowed_hours FROM plans WHERE id = ?", (plan_id,)
+                        "SELECT id FROM plans ORDER BY ABS(allowed_hours - ?), sort_order LIMIT 1",
+                        (hours_to_set or 0,),
                     ) as cursor:
                         plan_row = await cursor.fetchone()
-                    if plan_row:
-                        hours_to_set = plan_row["allowed_hours"]
+                    if not plan_row:
+                        return False, "등록된 요금제가 없습니다."
+                    plan_id = plan_row["id"]
+                async with self.conn.execute("SELECT id FROM plans WHERE id = ?", (plan_id,)) as cursor:
+                    if not await cursor.fetchone():
+                        return False, "존재하지 않는 요금제입니다."
+                await self.conn.execute(
+                    """
+                    INSERT INTO subscriptions
+                    (username, plan_id, status, auto_renew, start_period, created_at, updated_at)
+                    VALUES (?, ?, 'pending_payment', 1, ?, ?, ?)
+                    """,
+                    (username, plan_id, usage_period(), now_iso, now_iso),
+                )
+                created_subscription = True
+            elif sub and plan_id is not None:
+                async with self.conn.execute("SELECT id FROM plans WHERE id = ?", (plan_id,)) as cursor:
+                    if not await cursor.fetchone():
+                        return False, "존재하지 않는 요금제입니다."
+                await self.conn.execute(
+                    "UPDATE subscriptions SET plan_id = ?, updated_at = ? WHERE username = ?",
+                    (plan_id, now_iso, username),
+                )
+                # 요금제를 바꾸면서 시간을 따로 지정하지 않으면 새 요금제의 기본 시간을 따른다.
+                if hours_to_set is None:
+                    clear_custom_hours = True
 
             if clear_custom_hours:
                 await self.conn.execute(
@@ -965,15 +988,22 @@ class MembershipManager:
                     (1 if auto_renew else 0, username),
                 )
 
-            open_settlement = await self.get_open_settlement()
-            if open_settlement:
-                billing = await self.get_billing_cycle(username, open_settlement["period"])
-                if billing and billing["status"] == "pending":
-                    _, price, _ = await self.get_effective_hours_and_price(username)
-                    resolved_plan = plan_id if plan_id is not None else billing["plan_id"]
+            if created_subscription:
+                await self._ensure_billing_cycle(username, usage_period(), billing_type="new")
+
+            # 아직 입금 전인 청구서는 바뀐 요금제/요금을 반영한다.
+            if await self.get_subscription(username):
+                _, price, sub_now = await self.get_effective_hours_and_price(username)
+                async with self.conn.execute(
+                    "SELECT id, period, plan_id FROM billing_cycles WHERE username = ? AND status = 'pending'",
+                    (username,),
+                ) as cursor:
+                    pending_cycles = await cursor.fetchall()
+                for cycle in pending_cycles:
+                    resolved_plan = plan_id if plan_id is not None else cycle["plan_id"]
                     await self.conn.execute(
                         "UPDATE billing_cycles SET plan_id = ?, amount = ? WHERE id = ?",
-                        (resolved_plan, price, billing["id"]),
+                        (resolved_plan, price, cycle["id"]),
                     )
 
             await self.sync_user_entitlements(username)

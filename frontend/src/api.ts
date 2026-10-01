@@ -141,7 +141,17 @@ export const api = {
       reservation_opens_at?: string;
       schedule_message?: string;
       next_monthly_open_at?: string;
+      payment_guide?: string | null;
     }>(res);
+  },
+
+  async updatePaymentGuide(token: string, paymentGuide: string) {
+    const res = await fetch('/admin/settings/payment-guide', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ payment_guide: paymentGuide }),
+    });
+    return parseResponse<{ message: string }>(res);
   },
 
   async getFreeWeeklyUsage(token: string) {

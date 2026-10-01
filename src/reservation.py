@@ -138,6 +138,7 @@ class ReservationManager:
             "schedule_message": message,
             "next_monthly_open_at": next_open.isoformat() if next_open else None,
             "reservation_opens_at": next_open.isoformat() if next_open else settings.get("reservation_opens_at"),
+            "payment_guide": settings.get("payment_guide") or None,
             "did_clear": did_clear,
         }
 
@@ -209,6 +210,9 @@ class ReservationManager:
                     return False, "새벽 예약은 자유이용권 사용자만 신청할 수 있습니다."
                 if not group_to_check.issubset(day_indices):
                     return False, "새벽 예약은 같은 날 0~3시를 한꺼번에만 신청할 수 있습니다."
+
+            if user_allowed_hours <= 0:
+                return False, "이 계정은 월 예약 없이 자유이용으로만 이용할 수 있습니다."
 
             if existing_reservations_count + len(reserve_times) > user_allowed_hours:
                 return False, f"예약 가능 시간({user_allowed_hours}시간)을 초과합니다."

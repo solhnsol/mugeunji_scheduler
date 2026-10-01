@@ -108,6 +108,14 @@ export function RegisterPage() {
           <input className="input" id="password" name="password" type="password" required minLength={4} />
         </div>
         <button type="submit" className="btn-primary">가입하기</button>
+        <div className="rounded-2xl bg-cream-dark/60 px-4 py-3 text-xs text-ink-muted leading-relaxed">
+          <p className="font-medium text-ink mb-1">가입 후 이렇게 진행돼요</p>
+          <ol className="list-decimal pl-4 space-y-0.5">
+            <li>로그인 후 요금제를 선택해 신청</li>
+            <li>안내된 금액 입금 → 관리자가 확인</li>
+            <li>시간표가 열리면 원하는 시간 신청</li>
+          </ol>
+        </div>
         <p className="text-center">
           <Link to="/" className="text-sm text-ink-faint hover:text-sage">로그인</Link>
         </p>

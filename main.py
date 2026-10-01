@@ -153,7 +153,7 @@ class SetAccessPeriodRequest(BaseModel):
 
 
 class UpdateUserMembershipRequest(BaseModel):
-    allowed_hours: Optional[int] = Field(None, ge=1, le=24)
+    allowed_hours: Optional[int] = Field(None, ge=0, le=24)
     plan_id: Optional[int] = Field(None, ge=1)
     free_access: Optional[bool] = None
     custom_monthly_fee: Optional[int] = Field(None, ge=0)
@@ -172,6 +172,10 @@ class UpdatePlanPriceRequest(BaseModel):
 class UpdateSettingsRequest(BaseModel):
     reservation_enabled: bool
     reservation_opens_at: Optional[str] = None
+
+
+class UpdatePaymentGuideRequest(BaseModel):
+    payment_guide: str = Field("", max_length=1000)
 
 
 class UpdateAutomationRequest(BaseModel):
@@ -218,6 +222,10 @@ class UserInfoResponse(BaseModel):
     plan_name: Optional[str] = None
     subscription_status: Optional[str] = None
     monthly_price: Optional[int] = None
+    custom_monthly_fee: Optional[int] = None
+    custom_allowed_hours: Optional[int] = None
+    plan_id: Optional[int] = None
+    plan_allowed_hours: Optional[int] = None
 
 
 class PlanResponse(BaseModel):
@@ -232,6 +240,7 @@ class SettingsResponse(BaseModel):
     reservation_opens_at: Optional[str] = None
     next_monthly_open_at: Optional[str] = None
     schedule_message: Optional[str] = None
+    payment_guide: Optional[str] = None
 
 
 async def get_current_user(
@@ -507,6 +516,7 @@ async def get_all_users_by_admin(
             "plan_name": user.get("plan_name"),
             "subscription_status": user.get("subscription_status"),
             "monthly_price": price,
+            "custom_monthly_fee": user.get("custom_monthly_fee"),
         })
     return result
 
@@ -734,6 +744,7 @@ async def get_admin_settings(
     return {
         "reservation_enabled": settings.get("reservation_enabled") == "true",
         "reservation_opens_at": settings.get("reservation_opens_at"),
+        "payment_guide": settings.get("payment_guide"),
     }
 
 
@@ -754,6 +765,20 @@ async def update_admin_settings(
     is_success, message = await settings_manager.upsert_settings(payload)
     if is_success:
         return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
+
+
+@app.put("/admin/settings/payment-guide")
+async def update_payment_guide(
+    data: UpdatePaymentGuideRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    settings_manager = SettingsManager(conn)
+    text = data.payment_guide.strip()
+    is_success, message = await settings_manager.upsert_settings({"payment_guide": text or None})
+    if is_success:
+        return {"status": "success", "message": "입금 안내 문구가 저장되었습니다."}
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
 
 

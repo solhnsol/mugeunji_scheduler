@@ -10,7 +10,7 @@ import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { Plan, Reservation, SettlementOverview, UserInfo } from '../types';
-import { formatPrice } from '../utils';
+import { formatPhone, formatPrice } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 
 const ADMIN_TOKEN_KEY = 'adminAccessToken';
@@ -118,6 +118,7 @@ function AdminDashboard({
     window_end: string;
   } | null>(null);
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
+  const [paymentGuide, setPaymentGuide] = useState('');
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [freeScheduleModalOpen, setFreeScheduleModalOpen] = useState(false);
   const monthlyReservations = useMonthlyReservations();
@@ -136,12 +137,14 @@ function AdminDashboard({
 
   const load = useCallback(async (periodOverride?: string) => {
     const period = periodOverride ?? (periodInput.trim() || undefined);
-    const [s, p, u, a] = await Promise.all([
+    const [s, p, u, a, pub] = await Promise.all([
       api.getSettlement(token, period),
       api.getPlans(),
       api.getUsers(token),
       api.getAdmins(token),
+      api.getSettings(),
     ]);
+    setPaymentGuide(pub.payment_guide ?? '');
     setSettlement(s);
     setPlans(p);
     setUsers(u);
@@ -162,6 +165,15 @@ function AdminDashboard({
     if (tab !== 'free') return;
     loadFreeSchedule().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
   }, [tab, loadFreeSchedule, show]);
+
+  const savePaymentGuide = async () => {
+    try {
+      const res = await api.updatePaymentGuide(token, paymentGuide);
+      show(res.message, 'success');
+    } catch (e) {
+      show(e instanceof ApiError ? e.message : '저장 실패', 'error');
+    }
+  };
 
   const savePlanPrice = async (planId: number, price: number) => {
     try {
@@ -202,6 +214,23 @@ function AdminDashboard({
 
       {tab === 'settlement' && settlement && (
         <div className="space-y-5">
+          <section className="card p-5">
+            <h2 className="font-semibold text-ink mb-1">입금 안내 문구</h2>
+            <p className="text-xs text-ink-faint mb-3">
+              회원의 시작 가이드·입금 대기 화면·이용 안내에 표시됩니다. (계좌, 입금자명 규칙 등)
+            </p>
+            <textarea
+              className="input min-h-[88px]"
+              maxLength={1000}
+              value={paymentGuide}
+              onChange={(e) => setPaymentGuide(e.target.value)}
+              placeholder="예) 토스뱅크 1000-0000-0000 (홍길동) · 입금자명은 가입한 이름으로 해주세요."
+            />
+            <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm mt-3" onClick={savePaymentGuide}>
+              저장
+            </button>
+          </section>
+
           <section className="card p-5">
             <h2 className="font-semibold text-ink mb-4">요금제 가격</h2>
             <div className="space-y-3">
@@ -351,7 +380,7 @@ function AdminDashboard({
                     <tr key={item.id} className="border-b border-line/50">
                       <td className="py-3">
                         <div className="font-medium text-ink">{item.name || item.username}</div>
-                        <div className="text-xs text-ink-faint">{item.phone || item.username}</div>
+                        <div className="text-xs text-ink-faint">{item.phone ? formatPhone(item.phone) : item.username}</div>
                       </td>
                       <td className="text-ink-muted">{item.plan_name}</td>
                       <td className="tabular-nums">{formatPrice(item.amount)}</td>
@@ -697,10 +726,10 @@ function AdminDashboard({
               {users.map((u) => (
                 <tr key={u.username} className="border-b border-line/50">
                   <td className="py-3 font-medium">{u.name || '-'}</td>
-                  <td className="text-ink-muted">{u.phone || '-'}</td>
+                  <td className="text-ink-muted">{u.phone ? formatPhone(u.phone) : '-'}</td>
                   <td className="text-ink-muted">{u.username}</td>
                   <td>
-                    {u.allowed_hours ? `${u.allowed_hours}h` : '-'}
+                    {u.allowed_hours ? `${u.allowed_hours}h` : u.subscription_status ? '자유전용' : '-'}
                     {u.custom_allowed_hours != null && (
                       <span className="text-xs text-amber-700 ml-1">개별</span>
                     )}
@@ -859,8 +888,8 @@ function EditUserModal({
   onSaved: () => void;
   onError: (m: string) => void;
 }) {
-  const hourOptions = [...new Set(plans.map((p) => p.allowed_hours))].sort((a, b) => a - b);
-  const fallbackHours = hourOptions[0] ?? 4;
+  const hourOptions = [0, ...new Set(plans.map((p) => p.allowed_hours))].sort((a, b) => a - b);
+  const fallbackHours = hourOptions.find((h) => h > 0) ?? 4;
 
   const initialPlanId = user.plan_id ?? plans.find((p) => p.allowed_hours === user.plan_allowed_hours)?.id ?? plans[0]?.id;
   const usesCustomHours = user.custom_allowed_hours != null;
@@ -872,16 +901,21 @@ function EditUserModal({
   );
   const [freeAccess, setFreeAccess] = useState(user.free_access ?? user.role === 'free');
   const [customFee, setCustomFee] = useState(
-    user.monthly_price != null ? String(user.monthly_price) : '',
+    user.custom_monthly_fee != null ? String(user.custom_monthly_fee) : '',
   );
-  const [useCustomFee, setUseCustomFee] = useState(user.monthly_price != null && user.monthly_price > 0);
+  const [useCustomFee, setUseCustomFee] = useState(user.custom_monthly_fee != null);
 
   const selectedPlan = plans.find((p) => p.id === planId);
 
   const save = async () => {
     try {
+      if (useCustomFee && (customFee === '' || Number(customFee) < 0)) {
+        onError('커스텀 월 비용을 0원 이상으로 입력해주세요.');
+        return;
+      }
+      const freeOnly = useCustomHours && allowedHours === 0;
       const body: Record<string, unknown> = {
-        free_access: freeAccess,
+        free_access: freeOnly ? true : freeAccess,
         clear_custom_fee: !useCustomFee,
         ...(useCustomFee && customFee !== '' ? { custom_monthly_fee: Number(customFee) } : {}),
       };
@@ -938,7 +972,8 @@ function EditUserModal({
               <span className="font-medium">월 예약 시간 개별 설정</span>
             </label>
             {useCustomHours ? (
-              <div className="grid grid-cols-3 gap-2">
+              <>
+              <div className="grid grid-cols-4 gap-2">
                 {hourOptions.map((h) => (
                   <button
                     key={h}
@@ -950,10 +985,28 @@ function EditUserModal({
                     }`}
                     onClick={() => setAllowedHours(h)}
                   >
-                    {h}h
+                    {h === 0 ? '없음' : `${h}h`}
                   </button>
                 ))}
               </div>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs text-ink-faint">직접 입력</span>
+                <input
+                  className="input !py-2 max-w-[88px]"
+                  type="number"
+                  min={0}
+                  max={24}
+                  value={allowedHours}
+                  onChange={(e) => setAllowedHours(Math.max(0, Math.min(24, Number(e.target.value) || 0)))}
+                />
+                <span className="text-xs text-ink-faint">시간/주</span>
+              </div>
+              {allowedHours === 0 && (
+                <p className="text-xs text-amber-800 mt-2">
+                  월 예약 없이 자유이용만 사용하는 계정이에요. 자유이용 권한이 자동으로 켜집니다.
+                </p>
+              )}
+              </>
             ) : (
               <p className="text-sm text-ink-muted rounded-2xl border border-line px-4 py-3">
                 요금제 기본 · 주 {selectedPlan?.allowed_hours ?? user.allowed_hours}시간

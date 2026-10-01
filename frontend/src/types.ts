@@ -65,6 +65,7 @@ export interface UserInfo {
   plan_name?: string;
   subscription_status?: string;
   monthly_price?: number;
+  custom_monthly_fee?: number | null;
   free_access?: boolean;
 }
 
