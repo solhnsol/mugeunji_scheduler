@@ -7,6 +7,11 @@ export class ApiError extends Error {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => ({}));
+  if (response.status === 401 && !/\/(admin\/)?login$/.test(response.url)) {
+    // 토큰 만료/무효: 저장된 세션을 비우고 로그인 화면으로 돌려보낸다.
+    ['accessToken', 'adminAccessToken'].forEach((k) => sessionStorage.removeItem(k));
+    window.location.reload();
+  }
   if (!response.ok) {
     const detail = (data as { detail?: string | { msg?: string }[] }).detail;
     const message = Array.isArray(detail)

@@ -173,17 +173,17 @@ class UpdateAutomationRequest(BaseModel):
 
 
 class ReservationItem(BaseModel):
-    day: str
-    time_index: int
+    day: Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    time_index: int = Field(..., ge=0, le=23)
 
 
 class ReservationList(BaseModel):
-    reservations: List[ReservationItem]
+    reservations: List[ReservationItem] = Field(..., min_length=1, max_length=200)
 
 
 class ForceReservationRequest(BaseModel):
-    target_username: str
-    reservations: List[ReservationItem]
+    target_username: str = Field(..., min_length=1)
+    reservations: List[ReservationItem] = Field(..., min_length=1, max_length=200)
     reservation_type: Literal["monthly", "free"] = "monthly"
 
 
@@ -214,25 +214,31 @@ class SettingsResponse(BaseModel):
     schedule_message: Optional[str] = None
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="인증이 필요합니다.",
+        detail="인증이 필요합니다. 다시 로그인해주세요.",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        role: str = payload.get("role")
         if username is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    return {"username": username, "role": role}
+    # 역할은 토큰이 아닌 DB 기준 (관리자가 권한을 바꾸거나 계정이 삭제된 경우 즉시 반영)
+    async with conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
+        row = await cursor.fetchone()
+    if row is None:
+        raise credentials_exception
+    return {"username": username, "role": row["role"]}
 
 
-async def get_current_admin_user(token: str = Depends(oauth2_scheme)):
-    user = await get_current_user(token)
+async def get_current_admin_user(user: dict = Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 권한이 필요합니다.")
     return user
@@ -362,7 +368,7 @@ async def revoke_plan_cancellation(
 @app.post("/login")
 async def login_user(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_db_conn)):
     auth_manager = AuthManager(conn)
-    user_data = await auth_manager.login(data.username, data.password)
+    user_data = await auth_manager.login(data.username.strip(), data.password)
     if not user_data:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
     access_token_data = {"sub": user_data["username"], "role": user_data["role"]}
@@ -381,7 +387,7 @@ async def login_user(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_d
 @app.post("/admin/login")
 async def admin_login(data: LoginInfo, conn: aiosqlite.Connection = Depends(get_db_conn)):
     auth_manager = AuthManager(conn)
-    user_data = await auth_manager.login(data.username, data.password)
+    user_data = await auth_manager.login(data.username.strip(), data.password)
     if not user_data or user_data["role"] != "admin":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="관리자 인증에 실패했습니다.")
     access_token = create_access_token(data={"sub": user_data["username"], "role": user_data["role"]})
@@ -400,12 +406,11 @@ async def get_public_settings(conn: aiosqlite.Connection = Depends(get_db_conn))
 @app.post("/reserve")
 async def reserve_time(
     data: ReservationList,
-    token: str = Depends(oauth2_scheme),
+    current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     reserve_manager = ReservationManager(conn)
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    username = payload.get("sub")
+    username = current_user["username"]
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     is_success, message = await reserve_manager.create_reservation(username, reserve_times_list)
     if is_success:
@@ -417,12 +422,11 @@ async def reserve_time(
 @app.post("/free/reserve")
 async def reserve_free_time(
     data: ReservationList,
-    token: str = Depends(oauth2_scheme),
+    current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     reserve_manager = ReservationManager(conn)
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    username = payload.get("sub")
+    username = current_user["username"]
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     is_success, message = await reserve_manager.create_free_reservation(username, reserve_times_list)
     if is_success:

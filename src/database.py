@@ -9,6 +9,7 @@ from src.legacy_migration import run_legacy_migration
 
 async def init_db(db_path: str = "data/reservation.db"):
     load_dotenv()
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     conn = await aiosqlite.connect(db_path)
     conn.row_factory = aiosqlite.Row
     await setup_database(conn)
@@ -119,8 +120,6 @@ async def setup_database(conn: aiosqlite.Connection):
             FOREIGN KEY (plan_id) REFERENCES plans(id)
         );
     """)
-    await _migrate_subscriptions_table(conn)
-
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS billing_cycles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -138,6 +137,8 @@ async def setup_database(conn: aiosqlite.Connection):
             FOREIGN KEY (plan_id) REFERENCES plans(id)
         );
     """)
+
+    await _migrate_subscriptions_table(conn)
 
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS plan_change_requests (
