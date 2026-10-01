@@ -35,6 +35,7 @@ export interface MeResponse {
   can_access_current_month?: boolean;
   can_view_schedule?: boolean;
   profile_complete?: boolean;
+  must_change_password?: boolean;
   message: string;
   subscription?: Subscription | null;
   billing?: Billing | null;

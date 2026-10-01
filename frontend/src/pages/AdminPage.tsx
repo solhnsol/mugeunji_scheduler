@@ -4,6 +4,7 @@ import { api, ApiError } from '../api';
 import { SESSION } from '../api';
 import { AppShell, Toast } from '../components/ui';
 import { useConfirm } from '../components/ConfirmDialog';
+import { TempPasswordDialog } from '../components/TempPasswordDialog';
 import { useToast } from '../hooks/useToast';
 import { useSession } from '../hooks/useSession';
 import { AdminReservationGrid } from '../components/AdminReservationGrid';
@@ -585,6 +586,7 @@ function AdminDashboard({
           token={token}
           onClose={() => setEditUser(null)}
           onSaved={async () => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show('저장됨', 'success'); }}
+          onDeleted={async (message) => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show(message, 'success'); }}
           onError={(m) => show(m, 'error')}
         />
       )}
@@ -701,6 +703,7 @@ function EditUserModal({
   token,
   onClose,
   onSaved,
+  onDeleted,
   onError,
 }: {
   user: UserInfo;
@@ -708,8 +711,15 @@ function EditUserModal({
   token: string;
   onClose: () => void;
   onSaved: () => void;
+  onDeleted: (message: string) => void;
   onError: (m: string) => void;
 }) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  const [name, setName] = useState(user.name ?? '');
+  const [phone, setPhone] = useState(user.phone ? formatPhone(user.phone) : '');
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+
   const hourOptions = [0, ...new Set(plans.map((p) => p.allowed_hours))].sort((a, b) => a - b);
   const fallbackHours = hourOptions.find((h) => h > 0) ?? 4;
 
@@ -729,11 +739,66 @@ function EditUserModal({
 
   const selectedPlan = plans.find((p) => p.id === planId);
 
+  const resetPassword = async () => {
+    const ok = await confirm({
+      title: `${user.name || user.username}님의 비밀번호를 초기화할까요?`,
+      message:
+        '임시 비밀번호가 발급되고 기존 비밀번호는 바로 사용할 수 없게 돼요. 로그인 중인 기기도 로그아웃돼요. 회원이 임시 비밀번호로 로그인하면 새 비밀번호를 정하게 돼요.',
+      confirmLabel: '초기화',
+      danger: true,
+    });
+    if (!ok || accountBusy) return;
+    setAccountBusy(true);
+    try {
+      const res = await api.resetUserPassword(token, user.username);
+      setTempPassword(res.temp_password);
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : '초기화 실패');
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
+  const removeUser = async () => {
+    if (accountBusy) return;
+    setAccountBusy(true);
+    try {
+      const pv = await api.getUserDeletePreview(token, user.username);
+      const parts = [
+        `예약 ${pv.reservations}건`,
+        `청구 ${pv.billing}건${pv.billing_paid ? ` (입금 완료 ${pv.billing_paid}건 포함)` : ''}`,
+      ];
+      const ok = await confirm({
+        title: `${user.name || user.username}님을 삭제할까요?`,
+        message: `계정과 함께 ${parts.join(', ')}과(와) 요금제 기록이 모두 삭제되고 되돌릴 수 없어요.${
+          pv.billing_paid ? '\n이미 입금 확인된 청구도 사라져 정산 합계에서 빠져요.' : ''
+        }`,
+        confirmLabel: '삭제',
+        danger: true,
+      });
+      if (!ok) return;
+      const res = await api.deleteUser(token, user.username);
+      onDeleted(res.message);
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : '삭제 실패');
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
   const save = async () => {
     try {
       if (useCustomFee && (customFee === '' || Number(customFee) < 0)) {
         onError('커스텀 월 비용을 0원 이상으로 입력해주세요.');
         return;
+      }
+      const profileBody: { name?: string; phone?: string } = {};
+      if (name.trim() !== (user.name ?? '')) profileBody.name = name.trim();
+      if (phone.replace(/\D/g, '') !== (user.phone ?? '').replace(/\D/g, '')) {
+        profileBody.phone = phone.replace(/\D/g, '');
+      }
+      if (Object.keys(profileBody).length) {
+        await api.updateUserProfile(token, user.username, profileBody);
       }
       const freeOnly = useCustomHours && allowedHours === 0;
       const body: Record<string, unknown> = {
@@ -761,6 +826,23 @@ function EditUserModal({
         <h3 className="font-semibold text-lg text-ink">{user.name || user.username}</h3>
         <p className="text-xs text-ink-faint mb-5">@{user.username}</p>
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="edit-name">이름</label>
+              <input id="edit-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div>
+              <label className="label" htmlFor="edit-phone">전화번호</label>
+              <input
+                id="edit-phone"
+                className="input"
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(formatPhone(e.target.value))}
+                placeholder="010-1234-5678"
+              />
+            </div>
+          </div>
           <div>
             <label className="label" htmlFor="edit-plan">요금제</label>
             <select
@@ -865,7 +947,36 @@ function EditUserModal({
           <button type="button" className="btn-primary flex-1" onClick={save}>저장</button>
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>취소</button>
         </div>
+        <div className="mt-6 pt-4 border-t border-line">
+          <p className="text-xs font-medium text-ink-faint mb-2">계정 관리</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn-secondary flex-1 !text-sm disabled:opacity-50"
+              disabled={accountBusy}
+              onClick={resetPassword}
+            >
+              비밀번호 초기화
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-full border border-[#e8c4c4] text-[#8b4040] text-sm min-h-[48px] hover:bg-[#fdf5f5] disabled:opacity-50"
+              disabled={accountBusy}
+              onClick={removeUser}
+            >
+              회원 삭제
+            </button>
+          </div>
+        </div>
       </div>
+      {confirmDialog}
+      {tempPassword && (
+        <TempPasswordDialog
+          user={user}
+          password={tempPassword}
+          onClose={() => setTempPassword(null)}
+        />
+      )}
     </div>
   );
 }

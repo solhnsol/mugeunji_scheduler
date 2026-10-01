@@ -4,7 +4,7 @@ import { api } from '../api';
 export type Session =
   | { status: 'loading' }
   | { status: 'anon' }
-  | { status: 'authed'; username: string; role: string };
+  | { status: 'authed'; username: string; role: string; mustChangePassword: boolean };
 
 /** httpOnly 쿠키 세션 상태. 토큰은 JS에서 다루지 않고 /me 로 로그인 여부를 확인한다. */
 export function useSession() {

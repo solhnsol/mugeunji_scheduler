@@ -33,12 +33,20 @@ function authHeaders(token: string | null, json = true): HeadersInit {
 
 export const api = {
   /** 쿠키 세션 확인. 로그인되어 있지 않으면 null. */
-  async sessionInfo(): Promise<{ username: string; role: string } | null> {
+  async sessionInfo(): Promise<{ username: string; role: string; mustChangePassword: boolean } | null> {
     try {
       const res = await fetch('/me');
       if (!res.ok) return null;
-      const data = (await res.json()) as { username: string; role: string };
-      return { username: data.username, role: data.role };
+      const data = (await res.json()) as {
+        username: string;
+        role: string;
+        must_change_password?: boolean;
+      };
+      return {
+        username: data.username,
+        role: data.role,
+        mustChangePassword: !!data.must_change_password,
+      };
     } catch {
       return null;
     }
@@ -308,6 +316,48 @@ export const api = {
       method: 'PUT',
       headers: authHeaders(token),
       body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async updateUserProfile(
+    token: string,
+    username: string,
+    body: { name?: string; phone?: string },
+  ) {
+    const res = await fetch(`/admin/users/${encodeURIComponent(username)}/profile`, {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async resetUserPassword(token: string, username: string) {
+    const res = await fetch(`/admin/users/${encodeURIComponent(username)}/reset-password`, {
+      method: 'POST',
+      headers: authHeaders(token),
+    });
+    return parseResponse<{ message: string; temp_password: string }>(res);
+  },
+
+  async getUserDeletePreview(token: string, username: string) {
+    const res = await fetch(`/admin/users/${encodeURIComponent(username)}/delete-preview`, {
+      headers: authHeaders(token),
+    });
+    return parseResponse<{
+      username: string;
+      name?: string | null;
+      reservations: number;
+      billing: number;
+      billing_paid: number;
+    }>(res);
+  },
+
+  async deleteUser(token: string, username: string) {
+    const res = await fetch(`/admin/users/${encodeURIComponent(username)}`, {
+      method: 'DELETE',
+      headers: authHeaders(token),
     });
     return parseResponse<{ message: string }>(res);
   },

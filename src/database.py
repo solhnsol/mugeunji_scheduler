@@ -29,6 +29,10 @@ async def _migrate_users_table(conn: aiosqlite.Connection):
         ("custom_allowed_hours", "INTEGER"),
         ("custom_monthly_fee", "INTEGER"),
         ("created_at", "TEXT"),
+        # 관리자가 임시 비밀번호를 발급하면 1 — 로그인 후 새 비밀번호를 설정할 때까지 다른 기능을 막는다
+        ("must_change_password", "INTEGER NOT NULL DEFAULT 0"),
+        # 비밀번호가 바뀌면 올려서 이전에 발급된 로그인 토큰을 무효화한다
+        ("session_epoch", "INTEGER NOT NULL DEFAULT 0"),
     ]
     for name, col_type in columns:
         if not await _column_exists(conn, table="users", column=name):
