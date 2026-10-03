@@ -1154,6 +1154,10 @@ def _spa_index():
 if os.path.isdir("static/dist/assets"):
     app.mount("/assets", StaticFiles(directory="static/dist/assets"), name="assets")
 
+# 랜딩 페이지 사진 (frontend/public/landing/ 에 넣은 파일)
+if os.path.isdir("static/dist/landing"):
+    app.mount("/landing", StaticFiles(directory="static/dist/landing"), name="landing")
+
 
 @app.get("/")
 async def read_index():
@@ -1172,6 +1176,16 @@ async def read_free_index():
 
 @app.get("/register")
 async def read_register_index():
+    return _spa_index()
+
+
+@app.get("/login")
+async def read_login_index():
+    return _spa_index()
+
+
+@app.get("/about")
+async def read_about_index():
     return _spa_index()
 
 
