@@ -7,7 +7,9 @@ import {
   CONTACT_URL,
   EQUIPMENT,
   EQUIPMENT_FOOTNOTE,
+  EQUIPMENT_TOTAL,
   FAQ,
+  formatReferencePrice,
   HERO,
   HIGHLIGHTS,
   MAP_URL,
@@ -53,6 +55,24 @@ function Section({
   );
 }
 
+function CopyAddressButton({ address }: { address: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* 복사 권한이 없으면 화면의 주소를 직접 복사하도록 둔다 */
+    }
+  };
+  return (
+    <button type="button" className="btn-secondary !w-auto shrink-0" onClick={copy}>
+      {copied ? '복사됨' : '주소 복사'}
+    </button>
+  );
+}
+
 function PlansSection() {
   const [plans, setPlans] = useState<Plan[] | null>(null);
 
@@ -90,8 +110,6 @@ function PlansSection() {
 }
 
 export default function Landing({ authed = false }: { authed?: boolean }) {
-  const hasPrices = EQUIPMENT.some((item) => item.referencePrice);
-
   return (
     <div className="min-h-dvh flex flex-col">
       <header className="sticky top-0 z-20 bg-cream/90 backdrop-blur-md border-b border-line/60">
@@ -168,39 +186,62 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
           ))}
         </div>
 
-        <Section id="equipment" title="장비" subtitle="작업에 필요한 장비를 갖춰두었어요.">
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {EQUIPMENT.map((item) => (
-              <li key={item.name} className="card overflow-hidden">
-                {item.image && (
-                  <img src={item.image} alt={item.name} loading="lazy" className="w-full h-40 object-cover" />
-                )}
-                <div className="p-4">
+        <Section
+          id="equipment"
+          title="장비"
+          subtitle={`작업에 필요한 장비를 갖춰두었어요. 신품가 합계로 약 ${(Math.round(EQUIPMENT_TOTAL / 100000) * 10).toLocaleString('ko-KR')}만원어치예요 (모니터 제외).`}
+        >
+          <ul className="grid grid-cols-2 gap-3">
+            {EQUIPMENT.filter((item) => item.image).map((item) => (
+              <li key={item.name} className="card overflow-hidden flex flex-col">
+                <img
+                  src={item.image}
+                  alt={item.name}
+                  loading="lazy"
+                  className="w-full aspect-[4/3] object-contain bg-white p-2"
+                />
+                <div className="p-3 sm:p-4 border-t border-line/60 flex-1">
                   <p className="text-xs font-medium text-sage">{item.category}</p>
-                  <p className="font-semibold text-ink mt-0.5">{item.name}</p>
-                  {item.note && <p className="text-sm text-ink-muted mt-1">{item.note}</p>}
-                  {item.referencePrice && (
-                    <p className="text-xs text-ink-faint mt-2">신품 {item.referencePrice}</p>
+                  <p className="text-sm sm:text-base font-semibold text-ink mt-0.5 leading-snug">{item.name}</p>
+                  {item.note && <p className="text-xs sm:text-sm text-ink-muted mt-0.5">{item.note}</p>}
+                  {item.price != null && (
+                    <p className="text-xs text-ink-faint mt-2">
+                      신품 {formatReferencePrice(item.price, item.priceSuffix)}
+                    </p>
                   )}
                 </div>
               </li>
             ))}
           </ul>
-          <p className="text-xs text-ink-faint mt-3">
-            {hasPrices && '※ 가격은 신품 기준 대략적인 값이에요. '}
-            {EQUIPMENT_FOOTNOTE}
-          </p>
+          <ul className="card divide-y divide-line/60 mt-3">
+            {EQUIPMENT.filter((item) => !item.image).map((item) => (
+              <li key={item.name} className="px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-sage">{item.category}</p>
+                  <p className="text-sm font-semibold text-ink">{item.name}</p>
+                </div>
+                {item.price != null && (
+                  <p className="text-xs text-ink-faint shrink-0">
+                    신품 {formatReferencePrice(item.price, item.priceSuffix)}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-ink-faint mt-3">{EQUIPMENT_FOOTNOTE}</p>
         </Section>
 
         <Section id="location" title="위치" subtitle="신촌역과 연세대 정문에서 도보 3분 거리예요.">
-          <div className="card p-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-semibold text-ink">{SITE_NAME}</p>
-              <p className="text-sm text-ink-muted mt-0.5">{ADDRESS || '신촌역 · 연세대 정문 도보 3분'}</p>
+          <div className="card p-5">
+            <p className="font-semibold text-ink">{SITE_NAME}</p>
+            <p className="text-sm text-ink-muted mt-0.5">{ADDRESS}</p>
+            <p className="text-xs text-ink-faint mt-0.5">신촌역 · 연세대 정문 도보 3분</p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <ExternalLink href={MAP_URL} className="btn-secondary !w-auto">
+                네이버 지도에서 보기
+              </ExternalLink>
+              <CopyAddressButton address={ADDRESS} />
             </div>
-            <ExternalLink href={MAP_URL} className="btn-secondary !w-auto shrink-0">
-              네이버 지도에서 보기
-            </ExternalLink>
           </div>
         </Section>
 

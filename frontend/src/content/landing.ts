@@ -11,8 +11,8 @@ export const MAP_URL = 'https://naver.me/xNp5p5mu';
 /** 문의용 카카오톡 오픈채팅 */
 export const CONTACT_URL = 'https://open.kakao.com/o/sYomAFQi';
 
-/** 주소 (정해지면 채운다. 비워두면 화면에 표시하지 않는다) */
-export const ADDRESS = '';
+/** 주소 */
+export const ADDRESS = '서울 서대문구 연세로7길 46 지하 1층 7번 방';
 
 export const HERO = {
   eyebrow: '신촌역 · 연세대 정문 도보 3분',
@@ -31,24 +31,63 @@ export type Equipment = {
   category: string;
   name: string;
   note?: string;
-  /** 신품 기준 대략적인 가격 (확인된 것만 적는다. 예: '약 30만원대') */
-  referencePrice?: string;
-  /** public/landing/ 아래에 넣은 사진 파일 경로 (예: '/landing/mic.jpg') */
+  /** 신품 기준 가격(원). 확인된 것만 적는다 */
+  price?: number;
+  /** 가격 뒤에 붙는 말 (예: '부터', ' (페어)') */
+  priceSuffix?: string;
+  /** public/landing/ 아래에 넣은 사진 파일 경로 (예: '/landing/mic.webp') */
   image?: string;
 };
 
 export const EQUIPMENT: Equipment[] = [
-  { category: '컴퓨터', name: 'Mac mini M4' },
-  { category: '마이크', name: 'Neumann TLM 102' },
-  { category: '오디오 인터페이스', name: 'Universal Audio Apollo Twin X DUO Gen 2' },
-  { category: '모니터 스피커', name: 'Kali Audio IN-8 Gen 2' },
-  { category: '헤드폰', name: 'Sony MDR-7506' },
+  {
+    category: '컴퓨터',
+    name: 'Mac mini M4',
+    price: 890000,
+    priceSuffix: '부터',
+    image: '/landing/mac-mini-m4.webp',
+  },
+  {
+    category: '마이크',
+    name: 'Neumann TLM 102',
+    price: 1040000,
+    image: '/landing/neumann-tlm102.webp',
+  },
+  {
+    category: '오디오 인터페이스',
+    name: 'Universal Audio Apollo Twin X DUO Gen 2',
+    price: 1690000,
+    image: '/landing/apollo-twin-x.webp',
+  },
+  {
+    category: '모니터 스피커',
+    name: 'Kali Audio IN-8 Gen 2',
+    note: '스테레오 페어',
+    price: 1598000,
+    priceSuffix: ' (페어)',
+    image: '/landing/kali-in8.webp',
+  },
+  {
+    category: '헤드폰',
+    name: 'Sony MDR-7506',
+    price: 129000,
+    image: '/landing/sony-mdr7506.webp',
+  },
   { category: '모니터', name: '32인치 모니터' },
-  { category: '의자', name: '시디즈 T40', referencePrice: '약 30만원대' },
-  { category: '소프트웨어', name: 'Logic Pro 정품' },
+  { category: '의자', name: '시디즈 T40', price: 319000 },
+  { category: '소프트웨어', name: 'Logic Pro 정품', price: 349000 },
 ];
 
-export const EQUIPMENT_FOOTNOTE = '그 외 장비와 자세한 구성은 오픈채팅으로 문의해주세요.';
+/** 신품가를 만원 단위로 반올림해 보여준다. 예: 890000 → '약 89만원' */
+export function formatReferencePrice(price: number, suffix = ''): string {
+  return `약 ${Math.round(price / 10000).toLocaleString('ko-KR')}만원${suffix}`;
+}
+
+/** 가격이 확인된 장비의 신품가 합계 */
+export const EQUIPMENT_TOTAL = EQUIPMENT.reduce((sum, item) => sum + (item.price ?? 0), 0);
+
+export const EQUIPMENT_FOOTNOTE =
+  '※ 가격은 신품(출시가·판매가) 기준 대략적인 값이에요. 그 외 장비와 자세한 구성은 오픈채팅으로 문의해주세요.';
 
 export const STEPS = [
   { title: '회원가입', body: '이름·전화번호·아이디를 입력해 가입해요.' },
