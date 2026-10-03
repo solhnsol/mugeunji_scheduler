@@ -1,5 +1,3 @@
-import { formatPrice } from '../utils';
-
 export function MonthlyPlanHero({
   planName,
   allowedHours,
@@ -22,12 +20,16 @@ export function MonthlyPlanHero({
   if (pendingBilling) {
     return (
       <div className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50 via-white to-white p-6 sm:p-8">
-        <p className="text-sm font-medium text-amber-800/80">입금 확인 중</p>
-        <p className="text-4xl sm:text-5xl font-bold text-ink mt-3 tabular-nums tracking-tight">
-          {formatPrice(pendingBilling.amount)}
+        <p className="text-sm font-medium text-amber-800/80">관리자 확인 중</p>
+        <p className="text-2xl sm:text-3xl font-bold text-ink mt-3 leading-snug">
+          확인 후 요금을 안내드릴게요
         </p>
         <p className="text-sm text-ink-muted mt-2">
           {pendingBilling.period} · {planName}
+        </p>
+        <p className="text-sm text-amber-900/90 mt-4 leading-relaxed">
+          신청 내용을 관리자가 확인한 뒤 등록하신 연락처로 요금을 안내드려요. 조금만 기다려 주세요.
+          안내받은 금액을 입금하면 관리자가 확인하고, 그다음부터 시간표를 이용할 수 있어요.
         </p>
         {notice && <p className="text-sm text-amber-900/80 mt-4 leading-relaxed">{notice}</p>}
         {paymentGuide && (

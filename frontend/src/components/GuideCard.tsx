@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { MeResponse } from '../types';
-import { formatPrice } from '../utils';
 
 type Step = {
   id: string;
@@ -31,14 +30,13 @@ export function buildSteps(
     me.billing?.status === 'paid'
   );
   const freeOnly = isFreeOnly(me);
-  const amount = me.billing ? formatPrice(me.billing.amount) : '';
 
   return [
     {
       id: 'profile',
       title: '내 정보 등록',
       done: me.role === 'admin' || !!me.profile_complete,
-      hint: '이름과 전화번호를 등록하면 입금 확인과 안내를 받을 수 있어요.',
+      hint: '이름과 전화번호를 등록해주세요. 관리자가 확인한 뒤 이 연락처로 안내드려요.',
       action: { label: '정보 입력', onClick: opts.onProfile },
     },
     {
@@ -49,13 +47,13 @@ export function buildSteps(
     },
     {
       id: 'pay',
-      title: '요금 입금',
+      title: '요금 안내 · 입금',
       done: paid,
       hint:
-        (opts.paymentGuide ? `${opts.paymentGuide}\n` : '') +
-        (amount
-          ? `${me.billing?.period} 이용 요금 ${amount}을 입금하면 관리자가 확인한 뒤 시간표가 열려요. (확인까지 시간이 걸릴 수 있어요)`
-          : '요금제 신청 후 안내되는 금액을 입금하면 관리자가 확인한 뒤 시간표가 열려요.'),
+        (hasPlan
+          ? '관리자가 확인한 뒤 연락처로 요금을 안내드려요. 조금만 기다려 주세요.'
+          : '요금제를 신청하면 관리자가 확인한 뒤 연락처로 요금을 안내드려요. 안내받은 금액을 입금하면 시간표가 열려요.') +
+        (opts.paymentGuide ? `\n${opts.paymentGuide}` : ''),
     },
     freeOnly
       ? {
@@ -137,13 +135,13 @@ export function GuideCard({ steps }: { steps: Step[] }) {
 const GUIDE_ITEMS = (paymentGuide?: string | null) => [
   {
     q: '처음 이용하려면?',
-    a: '내 정보 등록 → 요금제 신청 → 요금 입금 → 시간표 신청 순서예요. 홈 화면의 "시작 가이드"에서 지금 할 일을 확인할 수 있어요.',
+    a: '내 정보 등록 → 요금제 신청 → 관리자 확인 후 요금 안내 → 입금 → 시간표 신청 순서예요. 홈 화면의 "시작 가이드"에서 지금 할 일을 확인할 수 있어요.',
   },
   {
-    q: '입금은 어떻게 하나요?',
+    q: '요금은 어떻게 안내받나요?',
     a:
-      paymentGuide ||
-      '요금제 신청 후 안내된 금액을 입금하세요. 관리자가 입금을 확인하면 시간표를 이용할 수 있어요. 입금 방법은 관리자에게 문의해주세요.',
+      '요금제를 신청하면 관리자가 확인한 뒤 등록하신 연락처로 요금과 입금 방법을 안내드려요. 조금만 기다려 주세요. 안내받은 금액을 입금하면 관리자가 확인하고, 그다음부터 시간표를 이용할 수 있어요.' +
+      (paymentGuide ? `\n${paymentGuide}` : ''),
   },
   {
     q: '시간표는 언제 열리나요?',

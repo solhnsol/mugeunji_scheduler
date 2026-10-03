@@ -270,9 +270,9 @@ class MembershipManager:
             else:
                 message = f"{next_period} 이용 요금이 확인되었습니다."
         elif display_billing and display_billing["status"] == "pending":
-            message = f"{display_billing['period']} 이용 요금 입금 확인 후 시간표를 이용할 수 있습니다."
+            message = f"입금이 확인되면 {display_billing['period']} 시간표를 이용할 수 있습니다."
         elif not can_access_schedule:
-            message = f"{start_period} 이용 요금 입금 확인 후 시간표를 이용할 수 있습니다."
+            message = f"입금이 확인되면 {start_period} 시간표를 이용할 수 있습니다."
         else:
             message = "이용 가능"
 
@@ -388,7 +388,7 @@ class MembershipManager:
             await self.conn.commit()
             return True, (
                 f"{start_period} 요금제 신청이 완료되었습니다. "
-                "입금 확인 후 이용 가능합니다."
+                "관리자가 확인한 뒤 연락처로 요금을 안내드릴게요. 조금만 기다려 주세요."
             )
         except Exception as e:
             await self.conn.rollback()
