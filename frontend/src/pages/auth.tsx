@@ -113,6 +113,7 @@ export default function LoginPage({
         <ForgotPassword />
         <div className="mt-4 flex justify-center gap-4 text-sm">
           <Link to="/register" className="text-sage font-medium hover:underline">회원가입</Link>
+          <Link to="/about" className="text-ink-muted hover:text-sage">작업실 소개</Link>
           <Link to="/admin" className="text-ink-faint hover:text-ink-muted">관리자</Link>
         </div>
       </div>
@@ -146,7 +147,7 @@ export function RegisterPage() {
         phone: phone.replace(/\D/g, ''),
       });
       showToast(data.message, 'success');
-      setTimeout(() => { window.location.href = '/'; }, 1200);
+      setTimeout(() => { window.location.href = '/login'; }, 1200);
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : '가입 실패', 'error');
       setBusy(false);
@@ -220,7 +221,7 @@ export function RegisterPage() {
           톡방에서 &apos;정한솔&apos;에게 연락해주세요.
         </p>
         <p className="text-center">
-          <Link to="/" className="text-sm text-ink-faint hover:text-sage">로그인</Link>
+          <Link to="/login" className="text-sm text-ink-faint hover:text-sage">로그인</Link>
         </p>
       </form>
       <Toast message={toast.message} type={toast.type} />
