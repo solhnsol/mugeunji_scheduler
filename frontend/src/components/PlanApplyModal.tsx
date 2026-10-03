@@ -73,6 +73,10 @@ export function PlanApplyModal({
           </label>
         </div>
 
+        <p className="mt-4 text-xs text-ink-muted bg-cream-dark/60 rounded-2xl px-4 py-3 leading-relaxed">
+          신청하면 관리자가 확인한 뒤 등록하신 연락처로 요금을 안내드려요. 조금만 기다려 주세요.
+        </p>
+
         <div className="flex gap-2 mt-6">
           <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>
             {busy ? '신청 중…' : '신청하기'}

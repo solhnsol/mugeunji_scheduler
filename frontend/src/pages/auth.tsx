@@ -210,7 +210,8 @@ export function RegisterPage() {
           <p className="font-medium text-ink mb-1">가입 후 이렇게 진행돼요</p>
           <ol className="list-decimal pl-4 space-y-0.5">
             <li>로그인 후 요금제를 선택해 신청</li>
-            <li>안내된 금액 입금 → 관리자가 확인</li>
+            <li>관리자가 확인한 뒤 연락처로 요금을 안내드려요 (조금만 기다려 주세요)</li>
+            <li>안내받은 금액 입금 → 관리자가 확인</li>
             <li>시간표가 열리면 원하는 시간 신청</li>
           </ol>
         </div>
