@@ -16,6 +16,7 @@ const STATUS_LABEL: Record<TokenPurchase['status'], { text: string; cls: string 
 export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
   const [packs, setPacks] = useState<TokenPack[] | null>(null);
   const [mine, setMine] = useState<MyTokens | null>(null);
+  const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const { toast, show } = useToast();
@@ -26,6 +27,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
       const [p, m] = await Promise.all([api.getTokenPacks(SESSION), api.getMyTokens(SESSION)]);
       setPacks(p);
       setMine(m);
+      api.getSettings().then((st) => setPaymentGuide(st.payment_guide ?? null)).catch(() => undefined);
       setError('');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '불러오지 못했어요');
@@ -171,6 +173,13 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
           {mine.purchases.length > 0 && (
             <section>
               <h2 className="text-lg font-bold text-ink">충전 요청</h2>
+              {paymentGuide && mine.purchases.some((p) => p.status === 'pending') && (
+                <div className="card p-4 mt-3 border-sage/30 bg-sage-muted/30">
+                  <p className="text-sm font-semibold text-ink">입금 안내</p>
+                  <p className="text-sm text-ink-muted mt-1 leading-relaxed whitespace-pre-line">{paymentGuide}</p>
+                  <p className="text-xs text-ink-faint mt-2">관리자가 요청을 확인하고 연락드린 뒤 입금해주세요.</p>
+                </div>
+              )}
               <ul className="card divide-y divide-line/60 mt-3">
                 {mine.purchases.map((p) => {
                   const st = STATUS_LABEL[p.status];
