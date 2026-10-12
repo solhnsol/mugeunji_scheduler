@@ -81,10 +81,25 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     setCalendar(res.days);
   }, []);
 
+  // 주 단위 시간표 캐시: 이미 본(또는 미리 받아 둔) 주는 바로 보여주고 뒤에서 새로 받아 바꾼다. 실시간 변경이 오면 비운다.
+  const weekCache = useRef(new Map<string, GridDay[]>());
   const loadWeek = useCallback(async (dateISO: string) => {
     const start = startOfWeek(dateISO);
+    const cached = weekCache.current.get(start);
+    if (cached) setWeek({ start, days: cached });
     const res = await api.getBookingRange(SESSION, start, 7);
+    weekCache.current.set(start, res.days);
     setWeek({ start, days: res.days });
+    // 앞뒤 주를 미리 받아 두면 ‹ › 이동이 즉시 반응한다
+    for (const next of [addDays(start, -7), addDays(start, 7)]) {
+      if (weekCache.current.has(next)) continue;
+      api
+        .getBookingRange(SESSION, next, 7)
+        .then((r) => {
+          if (!weekCache.current.has(next)) weekCache.current.set(next, r.days);
+        })
+        .catch(() => undefined);
+    }
   }, []);
 
   const loadMine = useCallback(async () => {
@@ -93,6 +108,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
 
   const refresh = useCallback(async () => {
     const { month: m, selectedDate: d } = stateRef.current;
+    weekCache.current.clear();
     await Promise.all([
       loadConfig(),
       m ? loadCalendar(m) : Promise.resolve(),
