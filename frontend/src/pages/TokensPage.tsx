@@ -40,6 +40,8 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
 
   const requestPack = async (pack: TokenPack) => {
     if (busy) return;
+    const alreadyPending =
+      !pack.auto_confirm && !!mine?.purchases.some((p) => p.status === 'pending' && p.pack_id === pack.id);
     const ok = await confirm(
       pack.auto_confirm
         ? {
@@ -49,7 +51,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
           }
         : {
             title: `${pack.name} 충전을 요청할까요?`,
-            message: `${formatPrice(pack.price_won)} → ${formatTokens(pack.tokens)}토큰\n요청하면 관리자가 확인한 뒤 등록하신 연락처로 입금 안내를 드려요. 입금이 확인되면 토큰이 지급돼요.`,
+            message: `${alreadyPending ? '같은 상품의 충전 요청이 이미 확인 대기 중이에요. 한 번 더 요청할까요?\n\n' : ''}${formatPrice(pack.price_won)} → ${formatTokens(pack.tokens)}토큰\n요청하면 관리자가 확인한 뒤 등록하신 연락처로 입금 안내를 드려요. 입금이 확인되면 토큰이 지급돼요.`,
             confirmLabel: '충전 요청',
           },
     );
