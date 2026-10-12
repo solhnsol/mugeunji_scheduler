@@ -16,6 +16,7 @@ const BookingPage = lazy(() => import('./pages/BookingPage'));
 const TokensPage = lazy(() => import('./pages/TokensPage'));
 const NoticesPage = lazy(() => import('./pages/NoticesPage'));
 import { PageSkeleton } from './components/Skeleton';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const BRAND = '묵은지 작업실';
 const DEFAULT_TITLE = document.title;
@@ -130,6 +131,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <TitleManager />
+      <ErrorBoundary>
       <Suspense fallback={<Splash />}>
       <Routes>
         <Route path="/" element={<UserRoute />} />
@@ -145,6 +147,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }
