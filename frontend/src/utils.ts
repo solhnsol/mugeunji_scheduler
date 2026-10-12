@@ -38,10 +38,22 @@ export function formatDateTime(iso: string | null | undefined): string {
   return `${p.month}/${p.day} ${pad(p.hour)}:${pad(p.minute)}`;
 }
 
-/** 소멸 시각 → "12/31까지" (한국 시간, 소멸 시각 직전 날짜 기준). 없으면 빈 문자열 */
+/** 소멸 시각 → "12/31까지" 또는 "11/30 21:00까지" (한국 시간). 없으면 빈 문자열 */
 export function formatExpiry(iso: string | null | undefined): string {
   const p = kstParts(iso);
   if (!p) return '';
-  const last = new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - 60_000);
-  return `${last.getUTCMonth() + 1}/${last.getUTCDate()}까지`;
+  if (p.hour === 0 && p.minute === 0) {
+    // 자정에 끝나는 기한은 직전 날짜까지 쓰는 것으로 보여준다
+    const last = new Date(Date.UTC(p.year, p.month - 1, p.day) - 86_400_000);
+    return `${last.getUTCMonth() + 1}/${last.getUTCDate()}까지`;
+  }
+  return `${p.month}/${p.day} ${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}까지`;
+}
+
+/** 상품·지급의 사용 기한 값('YYYY-MM-DD' 또는 'YYYY-MM-DDTHH:MM') → "11/30까지" / "11/30 21:00까지" */
+export function formatExpiresOn(value: string | null | undefined): string {
+  if (!value) return '';
+  const [d, t] = value.split('T');
+  const [, m, day] = d.split('-').map(Number);
+  return t ? `${m}/${day} ${t.slice(0, 5)}까지` : `${m}/${day}까지`;
 }

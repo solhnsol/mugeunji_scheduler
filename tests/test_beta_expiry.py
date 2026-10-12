@@ -184,3 +184,31 @@ def test_balances_list_includes_dawn_flag(client, admin, make_user):
     client.put(f"/admin/users/{username}/dawn", headers=admin, json={"allowed": False})
     row = [b for b in client.get("/admin/token-balances", headers=admin).json() if b["username"] == username][0]
     assert row["dawn_allowed"] is False and row["role"] == "user"
+
+
+def test_expiry_accepts_exact_time_and_rejects_past(client, admin, make_user):
+    u, member = make_user()
+    future = (datetime.now(KST) + timedelta(days=5)).strftime("%Y-%m-%dT21:00")
+    r = client.post("/admin/tokens/grant", headers=admin, json={"usernames": [u], "tokens": 5, "memo": "정확한 시각", "expires_on": future})
+    assert r.status_code == 200, r.text
+    ledger = client.get(f"/admin/token-ledger/{u}", headers=admin).json()
+    assert ledger["lots"][0]["expires_at"].startswith(future) and ledger["lots"][0]["expires_at"].endswith("+09:00")
+    past = (datetime.now(KST) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M")
+    bad = client.post("/admin/tokens/grant", headers=admin, json={"usernames": [u], "tokens": 5, "memo": "지난 기한", "expires_on": past})
+    assert bad.status_code == 400 and "지났" in bad.json()["detail"]
+    assert client.post("/admin/tokens/grant", headers=admin, json={"usernames": [u], "tokens": 1, "memo": "x", "expires_on": "11/30"}).status_code == 400
+
+
+def test_promo_pack_closes_at_exact_time(client, admin, make_user):
+    free_user, free_member = make_user()
+    client.put(f"/admin/users/{free_user}", headers=admin, json={"free_access": True})
+    past = (datetime.now(KST) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
+    pack_id = _make_pack(client, admin, name="종료된 무료", price=0, tokens=50, auto_confirm=True, expires_on=past, audience="free")
+    assert pack_id not in [p["id"] for p in client.get("/tokens/packs", headers=free_member).json()]
+    assert client.post("/tokens/purchases", headers=free_member, json={"pack_id": pack_id}).status_code == 400
+
+
+def test_beta_month_open_time_exposed(client, admin):
+    client.put("/admin/booking-settings", headers=admin, json={"beta_month": "2026-11"})
+    s = client.get("/admin/booking-settings", headers=admin).json()
+    assert s["beta_month_open_at"].startswith("2026-11-30T21:00")

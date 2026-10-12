@@ -1,7 +1,8 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api';
 import { TokenBalance, TokenLedgerEntry, TokenPack, TokenPurchase } from '../types';
-import { formatDateTime, formatExpiry, formatPhone, formatPrice, formatTokens } from '../utils';
+import { formatDateTime, formatExpiresOn, formatExpiry, formatPhone, formatPrice, formatTokens } from '../utils';
+import { ExpiryInput } from './ExpiryInput';
 import { AdminBookingSettings } from './AdminBookingSettings';
 import { AdminBookingsPanel } from './AdminBookingsPanel';
 import { useConfirm } from './ConfirmDialog';
@@ -303,7 +304,7 @@ export function AdminTokensTab({
                   </p>
                   <p className="text-sm text-ink-muted tabular-nums">
                     {pack.price_won === 0 ? '무료' : formatPrice(pack.price_won)} → {formatTokens(pack.tokens)}토큰
-                    {pack.expires_on && ` · ${pack.expires_on.slice(5).replace('-', '/')}까지 사용`}
+                    {pack.expires_on && ` · ${formatExpiresOn(pack.expires_on)} 사용`}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -390,6 +391,7 @@ export function AdminTokensTab({
 
       {packModal && (
         <PackModal
+          token={token}
           pack={packModal === 'new' ? null : packModal}
           onClose={() => setPackModal(null)}
           onSubmit={async (body) => {
@@ -417,6 +419,7 @@ export function AdminTokensTab({
       )}
       {grantOpen && (
         <GrantModal
+          token={token}
           balances={balances}
           onClose={() => setGrantOpen(false)}
           onSubmit={async (body) => {
@@ -432,10 +435,12 @@ export function AdminTokensTab({
 }
 
 function PackModal({
+  token,
   pack,
   onClose,
   onSubmit,
 }: {
+  token: string;
   pack: TokenPack | null;
   onClose: () => void;
   onSubmit: (body: {
@@ -500,13 +505,7 @@ function PackModal({
             <input id="pack-tokens" className="input" type="number" min={1} step={1} inputMode="numeric" value={tokens} onChange={(e) => setTokens(e.target.value)} />
           </div>
         </div>
-        <div>
-          <label className="label" htmlFor="pack-expires">사용 기한 (선택)</label>
-          <input id="pack-expires" className="input" type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} />
-          <p className="text-xs text-ink-faint mt-1.5 leading-relaxed">
-            비워 두면 충전한 날부터 3개월 뒤 사라져요. 날짜를 정하면 그날 끝까지 쓰고 사라져요. (예: 11월 한정 무료분 → 11-30)
-          </p>
-        </div>
+        <ExpiryInput token={token} id="pack-expires" value={expiresOn} onChange={setExpiresOn} hint="비워 두면 충전한 날부터 3개월 뒤 사라져요. 11월 한정 무료분은 12월 예약이 열리는 시각으로 정하세요." />
         <label className="flex items-center gap-3 rounded-2xl border border-line p-4 cursor-pointer">
           <input type="checkbox" className="w-5 h-5 accent-sage" checked={autoConfirm} onChange={(e) => setAutoConfirm(e.target.checked)} />
           <span className="text-sm"><b className="font-medium">바로 지급</b> · 요청하면 관리자 확인 없이 바로 들어와요</span>
@@ -633,10 +632,12 @@ function LedgerModal({
 }
 
 function GrantModal({
+  token,
   balances,
   onClose,
   onSubmit,
 }: {
+  token: string;
   balances: TokenBalance[];
   onClose: () => void;
   onSubmit: (body: { usernames: string[]; tokens: number; memo: string; expires_on?: string | null }) => Promise<void>;
@@ -692,17 +693,11 @@ function GrantModal({
           ))}
         </ul>
         <p className="text-xs text-ink-faint">{selected.size}명 선택</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label" htmlFor="grant-amount">1인당 토큰</label>
-            <input id="grant-amount" className="input" type="number" min={1} step={1} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </div>
-          <div>
-            <label className="label" htmlFor="grant-expires">사용 기한</label>
-            <input id="grant-expires" className="input" type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} />
-          </div>
+        <div>
+          <label className="label" htmlFor="grant-amount">1인당 토큰</label>
+          <input id="grant-amount" className="input" type="number" min={1} step={1} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </div>
-        <p className="text-xs text-ink-faint -mt-2">기한을 비우면 3개월 뒤 사라져요. 11월 한정이면 11-30을 고르세요.</p>
+        <ExpiryInput token={token} id="grant-expires" value={expiresOn} onChange={setExpiresOn} hint="비워 두면 3개월 뒤 사라져요. 11월 한정이면 12월 예약이 열리는 시각으로 정하세요." />
         <div>
           <label className="label" htmlFor="grant-memo">사유</label>
           <input id="grant-memo" className="input" value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={200} />
