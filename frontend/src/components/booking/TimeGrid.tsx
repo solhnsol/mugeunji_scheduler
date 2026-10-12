@@ -256,7 +256,19 @@ export function TimeGrid({
     if (e.pointerType !== 'mouse') window.setTimeout(() => (mouseHandled.current = false), 500);
   };
 
-  const cols = `${single ? 40 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
+  /** (하루 보기) 가격 구간 하나의 빈 시간을 한 번에 선택하고, 이미 모두 선택돼 있으면 모두 해제한다 */
+  const selectBand = (band: PriceBand) => {
+    const day = days[0];
+    if (!day) return;
+    const free = day.slots.filter((sl) => sl.status === 'free' && sl.hour >= band.start && sl.hour < band.end);
+    if (free.length === 0) return;
+    const allOn = free.every((sl) => selected.has(slotKey(day.date, sl.hour)));
+    for (const sl of free) {
+      if (selected.has(slotKey(day.date, sl.hour)) === allOn) onToggleFree(day.date, sl.hour);
+    }
+  };
+
+  const cols = `${single ? 44 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
 
   return (
     <div className={`${fill ? 'card flex flex-col flex-1 min-h-0 overflow-hidden' : 'card'} select-none`}>
@@ -320,11 +332,22 @@ export function TimeGrid({
                   <span className="text-[10px] leading-none text-ink-faint tabular-nums relative -top-[1px]">
                     {String(hour).padStart(2, '0')}
                   </span>
-                  {bandStart && (
-                    <span className="absolute right-1 bottom-0.5 text-[9px] leading-none text-sage font-medium tabular-nums">
-                      {band.cost}t
-                    </span>
-                  )}
+                  {bandStart &&
+                    (single ? (
+                      <button
+                        type="button"
+                        className="absolute right-0.5 bottom-0.5 z-[1] rounded-full bg-sage-muted px-1.5 py-1 text-[10px] leading-none text-sage font-medium tabular-nums hover:bg-sage-muted/70 active:scale-95 transition"
+                        title={`${String(band.start).padStart(2, '0')}~${String(band.end).padStart(2, '0')}시 전체 선택`}
+                        aria-label={`${band.start}시부터 ${band.end}시까지 전체 선택 또는 해제`}
+                        onClick={() => selectBand(band)}
+                      >
+                        {band.cost}t
+                      </button>
+                    ) : (
+                      <span className="absolute right-1 bottom-0.5 text-[9px] leading-none text-sage font-medium tabular-nums">
+                        {band.cost}t
+                      </span>
+                    ))}
                 </div>
               );
             })}
