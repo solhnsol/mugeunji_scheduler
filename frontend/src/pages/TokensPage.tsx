@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiError, SESSION } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
 import { AppShell, Toast } from '../components/ui';
+import { expiryPhrase, useTokenRules } from '../hooks/useTokenRules';
 import { useToast } from '../hooks/useToast';
 import { MyTokens, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiresOn, formatExpiry, formatPrice, formatTokens } from '../utils';
@@ -19,6 +20,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
   const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const rules = useTokenRules();
   const { toast, show } = useToast();
   const { confirm, dialog } = useConfirm();
 
@@ -141,7 +143,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
             <h2 className="text-lg font-bold text-ink">토큰 충전</h2>
             <p className="text-sm text-ink-muted mt-1 leading-relaxed">
               상품을 고르면 관리자가 확인한 뒤 연락처로 입금 안내를 드려요. 조금만 기다려 주세요. 안내받은 금액을 입금하면
-              관리자가 확인하고 토큰을 지급해요. 충전한 토큰은 3개월 동안 쓰지 않으면 사라지고, 쓰는 동안은 계속 이어져요.
+              관리자가 확인하고 토큰을 지급해요. 충전한 토큰은 {expiryPhrase(rules)} 동안 쓰지 않으면 사라지고, 쓰는 동안은 계속 이어져요.
             </p>
             {packs.length === 0 ? (
               <p className="text-sm text-ink-faint mt-4">지금 선택할 수 있는 상품이 없어요. 관리자에게 문의해주세요.</p>

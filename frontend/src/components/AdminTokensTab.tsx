@@ -2,6 +2,7 @@ import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api';
 import { TokenBalance, TokenLedgerEntry, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiresOn, formatExpiry, formatPhone, formatPrice, formatTokens } from '../utils';
+import { expiryPhrase, useTokenRules } from '../hooks/useTokenRules';
 import { ExpiryInput } from './ExpiryInput';
 import { AdminBookingSettings } from './AdminBookingSettings';
 import { AdminBookingsPanel } from './AdminBookingsPanel';
@@ -454,6 +455,7 @@ function PackModal({
     audience: 'all' | 'free';
   }) => Promise<void>;
 }) {
+  const rules = useTokenRules();
   const [name, setName] = useState(pack?.name ?? '');
   const [price, setPrice] = useState(pack ? String(pack.price_won) : '');
   const [tokens, setTokens] = useState(pack ? String(pack.tokens) : '');
@@ -505,7 +507,7 @@ function PackModal({
             <input id="pack-tokens" className="input" type="number" min={1} step={1} inputMode="numeric" value={tokens} onChange={(e) => setTokens(e.target.value)} />
           </div>
         </div>
-        <ExpiryInput token={token} id="pack-expires" value={expiresOn} onChange={setExpiresOn} hint="비워 두면 충전한 날부터 3개월 뒤 사라져요. 11월 한정 무료분은 12월 예약이 열리는 시각으로 정하세요." />
+        <ExpiryInput token={token} id="pack-expires" value={expiresOn} onChange={setExpiresOn} hint={`비워 두면 충전한 날부터 ${expiryPhrase(rules)} 뒤 사라져요. 11월 한정 무료분은 12월 예약이 열리는 시각으로 정하세요.`} />
         <label className="flex items-center gap-3 rounded-2xl border border-line p-4 cursor-pointer">
           <input type="checkbox" className="w-5 h-5 accent-sage" checked={autoConfirm} onChange={(e) => setAutoConfirm(e.target.checked)} />
           <span className="text-sm"><b className="font-medium">바로 지급</b> · 요청하면 관리자 확인 없이 바로 들어와요</span>
@@ -642,6 +644,7 @@ function GrantModal({
   onClose: () => void;
   onSubmit: (body: { usernames: string[]; tokens: number; memo: string; expires_on?: string | null }) => Promise<void>;
 }) {
+  const rules = useTokenRules();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [amount, setAmount] = useState('10');
   const [memo, setMemo] = useState('11월 베타 무료 지급');
@@ -697,7 +700,7 @@ function GrantModal({
           <label className="label" htmlFor="grant-amount">1인당 토큰</label>
           <input id="grant-amount" className="input" type="number" min={1} step={1} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </div>
-        <ExpiryInput token={token} id="grant-expires" value={expiresOn} onChange={setExpiresOn} hint="비워 두면 3개월 뒤 사라져요. 11월 한정이면 12월 예약이 열리는 시각으로 정하세요." />
+        <ExpiryInput token={token} id="grant-expires" value={expiresOn} onChange={setExpiresOn} hint={`비워 두면 ${expiryPhrase(rules)} 뒤 사라져요. 11월 한정이면 12월 예약이 열리는 시각으로 정하세요.`} />
         <div>
           <label className="label" htmlFor="grant-memo">사유</label>
           <input id="grant-memo" className="input" value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={200} />
