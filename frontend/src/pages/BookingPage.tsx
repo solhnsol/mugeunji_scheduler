@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError, SESSION } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
 import { MonthCalendar } from '../components/booking/MonthCalendar';
@@ -41,8 +41,19 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   const [error, setError] = useState('');
   const [month, setMonth] = useState<string | null>(null);
   const [calendar, setCalendar] = useState<CalendarDay[] | null>(null);
-  const [view, setView] = useState<'month' | 'detail'>('month');
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // 보고 있는 날짜는 주소(?date=)에 둔다: 폰의 뒤로가기는 일정표 → 달력으로 돌아가고, 새로고침·링크 공유에도 위치가 유지된다
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const dateParam = params.get('date');
+  const selectedDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
+  const view: 'month' | 'detail' = selectedDate ? 'detail' : 'month';
+  /** 같은 일정표 안에서 날짜만 바꿀 때는 기록을 쌓지 않는다 */
+  const setSelectedDate = (d: string) => setParams({ date: d }, { replace: true });
+  const backToMonth = () => {
+    // 앱 안에서 들어왔으면 기록을 한 칸 되돌리고, 링크로 바로 들어왔으면 달력 주소로 바꾼다
+    if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
+    else setParams({}, { replace: true });
+  };
   const [detailMode, setDetailMode] = useState<'day' | 'week'>(() => (typeof window !== 'undefined' && window.innerWidth >= 640 ? 'week' : 'day'));
   const [week, setWeek] = useState<{ start: string; days: GridDay[] } | null>(null);
   const [selected, setSelected] = useState<Map<string, SelectedSlot>>(new Map());
@@ -115,8 +126,12 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   useEffect(() => {
     if (!selectedDate) return;
     if (week && week.start === startOfWeek(selectedDate)) return;
-    loadWeek(selectedDate).catch(() => undefined);
-  }, [selectedDate, week, loadWeek]);
+    loadWeek(selectedDate).catch(() => {
+      // 잘못된 주소(범위 밖 날짜 등)로 들어왔거나 네트워크 오류: 영원히 "불러오는 중"에 머물지 않고 달력으로 돌아간다
+      show('이 날짜의 일정을 불러오지 못했어요', 'error');
+      setParams({}, { replace: true });
+    });
+  }, [selectedDate, week, loadWeek, show, setParams]);
 
   // 새로 불러온 시간표에서 이미 남이 가져간(또는 사라진) 칸이 내 선택에 남아 있으면 조용히 서버 오류로 끝나지 않도록 빼고 알린다
   const selectionRef = useRef({ selected, cancelSel });
@@ -166,8 +181,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   useEffect(() => () => window.clearTimeout(socketTimer.current), []);
 
   const openDay = (dateISO: string) => {
-    setSelectedDate(dateISO);
-    setView('detail');
+    setParams({ date: dateISO });
   };
 
   const toggleFree = (date: string, hour: number, cost: number) => {
@@ -427,7 +441,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
           ) : (
             <>
               <div className="shrink-0 flex items-center justify-between gap-1.5">
-                <button type="button" className="btn-ghost !min-h-[36px] !px-2 text-sm whitespace-nowrap shrink-0" onClick={() => setView('month')}>
+                <button type="button" className="btn-ghost !min-h-[36px] !px-2 text-sm whitespace-nowrap shrink-0" onClick={backToMonth}>
                   ‹ 달력
                 </button>
                 {selectedDate && (
