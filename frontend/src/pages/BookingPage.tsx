@@ -115,6 +115,42 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     loadWeek(selectedDate).catch(() => undefined);
   }, [selectedDate, week, loadWeek]);
 
+  // 새로 불러온 시간표에서 이미 남이 가져간(또는 사라진) 칸이 내 선택에 남아 있으면 조용히 서버 오류로 끝나지 않도록 빼고 알린다
+  const selectionRef = useRef({ selected, cancelSel });
+  selectionRef.current = { selected, cancelSel };
+  useEffect(() => {
+    if (!week) return;
+    const { selected: sel, cancelSel: cancelMap } = selectionRef.current;
+    const taken = [...sel.entries()].filter(([, s]) => {
+      const slot = week.days.find((d) => d.date === s.date)?.slots[s.hour];
+      return !!slot && slot.status !== 'free';
+    });
+    const gone = [...cancelMap.entries()].filter(([id, c]) => {
+      const slot = week.days.find((d) => d.date === c.date)?.slots[c.hour];
+      return !!slot && slot.booking_id !== id;
+    });
+    if (taken.length) {
+      setSelected((prev) => {
+        const next = new Map(prev);
+        taken.forEach(([k]) => next.delete(k));
+        return next;
+      });
+    }
+    if (gone.length) {
+      setCancelSel((prev) => {
+        const next = new Map(prev);
+        gone.forEach(([id]) => next.delete(id));
+        return next;
+      });
+    }
+    if (taken.length) {
+      const hours = summarizeHours(taken.map(([, s]) => s.hour));
+      show(`방금 다른 분이 예약해서 선택에서 뺐어요 (${hours})`, 'error');
+    } else if (gone.length) {
+      show('이미 취소되었거나 바뀐 예약을 선택에서 뺐어요', 'error');
+    }
+  }, [week, show]);
+
   // 다른 사람이 예약/취소하면 화면을 새로 불러온다
   const socketTimer = useRef<number | undefined>(undefined);
   useReservationSocket((msg) => {
