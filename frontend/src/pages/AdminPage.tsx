@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { SESSION } from '../api';
 import { AppShell, Toast } from '../components/ui';
@@ -103,7 +103,11 @@ function AdminDashboard({
   toast: { message: string; type: 'success' | 'error' | '' };
 }) {
   const { confirm, dialog: confirmDialog } = useConfirm();
-  const [tab, setTab] = useState<'roster' | 'tokens' | 'schedule' | 'free' | 'notices' | 'automation' | 'users'>('roster');
+  // 보고 있는 탭은 주소(?tab=)에 둬서 새로고침해도 같은 탭에 머문다
+  const [params, setParams] = useSearchParams();
+  const tabParam = params.get('tab');
+  const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'roster';
+  const setTab = (id: (typeof TABS)[number]['id']) => setParams({ tab: id }, { replace: true });
   const [reloadKey, setReloadKey] = useState(0);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
