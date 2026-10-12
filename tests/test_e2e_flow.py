@@ -40,7 +40,7 @@ def test_signup_to_booking_and_refund(client, admin, token_mode):
     assert client.get("/tokens/me", headers=member).json()["balance"] == 12
 
     # 예약: 16~17시는 4토큰
-    r = client.post("/bookings", headers=member, json={"slots": [{"date": "2026-12-26", "hour": 16}]})
+    r = client.post("/bookings", headers=member, json={"slots": [{"date": "2026-12-30", "hour": 20}]})
     assert r.status_code == 200, r.text
     assert client.get("/tokens/me", headers=member).json()["balance"] == 8
     mine = client.get("/bookings/mine", headers=member).json()
@@ -50,7 +50,7 @@ def test_signup_to_booking_and_refund(client, admin, token_mode):
     client.post("/register", json={"username": "flowother", "password": "secret12", "name": "다른", "phone": "01077778888"})
     other = {"Authorization": "Bearer " + client.post("/login", json={"username": "flowother", "password": "secret12"}).json()["access_token"]}
     client.post("/admin/tokens/adjust", headers=admin, json={"username": "flowother", "tokens": 5, "memo": "테스트"})
-    assert client.post("/bookings", headers=other, json={"slots": [{"date": "2026-12-26", "hour": 16}]}).status_code == 400
+    assert client.post("/bookings", headers=other, json={"slots": [{"date": "2026-12-30", "hour": 20}]}).status_code == 400
     # 남의 예약은 취소할 수 없다
     assert client.post("/bookings/cancel", headers=other, json={"ids": [mine[0]["id"]]}).status_code == 400
 
