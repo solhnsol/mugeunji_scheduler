@@ -130,7 +130,7 @@ export function AppShell({
 }) {
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
-      <header className="z-20 bg-cream border-b border-line/60 shrink-0">
+      <header className="z-20 bg-cream border-b border-line/60 shrink-0 pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-3xl px-4 pt-3 pb-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">

@@ -1,5 +1,6 @@
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
+import { useReservationSocket } from '../hooks/useReservationSocket';
 import { AdminBooking, GridDay, PriceBand, TokenBalance } from '../types';
 import { GridBlock, TimeGrid, buildBlocks } from './booking/TimeGrid';
 import { formatTokens, kstParts } from '../utils';
@@ -65,6 +66,11 @@ export function AdminBookingsPanel({
     setDays(null);
     load().catch((e) => fail(e, '예약을 불러오지 못했어요'));
   }, [load, fail]);
+
+  // 회원이 예약·취소하면 일정표를 새로 불러온다
+  useReservationSocket((msg) => {
+    if (msg.type === 'BOOKING_UPDATE') load().catch(() => undefined);
+  });
 
   const toggleFree = (date: string, hour: number) =>
     setSelected((prev) => {

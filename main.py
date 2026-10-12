@@ -1,9 +1,10 @@
+import time
 import asyncio
 import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
-from typing import List, Optional, Literal
+from typing import Dict, List, Optional, Literal
 
 import aiosqlite
 from dotenv import load_dotenv
@@ -593,6 +594,51 @@ async def revoke_plan_cancellation(
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
+# 로그인 무차별 대입 방지: (접속 IP, 아이디)별 / IP별 실패 횟수를 메모리에 세어 잠시 막는다 (재시작하면 초기화).
+_LOGIN_WINDOW_SEC = 600
+_LOGIN_MAX_PER_USER = 8
+_LOGIN_MAX_PER_IP = 30
+_login_failures: Dict[str, List[float]] = {}
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()  # 신뢰하는 프록시가 덧붙인 마지막 값
+    return forwarded or (request.client.host if request.client else "unknown")
+
+
+def _recent_failures(key: str, now: float) -> List[float]:
+    recent = [t for t in _login_failures.get(key, []) if now - t < _LOGIN_WINDOW_SEC]
+    if recent:
+        _login_failures[key] = recent
+    else:
+        _login_failures.pop(key, None)
+    return recent
+
+
+def _check_login_throttle(request: Request, username: str) -> None:
+    now = time.time()
+    ip = _client_ip(request)
+    if (
+        len(_recent_failures(f"u:{ip}:{username.lower()}", now)) >= _LOGIN_MAX_PER_USER
+        or len(_recent_failures(f"i:{ip}", now)) >= _LOGIN_MAX_PER_IP
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="로그인 시도가 너무 많아요. 잠시(10분 정도) 뒤에 다시 시도해주세요.",
+        )
+
+
+def _record_login_failure(request: Request, username: str) -> None:
+    now = time.time()
+    ip = _client_ip(request)
+    for key in (f"u:{ip}:{username.lower()}", f"i:{ip}"):
+        _login_failures.setdefault(key, []).append(now)
+
+
+def _clear_login_failures(request: Request, username: str) -> None:
+    _login_failures.pop(f"u:{_client_ip(request)}:{username.lower()}", None)
+
+
 @app.post("/login")
 async def login_user(
     data: LoginInfo,
@@ -601,9 +647,13 @@ async def login_user(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     auth_manager = AuthManager(conn)
-    user_data = await auth_manager.login(data.username.strip(), data.password)
+    username = data.username.strip()
+    _check_login_throttle(request, username)
+    user_data = await auth_manager.login(username, data.password)
     if not user_data:
+        _record_login_failure(request, username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+    _clear_login_failures(request, username)
     access_token_data = {"sub": user_data["username"], "role": user_data["role"], "ep": user_data.get("session_epoch", 0)}
     access_token = create_access_token(data=access_token_data)
     set_session_cookie(response, request, access_token)
@@ -626,9 +676,13 @@ async def admin_login(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     auth_manager = AuthManager(conn)
-    user_data = await auth_manager.login(data.username.strip(), data.password)
+    username = data.username.strip()
+    _check_login_throttle(request, username)
+    user_data = await auth_manager.login(username, data.password)
     if not user_data or user_data["role"] != "admin":
+        _record_login_failure(request, username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="관리자 인증에 실패했습니다.")
+    _clear_login_failures(request, username)
     access_token = create_access_token(
         data={"sub": user_data["username"], "role": user_data["role"], "ep": user_data.get("session_epoch", 0)}
     )
@@ -1332,6 +1386,7 @@ async def update_booking_settings(
     for ok, message in results:
         if not ok:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+    await broadcast_reservation_updates(conn)
     return {"status": "success", "message": "예약 설정을 저장했습니다."}
 
 
@@ -1771,6 +1826,10 @@ def _spa_index():
 if os.path.isdir("static/dist/assets"):
     app.mount("/assets", StaticFiles(directory="static/dist/assets"), name="assets")
 
+# 홈 화면에 추가했을 때 쓰는 앱 아이콘 (frontend/public/icons/)
+if os.path.isdir("static/dist/icons"):
+    app.mount("/icons", StaticFiles(directory="static/dist/icons"), name="icons")
+
 # 랜딩 페이지 사진 (frontend/public/landing/ 에 넣은 파일)
 if os.path.isdir("static/dist/landing"):
     app.mount("/landing", StaticFiles(directory="static/dist/landing"), name="landing")
@@ -1822,8 +1881,16 @@ async def read_notices_index():
 
 
 @app.get("/notices/{notice_id}")
-async def read_notice_index(notice_id: int):
+async def read_notice_index(notice_id: str):
     return _spa_index()
+
+
+@app.get("/manifest.webmanifest")
+async def web_manifest():
+    path = "static/dist/manifest.webmanifest"
+    if os.path.exists(path):
+        return FileResponse(path, media_type="application/manifest+json")
+    raise HTTPException(status_code=404)
 
 
 @app.get("/favicon.svg")

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, Toast } from '../components/ui';
@@ -130,6 +130,15 @@ export function RegisterPage() {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [tokenMode, setTokenMode] = useState(false);
+
+  // 토큰 예약으로 전환된 뒤에는 요금제가 아니라 토큰 충전·예약 순서를 안내한다
+  useEffect(() => {
+    api
+      .getSettings()
+      .then((st) => setTokenMode(st.reservation_mode === 'token'))
+      .catch(() => undefined);
+  }, []);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -211,10 +220,21 @@ export function RegisterPage() {
         <div className="rounded-2xl bg-cream-dark/60 px-4 py-3 text-xs text-ink-muted leading-relaxed">
           <p className="font-medium text-ink mb-1">가입 후 이렇게 진행돼요</p>
           <ol className="list-decimal pl-4 space-y-0.5">
-            <li>로그인 후 요금제를 선택해 신청</li>
-            <li>관리자가 확인한 뒤 연락처로 요금을 안내드려요 (조금만 기다려 주세요)</li>
-            <li>안내받은 금액 입금 → 관리자가 확인</li>
-            <li>시간표가 열리면 원하는 시간 신청</li>
+            {tokenMode ? (
+              <>
+                <li>로그인 후 메뉴의 &quot;토큰&quot;에서 충전 상품을 골라 요청</li>
+                <li>관리자가 확인한 뒤 연락처로 입금을 안내드려요 (조금만 기다려 주세요)</li>
+                <li>안내받은 금액 입금 → 관리자가 확인하면 토큰 지급</li>
+                <li>달력에서 원하는 날짜와 시간을 골라 예약</li>
+              </>
+            ) : (
+              <>
+                <li>로그인 후 요금제를 선택해 신청</li>
+                <li>관리자가 확인한 뒤 연락처로 요금을 안내드려요 (조금만 기다려 주세요)</li>
+                <li>안내받은 금액 입금 → 관리자가 확인</li>
+                <li>시간표가 열리면 원하는 시간 신청</li>
+              </>
+            )}
           </ol>
         </div>
         <p className="text-xs text-ink-muted text-center leading-relaxed">

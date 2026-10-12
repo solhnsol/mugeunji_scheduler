@@ -61,8 +61,8 @@ export function AdminBookingSettings({
     const month = betaMonth || nextMonthValue();
     const messages: Record<ReservationMode, string> = {
       legacy: '회원은 다시 월 신청·자유이용만 쓸 수 있어요. 이미 만든 토큰 예약은 그대로 남아요.',
-      beta: `월 신청은 지금처럼 쓰고, 회원의 자유이용 신청은 막혀요. 토큰 예약이 열리고, 기존 월 신청은 ${month}의 매주 같은 요일·시간으로 적용돼요.`,
-      token: '회원의 월 신청·자유이용이 모두 막히고 토큰 예약만 쓸 수 있어요. 정식 전환 때만 선택하세요.',
+      beta: '월 신청은 지금처럼 쓰고, 회원의 자유이용 신청은 막혀요. 토큰 예약이 열리고, 기존 월 신청은 지금 받고 있는 월 신청의 대상 달에 매주 같은 요일·시간으로 적용돼요. 이미 잡힌 자유이용 예약은 같은 시간을 이중으로 잡지 않도록 모두 지워져요.',
+      token: '회원의 월 신청·자유이용이 모두 막히고 토큰 예약만 쓸 수 있어요. 정식 전환 때만 선택하세요. (기존 방식에서 바로 올 때는 남은 자유이용 예약이 지워져요.)',
     };
     const ok = await confirm({
       title: `예약 방식을 "${MODES.find((m) => m.id === next)?.label}"(으)로 바꿀까요?`,
@@ -71,7 +71,7 @@ export function AdminBookingSettings({
       danger: next === 'token',
     });
     if (!ok) return;
-    await save({ reservation_mode: next, ...(next === 'beta' ? { beta_month: month } : {}) });
+    await save({ reservation_mode: next, ...(next === 'beta' && !betaMonth ? { beta_month: month } : {}) });
   };
 
   const bandsValid = bands.length > 0;
@@ -110,7 +110,7 @@ export function AdminBookingSettings({
         </div>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
-            <label className="label" htmlFor="beta-month">베타에서 기존 월 신청을 적용할 달</label>
+            <label className="label" htmlFor="beta-month">베타 기간(달) · 무료 토큰 사용 기한 계산용</label>
             <input
               id="beta-month"
               className="input !py-2 min-w-[170px]"
