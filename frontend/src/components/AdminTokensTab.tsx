@@ -643,6 +643,7 @@ function GrantModal({
   onClose: () => void;
   onSubmit: (body: { usernames: string[]; tokens: number; memo: string; expires_on?: string | null }) => Promise<void>;
 }) {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [amount, setAmount] = useState('10');
   const [memo, setMemo] = useState('11월 베타 무료 지급');
@@ -665,6 +666,17 @@ function GrantModal({
     if (selected.size === 0) return setError('지급할 회원을 선택해주세요.');
     if (!Number.isInteger(value) || value < 1) return setError('지급 토큰은 1 이상의 정수로 입력해주세요.');
     if (!memo.trim()) return setError('지급 사유를 입력해주세요.');
+    setError('');
+    // 되돌리기 어려운 일괄 작업이라, 실행 전에 대상 수·총량·기한을 한 번 더 보여준다
+    const names = balances.filter((b) => selected.has(b.username)).map((b) => b.name || b.username);
+    const preview = names.length <= 5 ? names.join(', ') : `${names.slice(0, 5).join(', ')} 외 ${names.length - 5}명`;
+    const ok = await confirm({
+      title: `${selected.size}명에게 ${formatTokens(value)}토큰씩 지급할까요?`,
+      message: `총 ${formatTokens(value * selected.size)}토큰\n대상: ${preview}\n사유: ${memo.trim()}\n사용 기한: ${expiresOn ? formatExpiresOn(expiresOn) : '3개월 뒤 소멸(기본)'}`,
+      confirmLabel: '지급',
+      cancelLabel: '돌아가기',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await onSubmit({ usernames: Array.from(selected), tokens: value, memo: memo.trim(), ...(expiresOn ? { expires_on: expiresOn } : {}) });
@@ -709,6 +721,7 @@ function GrantModal({
         <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>{busy ? '지급 중…' : '지급'}</button>
         <button type="button" className="btn-secondary flex-1" onClick={onClose}>취소</button>
       </div>
+      {confirmDialog}
     </Modal>
   );
 }
