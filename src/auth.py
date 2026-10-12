@@ -69,8 +69,8 @@ class AuthManager:
             return False, "아이디는 2자 이상이어야 합니다."
         if len(name) < 2:
             return False, "이름은 2자 이상이어야 합니다."
-        if len(password) < 4:
-            return False, "비밀번호는 4자 이상이어야 합니다."
+        if len(password) < 6:
+            return False, "비밀번호는 6자 이상이어야 합니다."
         if not PHONE_PATTERN.match(phone):
             return False, "올바른 휴대폰 번호 형식이 아닙니다. (예: 010-1234-5678)"
         if username == "admin":
@@ -141,8 +141,8 @@ class AuthManager:
         if new_password is not None:
             if not current_password:
                 return False, "현재 비밀번호를 입력해주세요."
-            if len(new_password) < 4:
-                return False, "새 비밀번호는 4자 이상이어야 합니다."
+            if len(new_password) < 6:
+                return False, "새 비밀번호는 6자 이상이어야 합니다."
             valid = await self._run_sync(
                 bcrypt.checkpw,
                 current_password.encode("utf-8"),

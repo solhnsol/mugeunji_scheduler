@@ -164,7 +164,7 @@ class UpdateProfileRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=2)
     phone: Optional[str] = Field(None, min_length=9)
     current_password: Optional[str] = None
-    new_password: Optional[str] = Field(None, min_length=4)
+    new_password: Optional[str] = Field(None, min_length=6)
 
 
 class PlanApplyRequest(BaseModel):
