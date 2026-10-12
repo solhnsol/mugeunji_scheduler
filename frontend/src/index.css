@@ -280,3 +280,25 @@ body {
     animation: none;
   }
 }
+
+/* 화면 전환(달력 ↔ 일정표): 짧은 페이드 */
+@keyframes view-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.view-in {
+  animation: view-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-in {
+    animation: none;
+  }
+}

@@ -398,7 +398,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
           )}
 
           {view === 'month' ? (
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 pb-2">
+            <div key="month" className="view-in flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 pb-2">
               <MonthCalendar
                 month={month}
                 days={calendar}
@@ -440,7 +440,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
               </section>
             </div>
           ) : (
-            <>
+            <div key="detail" className="view-in flex flex-col flex-1 min-h-0 gap-2">
               <div className="shrink-0 flex items-center justify-between gap-1.5">
                 <button type="button" className="btn-ghost !min-h-[36px] !px-2 text-sm whitespace-nowrap shrink-0" onClick={backToMonth}>
                   ‹ 달력
@@ -553,7 +553,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                   }}
                 />
               )}
-            </>
+            </div>
           )}
         </div>
       )}
