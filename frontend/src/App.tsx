@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { SESSION } from './api';
 import { AppShell } from './components/ui';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
@@ -11,6 +12,29 @@ import Landing from './pages/Landing';
 import BookingPage from './pages/BookingPage';
 import TokensPage from './pages/TokensPage';
 import NoticesPage from './pages/NoticesPage';
+
+const BRAND = '묵은지 작업실';
+const DEFAULT_TITLE = document.title;
+const ROUTE_TITLES: [string, string][] = [
+  ['/book', '예약'],
+  ['/tokens', '토큰'],
+  ['/notices', '공지·이용 안내'],
+  ['/free', '자유이용'],
+  ['/login', '로그인'],
+  ['/register', '가입'],
+  ['/admin', '관리자'],
+  ['/about', '소개'],
+];
+
+/** 화면마다 탭·방문 기록에서 구분되도록 문서 제목을 바꾼다 (홈은 기본 제목) */
+function TitleManager() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const hit = ROUTE_TITLES.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+    document.title = hit ? `${hit[1]} | ${BRAND}` : DEFAULT_TITLE;
+  }, [pathname]);
+  return null;
+}
 
 function Splash() {
   return (
@@ -95,6 +119,7 @@ function FreeRoute() {
 export default function App() {
   return (
     <BrowserRouter>
+      <TitleManager />
       <Routes>
         <Route path="/" element={<UserRoute />} />
         <Route path="/login" element={<LoginRoute />} />
