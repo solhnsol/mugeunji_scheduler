@@ -153,11 +153,13 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
 
   // 다른 사람이 예약/취소하면 화면을 새로 불러온다
   const socketTimer = useRef<number | undefined>(undefined);
-  useReservationSocket((msg) => {
-    if (msg.type !== 'BOOKING_UPDATE') return;
+  const scheduleRefresh = () => {
     window.clearTimeout(socketTimer.current);
     socketTimer.current = window.setTimeout(() => void refresh().catch(() => undefined), 300);
-  });
+  };
+  const { connected } = useReservationSocket((msg) => {
+    if (msg.type === 'BOOKING_UPDATE') scheduleRefresh();
+  }, scheduleRefresh);
   useEffect(() => () => window.clearTimeout(socketTimer.current), []);
 
   const openDay = (dateISO: string) => {
@@ -361,6 +363,11 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
           {view === 'month' && config.mode === 'beta' && (
             <p className="shrink-0 text-[11px] text-sage bg-sage-muted/40 border border-sage/20 rounded-xl px-3 py-1.5 leading-snug">
               토큰 예약 베타 · 줄무늬는 월 신청 시간이라 여기서 바꿀 수 없어요. 불편한 점은 단톡방으로 알려주세요.
+            </p>
+          )}
+          {!connected && (
+            <p className="shrink-0 text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 leading-snug" role="status">
+              실시간 연결이 끊겼어요. 다시 연결 중이에요 · 다른 분의 예약이 늦게 보일 수 있어요.
             </p>
           )}
           {!config.reservation_enabled && !config.is_admin && (
