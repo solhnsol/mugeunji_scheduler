@@ -242,3 +242,18 @@ def test_settings_validation(client, admin):
     dup = [{"hours_before": 24, "percent": 50}, {"hours_before": 24, "percent": 25}]
     assert client.put("/admin/booking-settings", headers=admin, json={"refund_tiers": dup}).status_code == 400
     assert client.put("/admin/booking-settings", headers=admin, json={}).status_code == 400
+
+
+def test_websocket_requires_login(client, make_user):
+    """예약 현황(회원 이름 포함)을 로그인하지 않은 연결에 보내지 않는다."""
+    from starlette.websockets import WebSocketDisconnect
+
+    client.cookies.clear()  # 앞선 로그인으로 공유 클라이언트에 남은 세션 쿠키
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_json()
+
+    _username, headers = make_user()
+    token = headers["Authorization"].split()[1]
+    with client.websocket_connect("/ws", cookies={"session": token}) as ws:
+        assert ws.receive_json()["type"] == "RESERVATION_UPDATE"

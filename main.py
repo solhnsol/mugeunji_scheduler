@@ -412,12 +412,8 @@ def set_session_cookie(response: Response, request: Request, token: str) -> None
     )
 
 
-async def get_current_user(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme),
-    conn: aiosqlite.Connection = Depends(get_db_conn),
-):
-    token = token or request.cookies.get(SESSION_COOKIE)
+async def _user_from_token(token: Optional[str], conn: aiosqlite.Connection, path: str = "") -> dict:
+    """로그인 토큰을 검증해 사용자를 돌려준다. 실패하면 401/403 HTTPException."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="인증이 필요합니다. 다시 로그인해주세요.",
@@ -448,9 +444,17 @@ async def get_current_user(
     if int(payload.get("ep", 0)) != int(row["session_epoch"] or 0):
         raise credentials_exception
     # 임시 비밀번호로 로그인한 상태에서는 새 비밀번호를 설정하기 전까지 다른 기능을 막는다
-    if row["must_change_password"] and request.url.path not in MUST_CHANGE_ALLOWED_PATHS:
+    if row["must_change_password"] and path not in MUST_CHANGE_ALLOWED_PATHS:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="새 비밀번호를 먼저 설정해주세요.")
     return {"username": username, "role": row["role"]}
+
+
+async def get_current_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await _user_from_token(token or request.cookies.get(SESSION_COOKIE), conn, request.url.path)
 
 
 async def get_current_admin_user(user: dict = Depends(get_current_user)):
@@ -1799,6 +1803,16 @@ async def upload_users_csv(
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     conn = websocket.app.state.db_conn
+    # 예약 현황에는 회원 이름이 들어 있으므로 로그인한 회원에게만, 같은 출처의 페이지에만 연결을 허용한다.
+    origin = websocket.headers.get("origin")
+    if origin and origin.split("://", 1)[-1] != websocket.headers.get("host", "") and origin not in _cors_origins:
+        await websocket.close(code=1008)
+        return
+    try:
+        await _user_from_token(websocket.cookies.get(SESSION_COOKIE), conn, "/ws")
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
     reserve_manager = ReservationManager(conn)
     await connection_manager.connect(websocket)
     await reserve_manager.check_reservation_availability()
