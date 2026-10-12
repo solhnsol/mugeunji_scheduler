@@ -267,3 +267,10 @@ def test_payment_guide_hidden_from_anonymous(client, admin, make_user):
     _u, headers = make_user()
     assert client.get("/settings", headers=headers).json()["payment_guide"] == "은행 123-456"
     client.cookies.clear()
+
+
+def test_security_headers(client):
+    r = client.get("/settings")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert r.headers["referrer-policy"]

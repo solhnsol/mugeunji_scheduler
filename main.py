@@ -1,6 +1,7 @@
 import time
 import asyncio
 import os
+import secrets
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
@@ -46,8 +47,12 @@ SESSION_COOKIE = "session"
 # 임시 비밀번호 상태에서도 허용하는 경로 (현재 상태 확인, 비밀번호 변경)
 MUST_CHANGE_ALLOWED_PATHS = {"/me", "/me/profile"}
 
-if SECRET_KEY == "change-me-in-production":
-    print("[WARN] SECRET_KEY가 기본값입니다. .env에 긴 임의 문자열을 설정하세요.")
+if SECRET_KEY in ("change-me-in-production", "change-me-to-a-long-random-string"):
+    # 공개된 기본 키로는 누구나 로그인 토큰(관리자 포함)을 위조할 수 있다. 임시 키를 쓰고(재시작하면 로그아웃됨) 알린다.
+    SECRET_KEY = secrets.token_urlsafe(48)
+    print("[WARN] SECRET_KEY가 기본값이라 임시 키로 실행합니다 (재시작하면 모두 로그아웃돼요). .env에 긴 임의 문자열을 설정하세요.")
+elif len(SECRET_KEY) < 32:
+    print("[WARN] SECRET_KEY가 짧습니다. 32자 이상의 임의 문자열을 권장합니다.")
 if not os.getenv("ADMIN_PASSWORD"):
     print("[WARN] ADMIN_PASSWORD가 없어 새 DB에서는 admin 계정이 생성되지 않습니다.")
 
@@ -96,6 +101,18 @@ if _cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if request.url.path.startswith("/api/") or request.url.path in ("/me", "/settings"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 
 # 단일 DB 연결을 공유하므로 쓰기 요청은 직렬화해 트랜잭션 간 commit/rollback 간섭을 막는다.
