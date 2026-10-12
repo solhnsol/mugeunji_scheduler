@@ -274,3 +274,28 @@ def test_security_headers(client):
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["x-frame-options"] == "DENY"
     assert r.headers["referrer-policy"]
+
+
+def test_register_rate_limit(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "_REGISTER_MAX_PER_IP", 10)
+    main._register_attempts.clear()
+    codes = []
+    for i in range(12):
+        r = client.post("/register", json={"username": f"rl{i}", "password": "password1", "name": "제한", "phone": f"0102000{i:04d}"})
+        codes.append(r.status_code)
+    main._register_attempts.clear()
+    assert codes[:10] == [200] * 10
+    assert codes[10:] == [429, 429]
+
+
+def test_account_wide_login_throttle(client):
+    import main
+
+    main._login_failures.clear()
+    for i in range(40):
+        main._record_login_failure(type("R", (), {"headers": {"x-forwarded-for": f"9.9.9.{i}"}, "client": None})(), "victim")
+    r = client.post("/login", json={"username": "victim", "password": "x"}, headers={"x-forwarded-for": "1.2.3.4"})
+    main._login_failures.clear()
+    assert r.status_code == 429

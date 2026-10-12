@@ -505,8 +505,25 @@ async def broadcast_booking_update(dates: List[str]):
     await connection_manager.broadcast_json({"type": "BOOKING_UPDATE", "dates": dates})
 
 
+# 가입 남용 방지: 같은 접속 IP에서 1시간에 가입할 수 있는 횟수 (재시작하면 초기화)
+_REGISTER_WINDOW_SEC = 3600
+_REGISTER_MAX_PER_IP = 10
+_register_attempts: Dict[str, List[float]] = {}
+
+
 @app.post("/register")
-async def register_user(data: RegisterInfo, conn: aiosqlite.Connection = Depends(get_db_conn)):
+async def register_user(data: RegisterInfo, request: Request, conn: aiosqlite.Connection = Depends(get_db_conn)):
+    now = time.time()
+    ip = _client_ip(request)
+    recent = [t for t in _register_attempts.get(ip, []) if now - t < _REGISTER_WINDOW_SEC]
+    if len(recent) >= _REGISTER_MAX_PER_IP:
+        _register_attempts[ip] = recent
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="가입 시도가 너무 많아요. 잠시 뒤에 다시 시도하거나 오픈채팅으로 문의해주세요.",
+        )
+    recent.append(now)
+    _register_attempts[ip] = recent
     auth_manager = AuthManager(conn)
     is_success, message = await auth_manager.register(
         data.username, data.password, data.name, data.phone
@@ -631,6 +648,8 @@ async def revoke_plan_cancellation(
 _LOGIN_WINDOW_SEC = 600
 _LOGIN_MAX_PER_USER = 8
 _LOGIN_MAX_PER_IP = 30
+# 접속 IP를 바꿔가며 한 계정만 노리는 시도 (프록시 헤더 위조 등)를 막는 계정 단위 상한. 정상 사용에서는 닿지 않는 값.
+_LOGIN_MAX_PER_ACCOUNT = 40
 _login_failures: Dict[str, List[float]] = {}
 
 
@@ -654,6 +673,7 @@ def _check_login_throttle(request: Request, username: str) -> None:
     if (
         len(_recent_failures(f"u:{ip}:{username.lower()}", now)) >= _LOGIN_MAX_PER_USER
         or len(_recent_failures(f"i:{ip}", now)) >= _LOGIN_MAX_PER_IP
+        or len(_recent_failures(f"a:{username.lower()}", now)) >= _LOGIN_MAX_PER_ACCOUNT
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -664,7 +684,7 @@ def _check_login_throttle(request: Request, username: str) -> None:
 def _record_login_failure(request: Request, username: str) -> None:
     now = time.time()
     ip = _client_ip(request)
-    for key in (f"u:{ip}:{username.lower()}", f"i:{ip}"):
+    for key in (f"u:{ip}:{username.lower()}", f"i:{ip}", f"a:{username.lower()}"):
         _login_failures.setdefault(key, []).append(now)
 
 
