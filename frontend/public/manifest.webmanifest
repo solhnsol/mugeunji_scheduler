@@ -9,6 +9,10 @@
   "orientation": "portrait",
   "background_color": "#f5f4f0",
   "theme_color": "#3a5248",
+  "shortcuts": [
+    { "name": "예약", "short_name": "예약", "url": "/book" },
+    { "name": "토큰 충전", "short_name": "토큰", "url": "/tokens" }
+  ],
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
