@@ -90,20 +90,24 @@ export function TimeGrid({
   const H = rowHeight;
   const single = days.length === 1;
   const scroller = useRef<HTMLDivElement>(null);
-  const paint = useRef<{ on: boolean } | null>(null);
-  const skipClick = useRef(false);
+  /** 마우스로 끌어서 선택/해제하는 중인 상태 */
+  const drag = useRef<{
+    mode: 'free' | 'mine';
+    on: boolean;
+    date: string;
+    last: number;
+    colTop: number;
+    pointerId: number;
+  } | null>(null);
+  /** 마우스 누름에서 이미 처리했으면 뒤따르는 click은 무시한다 */
+  const mouseHandled = useRef(false);
+  const latest = useRef({ days, selected, cancelSelected });
+  latest.current = { days, selected, cancelSelected };
   const [nowTick, setNowTick] = useState(0);
 
   useEffect(() => {
     const id = window.setInterval(() => setNowTick((n) => n + 1), 60_000);
-    const stop = () => {
-      paint.current = null;
-    };
-    window.addEventListener('pointerup', stop);
-    return () => {
-      window.clearInterval(id);
-      window.removeEventListener('pointerup', stop);
-    };
+    return () => window.clearInterval(id);
   }, []);
 
   // 처음 열릴 때만, 자주 쓰는 시간대가 보이게 안쪽 스크롤을 내린다
@@ -124,15 +128,91 @@ export function TimeGrid({
     return { date: `${p.year}-${pad(p.month)}-${pad(p.day)}`, top: (p.hour + p.minute / 60) * H };
   }, [nowTick, H]);
 
-  const applyPaint = (date: string, hour: number, isSelected: boolean) => {
-    if (paint.current && paint.current.on !== isSelected) onToggleFree(date, hour);
+  // 그 열(날짜)에서 y 좌표가 가리키는 시각
+  const hourAt = (colTop: number, clientY: number) => Math.min(Math.max(Math.floor((clientY - colTop) / H), 0), 23);
+
+  /** 한 시간을 목표 상태(on)로 맞춘다. 이미 그 상태거나 바꿀 수 없는 칸이면 아무 일도 하지 않는다. */
+  const paintHour = (mode: 'free' | 'mine', on: boolean, date: string, hour: number) => {
+    const { days: ds, selected: sel, cancelSelected: cancelSel } = latest.current;
+    const slot = ds.find((d) => d.date === date)?.slots[hour];
+    if (!slot) return;
+    if (mode === 'free') {
+      if (slot.status === 'free' && sel.has(slotKey(date, hour)) !== on) onToggleFree(date, hour);
+    } else if (slot.status === 'mine' && slot.booking_id != null && cancelSel.has(slot.booking_id) !== on) {
+      onToggleMine?.(slot.booking_id);
+    }
+  };
+
+  const onRootPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    mouseHandled.current = false;
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    const col = (e.target as HTMLElement).closest<HTMLElement>('[data-col]');
+    if (!col) return;
+    const date = col.dataset.col as string;
+    const colTop = col.getBoundingClientRect().top;
+    const hour = hourAt(colTop, e.clientY);
+    const slot = latest.current.days.find((d) => d.date === date)?.slots[hour];
+    if (!slot) return;
+    let mode: 'free' | 'mine';
+    let on: boolean;
+    if (slot.status === 'free') {
+      mode = 'free';
+      on = !latest.current.selected.has(slotKey(date, hour));
+    } else if (slot.status === 'mine' && slot.booking_id != null && onToggleMine) {
+      mode = 'mine';
+      on = !latest.current.cancelSelected.has(slot.booking_id);
+    } else {
+      return; // 남의 예약·지난 시간은 끌기를 시작하지 않는다 (남의 예약 클릭은 블록이 따로 처리)
+    }
+    drag.current = { mode, on, date, last: hour, colTop, pointerId: e.pointerId };
+    mouseHandled.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    paintHour(mode, on, date, hour);
+  };
+
+  const onRootPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    // 가장자리 근처에서는 안쪽 스크롤을 따라 움직인다
+    const sc = scroller.current;
+    if (fill && sc) {
+      const r = sc.getBoundingClientRect();
+      if (e.clientY > r.bottom - 24) sc.scrollTop += 14;
+      else if (e.clientY < r.top + 24) sc.scrollTop -= 14;
+      d.colTop = (sc.querySelector(`[data-col="${d.date}"]`) as HTMLElement | null)?.getBoundingClientRect().top ?? d.colTop;
+    }
+    const hour = hourAt(d.colTop, e.clientY);
+    if (hour === d.last) return;
+    // 빠르게 움직여도 건너뛴 칸이 없게 지나온 모든 시간을 처리한다
+    const step = hour > d.last ? 1 : -1;
+    for (let h = d.last + step; h !== hour + step; h += step) paintHour(d.mode, d.on, d.date, h);
+    d.last = hour;
+  };
+
+  const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    drag.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
   const cols = `${single ? 40 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
 
   return (
-    <div className={fill ? 'card flex flex-col flex-1 min-h-0 overflow-hidden' : 'card'}>
-      <div ref={scroller} className={fill ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain' : ''}>
+    <div className={`${fill ? 'card flex flex-col flex-1 min-h-0 overflow-hidden' : 'card'} select-none`}>
+      <div
+        ref={scroller}
+        className={fill ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain' : ''}
+        onPointerDown={onRootPointerDown}
+        onPointerMove={onRootPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onMouseDown={(e) => {
+          // 끌 때 글자가 같이 선택되지 않게 한다
+          if (mouseHandled.current) e.preventDefault();
+        }}
+        onDragStart={(e) => e.preventDefault()}
+      >
         {showHeader && (
           <div className="grid sticky top-0 z-20 bg-cream border-b border-line/70" style={{ gridTemplateColumns: cols }}>
             <span />
@@ -188,7 +268,7 @@ export function TimeGrid({
           {days.map((day) => {
             const blocks = blocksByDate.get(day.date) ?? [];
             return (
-              <div key={day.date} className="relative border-l border-line/50">
+              <div key={day.date} data-col={day.date} className="relative border-l border-line/50">
                 {day.slots.map((slot) => {
                   const key = slotKey(day.date, slot.hour);
                   const isSelected = selected.has(key);
@@ -211,18 +291,9 @@ export function TimeGrid({
                       role={free ? 'button' : undefined}
                       aria-label={free ? `${day.date} ${slot.hour}시 ${slot.cost}토큰` : undefined}
                       aria-pressed={free ? isSelected : undefined}
-                      onPointerDown={(e: ReactPointerEvent) => {
-                        if (!free || e.pointerType !== 'mouse' || e.button !== 0) return;
-                        paint.current = { on: !isSelected };
-                        skipClick.current = true;
-                        onToggleFree(day.date, slot.hour);
-                      }}
-                      onPointerEnter={(e: ReactPointerEvent) => {
-                        if (free && e.pointerType === 'mouse' && e.buttons === 1) applyPaint(day.date, slot.hour, isSelected);
-                      }}
                       onClick={() => {
-                        if (skipClick.current) {
-                          skipClick.current = false;
+                        if (mouseHandled.current) {
+                          mouseHandled.current = false;
                           return;
                         }
                         if (free) onToggleFree(day.date, slot.hour);
@@ -258,6 +329,10 @@ export function TimeGrid({
                         backgroundImage: b.legacy ? STRIPES : undefined,
                       }}
                       onClick={(e) => {
+                        if (mouseHandled.current) {
+                          mouseHandled.current = false;
+                          return;
+                        }
                         if (!interactive) return;
                         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                         const idx = Math.min(Math.max(Math.floor((e.clientY - rect.top) / H), 0), tall - 1);
