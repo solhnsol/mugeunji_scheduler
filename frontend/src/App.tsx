@@ -10,6 +10,7 @@ import FreeApp from './pages/FreeApp';
 import Landing from './pages/Landing';
 import BookingPage from './pages/BookingPage';
 import TokensPage from './pages/TokensPage';
+import NoticesPage from './pages/NoticesPage';
 
 function Splash() {
   return (
@@ -44,6 +45,12 @@ function TokensRoute() {
   if (session.status === 'anon') return <Navigate to="/login" replace />;
   if (session.mustChangePassword) return <ForcePasswordChange onDone={refresh} onLogout={logout} />;
   return <TokensPage onLogout={logout} />;
+}
+
+function NoticesRoute() {
+  const { session } = useSession();
+  if (session.status === 'loading') return <Splash />;
+  return <NoticesPage authed={session.status === 'authed'} />;
 }
 
 function BookingRoute() {
@@ -92,6 +99,8 @@ export default function App() {
         <Route path="/" element={<UserRoute />} />
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/about" element={<AboutRoute />} />
+        <Route path="/notices" element={<NoticesRoute />} />
+        <Route path="/notices/:id" element={<NoticesRoute />} />
         <Route path="/tokens" element={<TokensRoute />} />
         <Route path="/book" element={<BookingRoute />} />
         <Route path="/free" element={<FreeRoute />} />

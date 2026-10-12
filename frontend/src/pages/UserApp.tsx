@@ -14,6 +14,7 @@ import { MonthlyPlanHero } from '../components/ScheduleHero';
 import { ScheduleModal } from '../components/ScheduleModal';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { useToast } from '../hooks/useToast';
+import { NoticeCard } from '../components/NoticeCard';
 import { TokenHome } from '../components/TokenHome';
 import { MeResponse, MyBooking, Plan, ReservationMode } from '../types';
 import { formatTokens } from '../utils';
@@ -198,7 +199,8 @@ export default function UserApp({
     },
     { id: 'book', label: '예약', onClick: () => navigate('/book'), hidden: !tokenMode && !betaMode && me.role !== 'admin' },
     { id: 'tokens', label: '토큰', onClick: () => navigate('/tokens'), hidden: !tokenChargeEnabled && me.role !== 'admin' },
-    { id: 'guide', label: '이용 안내', onClick: () => setGuideOpen(true), hidden: tokenMode },
+    { id: 'notices', label: '공지·이용 안내', onClick: () => navigate('/notices') },
+    { id: 'guide', label: '시작 가이드', onClick: () => setGuideOpen(true), hidden: tokenMode },
     { id: 'logout', label: '로그아웃', onClick: onLogout },
   ];
 
@@ -359,6 +361,7 @@ export default function UserApp({
   if (tokenMode) {
     return (
       <AppShell title={`${displayName}님`} actions={<HeaderActions items={headerMenuItems} />}>
+        <div className="mb-4"><NoticeCard /></div>
         <TokenHome
           balance={tokenBalance}
           upcoming={upcomingBookings}
@@ -386,6 +389,7 @@ export default function UserApp({
               아래 순서대로 진행하면 시간표를 이용할 수 있어요. 막히면 상단 메뉴의 &quot;이용 안내&quot;를 확인해보세요.
             </p>
           </div>
+          <NoticeCard />
           {guideCard}
           {betaCard}
           {tokenCard}
@@ -424,6 +428,7 @@ export default function UserApp({
     >
       <div className="space-y-4">
         {profileBanner}
+        <NoticeCard />
         {guideCard}
 
         {betaCard}

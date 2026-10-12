@@ -32,6 +32,7 @@ from src.database import init_db
 from src.membership import MembershipManager, period_from_offset, usage_period
 from src.reservation import ReservationManager
 from src.settings import SettingsManager
+from src.notices import NoticeError, NoticeManager
 from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
 from src.tokens import TokenManager
 
@@ -247,6 +248,24 @@ class TokenGrantRequest(BaseModel):
 
 class RejectPurchaseRequest(BaseModel):
     memo: Optional[str] = Field(None, max_length=200)
+
+
+class NoticeCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=100)
+    body: str = Field("", max_length=20000)
+    category: Literal["notice", "guide"] = "notice"
+    visibility: Literal["public", "members"] = "members"
+    pinned: bool = False
+    published: bool = False
+
+
+class NoticeUpdateRequest(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=100)
+    body: Optional[str] = Field(None, max_length=20000)
+    category: Optional[Literal["notice", "guide"]] = None
+    visibility: Optional[Literal["public", "members"]] = None
+    pinned: Optional[bool] = None
+    published: Optional[bool] = None
 
 
 class TokenSettingsRequest(BaseModel):
@@ -1793,9 +1812,204 @@ async def read_about_index():
     return _spa_index()
 
 
+@app.get("/notices")
+async def read_notices_index():
+    return _spa_index()
+
+
+@app.get("/notices/{notice_id}")
+async def read_notice_index(notice_id: int):
+    return _spa_index()
+
+
 @app.get("/favicon.svg")
 async def favicon_svg():
     path = "static/dist/favicon.svg"
     if os.path.exists(path):
         return FileResponse(path, media_type="image/svg+xml")
     raise HTTPException(status_code=404)
+
+
+# ---------------------------------------------------------------- 공지·이용 안내
+def _notice_error(e: NoticeError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+async def get_optional_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+) -> Optional[dict]:
+    """로그인했으면 사용자, 아니면 None (로그인 전 방문자도 볼 수 있는 API용)."""
+    try:
+        return await get_current_user(request, token, conn)
+    except HTTPException:
+        return None
+
+
+@app.get("/api/notices")
+async def list_notices(
+    category: Optional[str] = None,
+    user: Optional[dict] = Depends(get_optional_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await NoticeManager(conn).list(members=user is not None, category=category)
+
+
+@app.get("/api/notices/{notice_id}")
+async def get_notice(
+    notice_id: int,
+    user: Optional[dict] = Depends(get_optional_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    notice = await NoticeManager(conn).get(notice_id, members=user is not None)
+    if not notice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없습니다.")
+    return notice
+
+
+@app.get("/admin/notices")
+async def admin_list_notices(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await NoticeManager(conn).list(include_drafts=True, members=True)
+
+
+@app.get("/admin/notices/{notice_id}")
+async def admin_get_notice(
+    notice_id: int,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    notice = await NoticeManager(conn).get(notice_id, include_drafts=True, members=True)
+    if not notice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없습니다.")
+    return notice
+
+
+@app.post("/admin/notices")
+async def admin_create_notice(
+    data: NoticeCreateRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        return await NoticeManager(conn).create(**data.model_dump(), created_by=admin_user["username"])
+    except NoticeError as e:
+        raise _notice_error(e)
+
+
+@app.put("/admin/notices/{notice_id}")
+async def admin_update_notice(
+    notice_id: int,
+    data: NoticeUpdateRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        return await NoticeManager(conn).update(notice_id, data.model_dump())
+    except NoticeError as e:
+        raise _notice_error(e)
+
+
+@app.delete("/admin/notices/{notice_id}")
+async def admin_delete_notice(
+    notice_id: int,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        await NoticeManager(conn).delete(notice_id)
+    except NoticeError as e:
+        raise _notice_error(e)
+    return {"status": "success", "message": "공지를 삭제했습니다."}
+
+
+@app.get("/admin/notice-api-key")
+async def admin_notice_key_status(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await NoticeManager(conn).key_status()
+
+
+@app.post("/admin/notice-api-key")
+async def admin_rotate_notice_key(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    """에이전트용 키를 새로 만든다 (이전 키는 즉시 못 쓴다). 키는 이 응답에서만 볼 수 있다."""
+    return {"api_key": await NoticeManager(conn).rotate_key()}
+
+
+@app.delete("/admin/notice-api-key")
+async def admin_revoke_notice_key(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await NoticeManager(conn).revoke_key()
+    return {"status": "success", "message": "에이전트 키를 폐기했습니다."}
+
+
+# 에이전트 전용: 공지 작성 권한만 가진 API 키 (Authorization: Bearer ntc_...). 쿠키 로그인은 받지 않는다.
+async def require_notice_agent(request: Request, conn: aiosqlite.Connection = Depends(get_db_conn)) -> str:
+    header = request.headers.get("authorization", "")
+    key = header[7:].strip() if header.lower().startswith("bearer ") else ""
+    if not await NoticeManager(conn).verify_key(key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않은 API 키입니다.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return "agent"
+
+
+@app.get("/api/agent/notices")
+async def agent_list_notices(_: str = Depends(require_notice_agent), conn: aiosqlite.Connection = Depends(get_db_conn)):
+    return await NoticeManager(conn).list(include_drafts=True, members=True)
+
+
+@app.get("/api/agent/notices/{notice_id}")
+async def agent_get_notice(
+    notice_id: int, _: str = Depends(require_notice_agent), conn: aiosqlite.Connection = Depends(get_db_conn)
+):
+    notice = await NoticeManager(conn).get(notice_id, include_drafts=True, members=True)
+    if not notice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없습니다.")
+    return notice
+
+
+@app.post("/api/agent/notices")
+async def agent_create_notice(
+    data: NoticeCreateRequest, _: str = Depends(require_notice_agent), conn: aiosqlite.Connection = Depends(get_db_conn)
+):
+    """published를 생략하면 초안으로 저장되고, 관리자가 검토한 뒤 공개한다."""
+    try:
+        return await NoticeManager(conn).create(**data.model_dump(), created_by="agent")
+    except NoticeError as e:
+        raise _notice_error(e)
+
+
+@app.put("/api/agent/notices/{notice_id}")
+async def agent_update_notice(
+    notice_id: int,
+    data: NoticeUpdateRequest,
+    _: str = Depends(require_notice_agent),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        return await NoticeManager(conn).update(notice_id, data.model_dump())
+    except NoticeError as e:
+        raise _notice_error(e)
+
+
+@app.delete("/api/agent/notices/{notice_id}")
+async def agent_delete_notice(
+    notice_id: int, _: str = Depends(require_notice_agent), conn: aiosqlite.Connection = Depends(get_db_conn)
+):
+    try:
+        await NoticeManager(conn).delete(notice_id)
+    except NoticeError as e:
+        raise _notice_error(e)
+    return {"status": "success", "message": "공지를 삭제했습니다."}

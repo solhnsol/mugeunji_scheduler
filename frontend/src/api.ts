@@ -365,6 +365,67 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
+  // ---- 공지·이용 안내
+  async getNotices(category?: 'notice' | 'guide') {
+    const res = await fetch(`/api/notices${category ? `?category=${category}` : ''}`);
+    return parseResponse<import('./types').Notice[]>(res);
+  },
+
+  async getNotice(id: number) {
+    const res = await fetch(`/api/notices/${id}`);
+    return parseResponse<import('./types').Notice>(res);
+  },
+
+  async adminListNotices(token: string) {
+    const res = await fetch('/admin/notices', { headers: authHeaders(token) });
+    return parseResponse<import('./types').Notice[]>(res);
+  },
+
+  async adminGetNotice(token: string, id: number) {
+    const res = await fetch(`/admin/notices/${id}`, { headers: authHeaders(token) });
+    return parseResponse<import('./types').Notice>(res);
+  },
+
+  async adminSaveNotice(
+    token: string,
+    id: number | null,
+    body: Partial<{
+      title: string;
+      body: string;
+      category: 'notice' | 'guide';
+      visibility: 'public' | 'members';
+      pinned: boolean;
+      published: boolean;
+    }>,
+  ) {
+    const res = await fetch(id === null ? '/admin/notices' : `/admin/notices/${id}`, {
+      method: id === null ? 'POST' : 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<import('./types').Notice>(res);
+  },
+
+  async adminDeleteNotice(token: string, id: number) {
+    const res = await fetch(`/admin/notices/${id}`, { method: 'DELETE', headers: authHeaders(token) });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminNoticeKeyStatus(token: string) {
+    const res = await fetch('/admin/notice-api-key', { headers: authHeaders(token) });
+    return parseResponse<{ has_key: boolean }>(res);
+  },
+
+  async adminRotateNoticeKey(token: string) {
+    const res = await fetch('/admin/notice-api-key', { method: 'POST', headers: authHeaders(token) });
+    return parseResponse<{ api_key: string }>(res);
+  },
+
+  async adminRevokeNoticeKey(token: string) {
+    const res = await fetch('/admin/notice-api-key', { method: 'DELETE', headers: authHeaders(token) });
+    return parseResponse<{ message: string }>(res);
+  },
+
   async adminListBookings(token: string, params: { date?: string; username?: string }) {
     const q = new URLSearchParams();
     if (params.date) q.set('date_filter', params.date);

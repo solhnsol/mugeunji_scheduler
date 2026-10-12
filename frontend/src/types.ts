@@ -328,3 +328,19 @@ export interface AdminBooking {
   cancelled_at: string | null;
   created_by: string | null;
 }
+
+export interface Notice {
+  id: number;
+  title: string;
+  category: 'notice' | 'guide';
+  category_label: string;
+  visibility: 'public' | 'members';
+  pinned: boolean;
+  published: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+  published_at: string | null;
+  created_by: string | null;
+  /** 목록에는 없고 상세·관리자 조회에만 있다 */
+  body?: string;
+}
