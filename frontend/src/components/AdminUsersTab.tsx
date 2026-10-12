@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { UserInfo } from '../types';
 import { formatPhone } from '../utils';
 
@@ -11,6 +13,27 @@ export function AdminUsersTab({
   users: UserInfo[];
   onEdit: (user: UserInfo) => void;
 }) {
+  // 검색어는 주소(?q=)에 두어 새로고침·뒤로가기 뒤에도 유지된다
+  const [params, setParams] = useSearchParams();
+  const q = params.get('q') ?? '';
+  const setQuery = (value: string) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set('q', value);
+    else next.delete('q');
+    setParams(next, { replace: true });
+  };
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return users;
+    const digits = needle.replace(/\D/g, '');
+    return users.filter(
+      (u) =>
+        (u.name || '').toLowerCase().includes(needle) ||
+        u.username.toLowerCase().includes(needle) ||
+        (digits.length >= 3 && (u.phone || '').replace(/\D/g, '').includes(digits)),
+    );
+  }, [users, q]);
+
   return (
         <div className="space-y-5">
           <section className="card p-5 overflow-x-auto">
@@ -46,7 +69,20 @@ export function AdminUsersTab({
           </section>
 
           <section className="card p-5 overflow-x-auto">
-            <h2 className="font-semibold text-ink mb-4">회원</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h2 className="font-semibold text-ink">
+                회원 <span className="text-sm font-normal text-ink-faint tabular-nums">{q ? `${filtered.length}/${users.length}` : users.length}명</span>
+              </h2>
+              <input
+                type="search"
+                className="input !py-2 !px-3 !w-full sm:!w-56 text-sm"
+                placeholder="이름·아이디·연락처 검색"
+                aria-label="회원 검색"
+                autoComplete="off"
+                value={q}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
             <table className="w-full text-sm min-w-[560px]">
             <thead>
               <tr className="text-left text-ink-faint border-b border-line text-xs">
@@ -59,7 +95,14 @@ export function AdminUsersTab({
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-6 text-center text-ink-faint">
+                    {q ? '검색 결과가 없어요' : '회원이 없어요'}
+                  </td>
+                </tr>
+              )}
+              {filtered.map((u) => (
                 <tr key={u.username} className="border-b border-line/50">
                   <td className="py-3 font-medium">{u.name || '-'}</td>
                   <td className="text-ink-muted">{u.phone ? formatPhone(u.phone) : '-'}</td>
