@@ -109,6 +109,17 @@ function AdminDashboard({
   const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'roster';
   const setTab = (id: (typeof TABS)[number]['id']) => setParams({ tab: id }, { replace: true });
   const [reloadKey, setReloadKey] = useState(0);
+  // 확인 대기 중인 토큰 충전 요청 수: 다른 탭을 보고 있어도 토큰 탭에 배지로 알린다
+  const [pendingTokens, setPendingTokens] = useState(0);
+  const loadPending = useCallback(async () => {
+    const list = await api.adminListTokenPurchases(token, 'pending');
+    setPendingTokens(list.length);
+  }, [token]);
+  useEffect(() => {
+    loadPending().catch(() => undefined);
+    const id = window.setInterval(() => loadPending().catch(() => undefined), 60_000);
+    return () => window.clearInterval(id);
+  }, [loadPending, tab]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [admins, setAdmins] = useState<UserInfo[]>([]);
@@ -210,6 +221,14 @@ function AdminDashboard({
             onClick={() => setTab(t.id)}
           >
             {t.label}
+            {t.id === 'tokens' && pendingTokens > 0 && tab !== 'tokens' && (
+              <span
+                className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-[#c45c5c] text-white text-[11px] font-semibold tabular-nums align-middle"
+                aria-label={`확인 대기 ${pendingTokens}건`}
+              >
+                {pendingTokens}
+              </span>
+            )}
           </button>
         ))}
         </div>
