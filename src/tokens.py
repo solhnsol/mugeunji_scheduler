@@ -322,7 +322,7 @@ class TokenManager:
 
     async def list_balances(self) -> List[Dict]:
         async with self.conn.execute(
-            """SELECT username, name, phone, role FROM users WHERE role != 'admin' ORDER BY username"""
+            """SELECT username, name, phone, role, dawn_allowed FROM users WHERE role != 'admin' ORDER BY username"""
         ) as cursor:
             users = await cursor.fetchall()
         async with self.conn.execute(
@@ -346,6 +346,7 @@ class TokenManager:
                 "name": u["name"],
                 "phone": u["phone"],
                 "role": u["role"],
+                "dawn_allowed": bool(u["dawn_allowed"]),
                 "balance": sum(lot["tokens"] for lot in lots),
                 "next_expiry": min(expiring) if expiring else None,
                 "last_activity": last_activity.get(u["username"]),

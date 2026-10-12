@@ -177,3 +177,10 @@ def test_beta_blocks_free_use_but_not_monthly(client, admin, make_user, beta_mod
     assert client.get("/tokens/me", headers=member).status_code == 200
     assert client.get("/bookings/config", headers=member).json()["mode"] == "beta"
     assert client.get("/settings").json()["reservation_mode"] == "beta"
+
+
+def test_balances_list_includes_dawn_flag(client, admin, make_user):
+    username, _ = make_user()
+    client.put(f"/admin/users/{username}/dawn", headers=admin, json={"allowed": False})
+    row = [b for b in client.get("/admin/token-balances", headers=admin).json() if b["username"] == username][0]
+    assert row["dawn_allowed"] is False and row["role"] == "user"

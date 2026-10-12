@@ -236,6 +236,7 @@ export interface TokenBalance {
   name?: string | null;
   phone?: string | null;
   role?: string;
+  dawn_allowed?: boolean;
   balance: number;
   next_expiry?: string | null;
   last_activity: string | null;
@@ -312,4 +313,18 @@ export interface MyBooking {
   hour: number;
   cost: number;
   cancellable: boolean;
+}
+
+export interface AdminBooking {
+  id: number;
+  username: string;
+  name: string;
+  date: string;
+  hour: number;
+  cost: number;
+  status: 'active' | 'cancelled';
+  refunded: number;
+  created_at: string | null;
+  cancelled_at: string | null;
+  created_by: string | null;
 }

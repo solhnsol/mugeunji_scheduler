@@ -365,6 +365,42 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
+  async adminListBookings(token: string, params: { date?: string; username?: string }) {
+    const q = new URLSearchParams();
+    if (params.date) q.set('date_filter', params.date);
+    if (params.username) q.set('username', params.username);
+    const res = await fetch(`/admin/bookings?${q}`, { headers: authHeaders(token) });
+    return parseResponse<import('./types').AdminBooking[]>(res);
+  },
+
+  async adminCreateBooking(token: string, username: string, slots: { date: string; hour: number }[]) {
+    const res = await fetch('/admin/bookings', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ username, slots }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  /** refund: null이면 환불 정책대로, true면 전액, false면 환불 없음 */
+  async adminCancelBooking(token: string, bookingId: number, refund: boolean | null) {
+    const res = await fetch(`/admin/bookings/${bookingId}/cancel`, {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ refund }),
+    });
+    return parseResponse<{ message: string; refunded: number }>(res);
+  },
+
+  async adminSetDawn(token: string, username: string, allowed: boolean) {
+    const res = await fetch(`/admin/users/${username}/dawn`, {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ allowed }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
   async adminGetBookingSettings(token: string) {
     const res = await fetch('/admin/booking-settings', { headers: authHeaders(token) });
     return parseResponse<{

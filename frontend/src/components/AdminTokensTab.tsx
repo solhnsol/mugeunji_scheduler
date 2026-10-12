@@ -3,6 +3,7 @@ import { api, ApiError } from '../api';
 import { TokenBalance, TokenLedgerEntry, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiry, formatPhone, formatPrice, formatTokens } from '../utils';
 import { AdminBookingSettings } from './AdminBookingSettings';
+import { AdminBookingsPanel } from './AdminBookingsPanel';
 import { useConfirm } from './ConfirmDialog';
 
 type PurchaseFilter = 'pending' | 'confirmed' | 'cancelled';
@@ -47,6 +48,7 @@ export function AdminTokensTab({
   const [adjustTarget, setAdjustTarget] = useState<TokenBalance | null>(null);
   const [ledgerTarget, setLedgerTarget] = useState<TokenBalance | null>(null);
   const [grantOpen, setGrantOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<TokenBalance | null>(null);
   const { confirm, dialog } = useConfirm();
 
   const fail = useCallback(
@@ -131,6 +133,15 @@ export function AdminTokensTab({
   return (
     <div className="space-y-5">
       <AdminBookingSettings token={token} show={show} />
+
+      <AdminBookingsPanel
+        token={token}
+        show={show}
+        members={balances}
+        onChanged={() => void loadAll()}
+        historyTarget={historyTarget}
+        onCloseHistory={() => setHistoryTarget(null)}
+      />
 
       <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -354,6 +365,19 @@ export function AdminTokensTab({
                   <button type="button" className="text-xs text-sage font-medium min-h-[36px] px-2" onClick={() => setLedgerTarget(b)}>
                     내역
                   </button>
+                  <button type="button" className="text-xs text-sage font-medium min-h-[36px] px-2" onClick={() => setHistoryTarget(b)}>
+                    예약
+                  </button>
+                  <label className="flex items-center gap-1 text-xs text-ink-muted min-h-[36px] px-1 cursor-pointer" title="새벽(0~4시) 예약 허용">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-sage"
+                      checked={b.dawn_allowed !== false}
+                      disabled={busy}
+                      onChange={(e) => run(`dawn-${b.username}`, async () => api.adminSetDawn(token, b.username, e.target.checked))}
+                    />
+                    새벽
+                  </label>
                   <button type="button" className="text-xs border border-line text-ink-muted rounded-full px-3 py-1.5 min-h-[36px] hover:bg-cream-dark/60" onClick={() => setAdjustTarget(b)}>
                     조정
                   </button>
