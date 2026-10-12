@@ -1,17 +1,20 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { SESSION } from './api';
 import { AppShell } from './components/ui';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
 import { useSession } from './hooks/useSession';
-import LoginPage, { RegisterPage } from './pages/auth';
-import UserApp from './pages/UserApp';
-import AdminPage from './pages/AdminPage';
-import FreeApp from './pages/FreeApp';
-import Landing from './pages/Landing';
-import BookingPage from './pages/BookingPage';
-import TokensPage from './pages/TokensPage';
-import NoticesPage from './pages/NoticesPage';
+
+// 화면 단위로 코드를 나눠, 회원이 관리자 화면 코드까지 내려받지 않게 한다
+const LoginPage = lazy(() => import('./pages/auth'));
+const RegisterPage = lazy(() => import('./pages/auth').then((m) => ({ default: m.RegisterPage })));
+const UserApp = lazy(() => import('./pages/UserApp'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const FreeApp = lazy(() => import('./pages/FreeApp'));
+const Landing = lazy(() => import('./pages/Landing'));
+const BookingPage = lazy(() => import('./pages/BookingPage'));
+const TokensPage = lazy(() => import('./pages/TokensPage'));
+const NoticesPage = lazy(() => import('./pages/NoticesPage'));
 import { PageSkeleton } from './components/Skeleton';
 
 const BRAND = '묵은지 작업실';
@@ -127,6 +130,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <TitleManager />
+      <Suspense fallback={<Splash />}>
       <Routes>
         <Route path="/" element={<UserRoute />} />
         <Route path="/login" element={<LoginRoute />} />
@@ -140,6 +144,7 @@ export default function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
