@@ -1,8 +1,9 @@
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
-import { AdminBooking, TokenBalance } from '../types';
-import { formatDateTime, formatTokens, kstParts } from '../utils';
-import { addDays, formatDateKo, hourLabel } from '../utils/booking';
+import { AdminBooking, GridDay, PriceBand, TokenBalance } from '../types';
+import { GridBlock, TimeGrid, buildBlocks } from './booking/TimeGrid';
+import { formatTokens, kstParts } from '../utils';
+import { addDays, formatDateKo, hourLabel, slotKey, startOfWeek, summarizeHours } from '../utils/booking';
 
 function todayKst(): string {
   const p = kstParts(new Date().toISOString());
@@ -22,7 +23,7 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
   );
 }
 
-/** 날짜별 토큰 예약 현황, 관리자 강제 예약·취소, 회원별 예약 내역. */
+/** 주간 일정표로 보는 토큰 예약 현황. 빈 시간을 골라 회원 이름으로 등록하고, 예약 블록을 눌러 취소한다. */
 export function AdminBookingsPanel({
   token,
   show,
@@ -39,39 +40,59 @@ export function AdminBookingsPanel({
   historyTarget: TokenBalance | null;
   onCloseHistory: () => void;
 }) {
-  const [date, setDate] = useState(todayKst());
-  const [rows, setRows] = useState<AdminBooking[] | null>(null);
-  const [cancelTarget, setCancelTarget] = useState<AdminBooking | null>(null);
+  const today = todayKst();
+  const [weekStart, setWeekStart] = useState(startOfWeek(today));
+  const [days, setDays] = useState<GridDay[] | null>(null);
+  const [bands, setBands] = useState<PriceBand[]>([]);
+  const [selected, setSelected] = useState<Map<string, { date: string; hour: number }>>(new Map());
   const [forceUser, setForceUser] = useState('');
-  const [forceHours, setForceHours] = useState<Set<number>>(new Set());
+  const [cancelTarget, setCancelTarget] = useState<{ block: GridBlock; hour: number } | null>(null);
+  const [wholeBlock, setWholeBlock] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const fail = useCallback((e: unknown, fb: string) => show(e instanceof ApiError ? e.message : fb, 'error'), [show]);
 
   const load = useCallback(async () => {
-    if (!date) return;
-    setRows(await api.adminListBookings(token, { date }));
-  }, [token, date]);
+    const res = await api.getBookingRange(token, weekStart, 7);
+    setDays(res.days);
+  }, [token, weekStart]);
 
   useEffect(() => {
+    api.getBookingConfig(token).then((c) => setBands(c.price_bands)).catch(() => undefined);
+  }, [token]);
+
+  useEffect(() => {
+    setDays(null);
     load().catch((e) => fail(e, '예약을 불러오지 못했어요'));
   }, [load, fail]);
 
-  const active = useMemo(() => (rows ?? []).filter((r) => r.status === 'active').sort((a, b) => a.hour - b.hour), [rows]);
-  const cancelled = useMemo(() => (rows ?? []).filter((r) => r.status === 'cancelled'), [rows]);
-  const takenHours = useMemo(() => new Set(active.map((r) => r.hour)), [active]);
+  const toggleFree = (date: string, hour: number) =>
+    setSelected((prev) => {
+      const next = new Map(prev);
+      const key = slotKey(date, hour);
+      if (next.has(key)) next.delete(key);
+      else next.set(key, { date, hour });
+      return next;
+    });
 
   const doCancel = async (refund: boolean | null) => {
     if (!cancelTarget || busy) return;
+    const { block, hour } = cancelTarget;
+    const ids = wholeBlock ? block.ids.filter((id): id is number => id != null) : [block.ids[hour - block.start]].filter((id): id is number => id != null);
     setBusy(true);
     try {
-      const res = await api.adminCancelBooking(token, cancelTarget.id, refund);
-      show(`${res.message} (환불 ${formatTokens(res.refunded)}토큰)`, 'success');
+      let refunded = 0;
+      for (const id of ids) {
+        const res = await api.adminCancelBooking(token, id, refund);
+        refunded += res.refunded;
+      }
+      show(`${ids.length}시간 예약을 취소했어요. (환불 ${formatTokens(refunded)}토큰)`, 'success');
       setCancelTarget(null);
       await load();
       onChanged();
     } catch (e) {
       fail(e, '취소하지 못했어요');
+      await load().catch(() => undefined);
     } finally {
       setBusy(false);
     }
@@ -80,127 +101,116 @@ export function AdminBookingsPanel({
   const doForce = async () => {
     if (busy) return;
     if (!forceUser) return show('회원을 선택해주세요.', 'error');
-    if (forceHours.size === 0) return show('시간을 선택해주세요.', 'error');
+    if (selected.size === 0) return show('빈 시간을 선택해주세요.', 'error');
     setBusy(true);
     try {
       const res = await api.adminCreateBooking(
         token,
         forceUser,
-        [...forceHours].sort((a, b) => a - b).map((hour) => ({ date, hour })),
+        [...selected.values()].sort((a, b) => (a.date === b.date ? a.hour - b.hour : a.date < b.date ? -1 : 1)),
       );
       show(res.message, 'success');
-      setForceHours(new Set());
+      setSelected(new Map());
       await load();
     } catch (e) {
       fail(e, '등록하지 못했어요');
+      await load().catch(() => undefined);
     } finally {
       setBusy(false);
     }
   };
 
-  const toggleHour = (h: number) =>
-    setForceHours((prev) => {
-      const next = new Set(prev);
-      if (next.has(h)) next.delete(h);
-      else next.add(h);
-      return next;
-    });
+  const weekEnd = addDays(weekStart, 6);
+  const range = `${formatDateKo(weekStart)} ~ ${formatDateKo(weekEnd)}`;
+  const bookedHours = days ? days.reduce((n, d) => n + d.slots.filter((sl) => sl.status === 'mine' || sl.status === 'taken').length, 0) : 0;
+  const cancelBlockHours = cancelTarget ? cancelTarget.block.ids.filter((id) => id != null).length : 0;
 
   return (
     <section className="card p-5 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold text-ink">날짜별 토큰 예약</h2>
+        <h2 className="font-semibold text-ink">토큰 예약 일정표</h2>
         <div className="flex items-center gap-1">
-          <button type="button" className="btn-ghost !min-h-[40px] !px-3" aria-label="전날" onClick={() => setDate(addDays(date, -1))}>‹</button>
-          <input aria-label="날짜" className="input !py-2 !w-auto" type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
-          <button type="button" className="btn-ghost !min-h-[40px] !px-3" aria-label="다음 날" onClick={() => setDate(addDays(date, 1))}>›</button>
-          <button type="button" className="text-xs text-sage px-2 min-h-[40px]" onClick={() => setDate(todayKst())}>오늘</button>
+          <button type="button" className="btn-ghost !min-h-[40px] !px-3" aria-label="이전 주" onClick={() => setWeekStart(addDays(weekStart, -7))}>‹</button>
+          <button type="button" className="text-xs text-sage px-2 min-h-[40px]" onClick={() => setWeekStart(startOfWeek(today))}>이번 주</button>
+          <input
+            aria-label="날짜로 이동"
+            className="input !py-2 !w-auto"
+            type="date"
+            value={weekStart}
+            onChange={(e) => e.target.value && setWeekStart(startOfWeek(e.target.value))}
+          />
+          <button type="button" className="btn-ghost !min-h-[40px] !px-3" aria-label="다음 주" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
         </div>
       </div>
       <p className="text-xs text-ink-faint">
-        {formatDateKo(date)} · 예약 <b className="text-ink tabular-nums">{active.length}</b>시간
-        <span className="ml-1">(베타의 기존 월 신청 시간은 여기에 나오지 않아요)</span>
+        {range} · 예약 <b className="text-ink tabular-nums">{bookedHours}</b>시간 · 예약 블록을 누르면 취소, 빈 시간을 고르면 회원 이름으로 등록해요. 줄무늬는 기존 월 신청(베타)이에요.
       </p>
 
-      {rows === null ? (
-        <p className="text-sm text-ink-faint">불러오는 중…</p>
-      ) : active.length === 0 ? (
-        <p className="text-sm text-ink-faint">이 날의 토큰 예약이 없어요.</p>
+      {!days ? (
+        <p className="text-sm text-ink-faint py-8 text-center">불러오는 중…</p>
       ) : (
-        <ul className="divide-y divide-line/60">
-          {active.map((r) => (
-            <li key={r.id} className="py-2.5 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-ink">
-                  {hourLabel(r.hour)} · {r.name}
-                  <span className="text-xs text-ink-faint font-normal ml-1.5 tabular-nums">{formatTokens(r.cost)}토큰</span>
-                </p>
-                <p className="text-xs text-ink-faint">
-                  {r.created_by && r.created_by !== r.username ? `${r.created_by}가 등록 · ` : ''}
-                  신청 {formatDateTime(r.created_at)}
-                </p>
-              </div>
-              <button type="button" className="text-xs text-[#8b4040] min-h-[36px] px-2 shrink-0" onClick={() => setCancelTarget(r)}>
-                취소
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {cancelled.length > 0 && (
-        <details className="text-xs text-ink-faint">
-          <summary className="cursor-pointer">취소된 예약 {cancelled.length}건</summary>
-          <ul className="mt-1.5 space-y-0.5">
-            {cancelled.map((r) => (
-              <li key={r.id}>
-                {hourLabel(r.hour)} · {r.name} · 환불 {formatTokens(r.refunded)}/{formatTokens(r.cost)}토큰
-              </li>
-            ))}
-          </ul>
-        </details>
+        <TimeGrid
+          days={days}
+          bands={bands}
+          today={today}
+          selected={new Set(selected.keys())}
+          cancelSelected={new Set()}
+          onToggleFree={toggleFree}
+          onBlockClick={(block, hour) => {
+            setWholeBlock(false);
+            setCancelTarget({ block, hour });
+          }}
+          onToggleMine={(id) => {
+            const day = days.find((d) => d.slots.some((sl) => sl.booking_id === id));
+            const slot = day?.slots.find((sl) => sl.booking_id === id);
+            if (day && slot) {
+              const block = buildBlocks(day).find((b) => b.ids.includes(id));
+              if (block) {
+                setWholeBlock(false);
+                setCancelTarget({ block, hour: slot.hour });
+              }
+            }
+          }}
+        />
       )}
 
-      <div className="rounded-2xl border border-line p-4 space-y-3">
-        <p className="text-sm font-medium text-ink">회원 이름으로 예약 등록</p>
-        <p className="text-xs text-ink-faint">토큰이 차감되지 않고, 예약 가능 범위와 새벽 권한도 따지지 않아요.</p>
-        <select className="input" aria-label="회원" value={forceUser} onChange={(e) => setForceUser(e.target.value)}>
-          <option value="">회원 선택</option>
-          {members.map((m) => (
-            <option key={m.username} value={m.username}>{m.name || m.username} (@{m.username})</option>
-          ))}
-        </select>
-        <div className="grid grid-cols-6 gap-1.5" role="group" aria-label="시간">
-          {Array.from({ length: 24 }, (_, h) => (
-            <button
-              key={h}
-              type="button"
-              disabled={takenHours.has(h)}
-              aria-pressed={forceHours.has(h)}
-              onClick={() => toggleHour(h)}
-              className={`rounded-xl text-xs min-h-[36px] tabular-nums border transition ${
-                takenHours.has(h)
-                  ? 'bg-slot-taken/40 text-ink-faint border-transparent'
-                  : forceHours.has(h)
-                    ? 'bg-sage text-white border-sage'
-                    : 'bg-white text-ink-muted border-line hover:border-sage/40'
-              }`}
-            >
-              {h}
-            </button>
-          ))}
+      {selected.size > 0 && (
+        <div className="rounded-2xl border border-sage/30 bg-sage-muted/30 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-ink">
+              선택 {selected.size}시간
+              <span className="text-xs text-ink-faint font-normal ml-1.5">토큰이 차감되지 않고, 예약 가능 범위·새벽 권한도 따지지 않아요.</span>
+            </p>
+            <button type="button" className="text-xs text-sage underline underline-offset-2 shrink-0" onClick={() => setSelected(new Map())}>선택 해제</button>
+          </div>
+          <select className="input" aria-label="회원" value={forceUser} onChange={(e) => setForceUser(e.target.value)}>
+            <option value="">회원 선택</option>
+            {members.map((m) => (
+              <option key={m.username} value={m.username}>{m.name || m.username} (@{m.username})</option>
+            ))}
+          </select>
+          <button type="button" className="btn-primary !min-h-[44px]" disabled={busy} onClick={doForce}>
+            {busy ? '등록 중…' : `${selected.size}시간 등록`}
+          </button>
         </div>
-        <button type="button" className="btn-primary !min-h-[44px]" disabled={busy} onClick={doForce}>
-          {forceHours.size > 0 ? `${forceHours.size}시간 등록` : '등록'}
-        </button>
-      </div>
+      )}
 
       {cancelTarget && (
         <Modal
           title="예약을 취소할까요?"
-          subtitle={`${formatDateKo(cancelTarget.date)} ${hourLabel(cancelTarget.hour)} · ${cancelTarget.name} · ${formatTokens(cancelTarget.cost)}토큰`}
+          subtitle={`${formatDateKo(cancelTarget.block.date)} ${hourLabel(cancelTarget.hour)} · ${cancelTarget.block.name}`}
           onClose={() => setCancelTarget(null)}
         >
-          <p className="text-xs text-ink-muted mb-4 leading-relaxed">환불 방식을 고르세요. 취소하면 그 시간은 다시 비어요.</p>
+          {cancelBlockHours > 1 && (
+            <label className="flex items-center gap-3 rounded-2xl border border-line p-3 mb-4 cursor-pointer">
+              <input type="checkbox" className="w-5 h-5 accent-sage" checked={wholeBlock} onChange={(e) => setWholeBlock(e.target.checked)} />
+              <span className="text-sm">
+                이어진 {summarizeHours(cancelTarget.block.ids.map((_, i) => cancelTarget.block.start + i))} 전체 취소
+                <span className="block text-xs text-ink-faint">끄면 {hourLabel(cancelTarget.hour)} 한 시간만 취소해요.</span>
+              </span>
+            </label>
+          )}
+          <p className="text-xs text-ink-muted mb-3 leading-relaxed">환불 방식을 고르세요. 취소하면 그 시간은 다시 비어요.</p>
           <div className="space-y-2">
             <button type="button" className="btn-secondary w-full" disabled={busy} onClick={() => doCancel(null)}>환불 정책대로</button>
             <button type="button" className="btn-secondary w-full" disabled={busy} onClick={() => doCancel(true)}>전액 환불</button>
