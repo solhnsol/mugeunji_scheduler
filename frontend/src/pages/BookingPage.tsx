@@ -89,19 +89,22 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     ]);
   }, [loadConfig, loadCalendar, loadWeek, loadMine]);
 
-  // 첫 로딩
-  useEffect(() => {
-    (async () => {
-      try {
-        const cfg = await loadConfig();
-        const m = monthOf(cfg.bookable_from);
-        setMonth(m);
-        await Promise.all([loadCalendar(m), loadMine()]);
-      } catch (e) {
-        setError(e instanceof ApiError ? e.message : '불러오지 못했어요');
-      }
-    })();
+  // 첫 로딩 (실패하면 "다시 시도"로 다시 부른다)
+  const init = useCallback(async () => {
+    setError('');
+    try {
+      const cfg = await loadConfig();
+      const m = monthOf(cfg.bookable_from);
+      setMonth(m);
+      await Promise.all([loadCalendar(m), loadMine()]);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '불러오지 못했어요');
+    }
   }, [loadConfig, loadCalendar, loadMine]);
+
+  useEffect(() => {
+    void init();
+  }, [init]);
 
   // 달 이동
   useEffect(() => {
@@ -343,7 +346,10 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
         <div className="text-center py-16 space-y-4">
           <p className="text-ink-muted">{error}</p>
           <div className="flex justify-center gap-2">
-            <Link to="/" className="btn-primary !w-auto !px-6">홈으로</Link>
+            <button type="button" className="btn-primary !w-auto !px-6" onClick={() => void init()}>
+              다시 시도
+            </button>
+            <Link to="/" className="btn-secondary !w-auto !px-6">홈으로</Link>
             {onLogout && (
               <button type="button" className="btn-secondary !w-auto !px-6" onClick={onLogout}>
                 로그아웃
