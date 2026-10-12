@@ -174,26 +174,34 @@ export function AdminBookingsPanel({
         />
       )}
 
-      {selected.size > 0 && (
-        <div className="rounded-2xl border border-sage/30 bg-sage-muted/30 p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-ink">
-              선택 {selected.size}시간
-              <span className="text-xs text-ink-faint font-normal ml-1.5">토큰이 차감되지 않고, 예약 가능 범위·새벽 권한도 따지지 않아요.</span>
-            </p>
-            <button type="button" className="text-xs text-sage underline underline-offset-2 shrink-0" onClick={() => setSelected(new Map())}>선택 해제</button>
-          </div>
-          <select className="input" aria-label="회원" value={forceUser} onChange={(e) => setForceUser(e.target.value)}>
+      {/* 선택 영역은 항상 같은 자리에 두고, 선택이 없으면 비활성으로 보여준다 (나타났다 사라지면 일정표가 밀린다) */}
+      <div className="rounded-2xl border border-line p-3 space-y-2">
+        <div className="flex items-center justify-between gap-3 h-5">
+          <p className="text-sm font-medium text-ink truncate">
+            {selected.size > 0 ? `선택 ${selected.size}시간` : <span className="text-ink-faint font-normal">빈 시간을 눌러 선택하면 회원 이름으로 등록할 수 있어요</span>}
+          </p>
+          <button
+            type="button"
+            className="text-xs text-sage underline underline-offset-2 shrink-0 disabled:opacity-30 disabled:no-underline"
+            disabled={selected.size === 0}
+            onClick={() => setSelected(new Map())}
+          >
+            선택 해제
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <select className="input flex-1 min-w-0" aria-label="회원" value={forceUser} disabled={selected.size === 0} onChange={(e) => setForceUser(e.target.value)}>
             <option value="">회원 선택</option>
             {members.map((m) => (
               <option key={m.username} value={m.username}>{m.name || m.username} (@{m.username})</option>
             ))}
           </select>
-          <button type="button" className="btn-primary !min-h-[44px]" disabled={busy} onClick={doForce}>
-            {busy ? '등록 중…' : `${selected.size}시간 등록`}
+          <button type="button" className="btn-primary !w-auto !px-5 !min-h-[44px] shrink-0" disabled={busy || selected.size === 0} onClick={doForce}>
+            {busy ? '등록 중…' : selected.size > 0 ? `${selected.size}시간 등록` : '등록'}
           </button>
         </div>
-      )}
+        <p className="text-[11px] text-ink-faint truncate">토큰이 차감되지 않고, 예약 가능 범위·새벽 권한도 따지지 않아요.</p>
+      </div>
 
       {cancelTarget && (
         <Modal
