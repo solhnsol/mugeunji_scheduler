@@ -27,12 +27,13 @@ from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 
 from src.auth import AuthManager, is_profile_complete
-from src.automation_config import RESERVATION_FREE, RESERVATION_MONTHLY, ScheduleConfig
+from src.automation_config import RESERVATION_FREE, RESERVATION_MONTHLY, ScheduleConfig, now_kst
 from src.database import init_db
 from src.membership import MembershipManager, period_from_offset, usage_period
 from src.reservation import ReservationManager
 from src.settings import SettingsManager
-from src.booking import MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
+from src.notices import NoticeError, NoticeManager
+from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
 from src.tokens import TokenManager
 
 load_dotenv()
@@ -208,16 +209,23 @@ class UpdateUserProfileRequest(BaseModel):
 
 class TokenPackCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=30)
-    price_won: int = Field(..., ge=1)
+    price_won: int = Field(..., ge=0)
     tokens: int = Field(..., ge=1)
+    auto_confirm: bool = False
+    expires_on: Optional[str] = None
+    audience: Literal["all", "free"] = "all"
 
 
 class TokenPackUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=30)
-    price_won: Optional[int] = Field(None, ge=1)
+    price_won: Optional[int] = Field(None, ge=0)
     tokens: Optional[int] = Field(None, ge=1)
     sort_order: Optional[int] = None
     active: Optional[bool] = None
+    auto_confirm: Optional[bool] = None
+    expires_on: Optional[str] = None
+    clear_expires_on: bool = False
+    audience: Optional[Literal["all", "free"]] = None
 
 
 class TokenPurchaseRequest(BaseModel):
@@ -228,10 +236,36 @@ class TokenAdjustRequest(BaseModel):
     username: str = Field(..., min_length=1)
     tokens: int
     memo: str = Field(..., min_length=1, max_length=200)
+    expires_on: Optional[str] = None
+
+
+class TokenGrantRequest(BaseModel):
+    usernames: List[str] = Field(..., min_length=1, max_length=500)
+    tokens: int = Field(..., ge=1)
+    memo: str = Field(..., min_length=1, max_length=200)
+    expires_on: Optional[str] = None
 
 
 class RejectPurchaseRequest(BaseModel):
     memo: Optional[str] = Field(None, max_length=200)
+
+
+class NoticeCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=100)
+    body: str = Field("", max_length=20000)
+    category: Literal["notice", "guide"] = "notice"
+    visibility: Literal["public", "members"] = "members"
+    pinned: bool = False
+    published: bool = False
+
+
+class NoticeUpdateRequest(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=100)
+    body: Optional[str] = Field(None, max_length=20000)
+    category: Optional[Literal["notice", "guide"]] = None
+    visibility: Optional[Literal["public", "members"]] = None
+    pinned: Optional[bool] = None
+    published: Optional[bool] = None
 
 
 class TokenSettingsRequest(BaseModel):
@@ -273,7 +307,8 @@ class RefundTierModel(BaseModel):
 
 
 class BookingSettingsRequest(BaseModel):
-    reservation_mode: Optional[Literal["legacy", "token"]] = None
+    reservation_mode: Optional[Literal["legacy", "beta", "token"]] = None
+    beta_month: Optional[str] = None
     price_bands: Optional[List[PriceBandModel]] = None
     refund_tiers: Optional[List[RefundTierModel]] = None
 
@@ -357,6 +392,7 @@ class SettingsResponse(BaseModel):
     payment_guide: Optional[str] = None
     token_charge_enabled: bool = False
     reservation_mode: str = "legacy"
+    beta_month: str = ""
 
 
 def set_session_cookie(response: Response, request: Request, token: str) -> None:
@@ -641,25 +677,31 @@ async def get_public_settings(conn: aiosqlite.Connection = Depends(get_db_conn))
     settings = await SettingsManager(conn).get_settings()
     status["token_charge_enabled"] = settings.get("token_charge_enabled") == "true"
     status["reservation_mode"] = settings.get("reservation_mode") or MODE_LEGACY
+    status["beta_month"] = settings.get("beta_month") or ""
     return status
 
 
-async def _require_legacy_mode(conn: aiosqlite.Connection, user: dict) -> None:
-    """토큰 예약으로 전환된 뒤에는 기존 월/자유이용 예약을 회원이 쓸 수 없다."""
+async def _require_legacy_mode(conn: aiosqlite.Connection, user: dict, allow_monthly: bool = False) -> None:
+    """토큰 예약으로 전환된 뒤에는 기존 월/자유이용 예약을 회원이 쓸 수 없다.
+
+    베타에서는 월 신청(allow_monthly)만 기존 방식으로 쓰고 자유이용은 막는다."""
     if user["role"] == "admin":
         return
-    if (await BookingManager(conn).get_mode()) == MODE_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="새 예약 시스템(토큰 예약)으로 전환됐어요. 토큰으로 예약해주세요.",
-        )
+    mode = await BookingManager(conn).get_mode()
+    if mode == MODE_TOKEN:
+        detail = "새 예약 시스템(토큰 예약)으로 전환됐어요. 토큰으로 예약해주세요."
+    elif mode == MODE_BETA and not allow_monthly:
+        detail = "베타 기간에는 자유이용 대신 토큰으로 예약해주세요."
+    else:
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 async def _require_token_mode(conn: aiosqlite.Connection, user: dict) -> None:
     """토큰 예약은 전환된 뒤에만 회원이 쓸 수 있다. 관리자는 전환 전에도 미리 써볼 수 있다."""
     if user["role"] == "admin":
         return
-    if (await BookingManager(conn).get_mode()) != MODE_TOKEN:
+    if (await BookingManager(conn).get_mode()) not in (MODE_TOKEN, MODE_BETA):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="토큰 예약은 아직 열리지 않았어요.")
 
 
@@ -669,10 +711,16 @@ async def reserve_time(
     current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
-    await _require_legacy_mode(conn, current_user)
+    await _require_legacy_mode(conn, current_user, allow_monthly=True)
     reserve_manager = ReservationManager(conn)
     username = current_user["username"]
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
+    conflicts = await BookingManager(conn).monthly_conflicts(reserve_times_list)
+    if conflicts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"이미 토큰으로 예약된 시간이 있어 월 신청할 수 없어요: {', '.join(conflicts[:3])}{' 외' if len(conflicts) > 3 else ''}",
+        )
     is_success, message = await reserve_manager.create_reservation(username, reserve_times_list)
     if is_success:
         await broadcast_reservation_updates(conn)
@@ -686,7 +734,7 @@ async def cancel_reservation(
     current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
-    await _require_legacy_mode(conn, current_user)
+    await _require_legacy_mode(conn, current_user, allow_monthly=True)
     reserve_manager = ReservationManager(conn)
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     is_success, message = await reserve_manager.cancel_own_reservations(
@@ -907,7 +955,7 @@ async def _require_token_charge_open(conn: aiosqlite.Connection, user: dict) -> 
     if user["role"] == "admin":
         return
     settings = await SettingsManager(conn).get_settings()
-    if settings.get("token_charge_enabled") != "true" and settings.get("reservation_mode") != MODE_TOKEN:
+    if settings.get("token_charge_enabled") != "true" and settings.get("reservation_mode") not in (MODE_TOKEN, MODE_BETA):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="아직 토큰 충전을 사용할 수 없습니다.")
 
 
@@ -917,7 +965,13 @@ async def list_token_packs(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     await _require_token_charge_open(conn, current_user)
-    return await TokenManager(conn).list_packs(active_only=True)
+    today = now_kst().date().isoformat()
+    packs = await TokenManager(conn).list_packs(active_only=True)
+    is_free_member = current_user["role"] in ("free", "admin")
+    return [
+        p for p in packs
+        if (is_free_member or p["audience"] != "free") and not (p["expires_on"] and p["expires_on"] < today)
+    ]
 
 
 @app.get("/tokens/me")
@@ -930,6 +984,7 @@ async def get_my_tokens(
     username = current_user["username"]
     return {
         "balance": await tokens.get_balance(username),
+        "lots": await tokens.get_lots(username),
         "ledger": await tokens.list_ledger(username, limit=50),
         "purchases": await tokens.list_user_purchases(username, limit=20),
     }
@@ -1000,7 +1055,10 @@ async def admin_create_token_pack(
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
-    ok, message = await TokenManager(conn).create_pack(data.name, data.price_won, data.tokens)
+    ok, message = await TokenManager(conn).create_pack(
+        data.name, data.price_won, data.tokens,
+        auto_confirm=data.auto_confirm, expires_on=data.expires_on, audience=data.audience,
+    )
     if ok:
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
@@ -1020,6 +1078,10 @@ async def admin_update_token_pack(
         tokens=data.tokens,
         sort_order=data.sort_order,
         active=data.active,
+        auto_confirm=data.auto_confirm,
+        expires_on=data.expires_on,
+        clear_expires_on=data.clear_expires_on,
+        audience=data.audience,
     )
     if ok:
         return {"status": "success", "message": message}
@@ -1101,7 +1163,11 @@ async def admin_token_ledger(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     tokens = TokenManager(conn)
-    return {"balance": await tokens.get_balance(username), "ledger": await tokens.list_ledger(username, limit=200)}
+    return {
+        "balance": await tokens.get_balance(username),
+        "lots": await tokens.get_lots(username),
+        "ledger": await tokens.list_ledger(username, limit=200),
+    }
 
 
 @app.post("/admin/tokens/adjust")
@@ -1110,7 +1176,23 @@ async def admin_adjust_tokens(
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
-    ok, message = await TokenManager(conn).adjust(data.username, data.tokens, data.memo, admin_user["username"])
+    ok, message = await TokenManager(conn).adjust(
+        data.username, data.tokens, data.memo, admin_user["username"], data.expires_on
+    )
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/tokens/grant")
+async def admin_grant_tokens(
+    data: TokenGrantRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await TokenManager(conn).grant_many(
+        data.usernames, data.tokens, data.memo, admin_user["username"], data.expires_on
+    )
     if ok:
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
@@ -1219,6 +1301,7 @@ async def get_booking_settings(
     config = await BookingManager(conn).get_config(admin_user["username"], "admin")
     return {
         "reservation_mode": config["mode"],
+        "beta_month": config["beta_month"],
         "price_bands": config["price_bands"],
         "refund_tiers": config["refund_tiers"],
     }
@@ -1237,7 +1320,9 @@ async def update_booking_settings(
     if data.refund_tiers is not None:
         results.append(await manager.set_refund_tiers([t.model_dump() for t in data.refund_tiers]))
     if data.reservation_mode is not None:
-        results.append(await manager.set_mode(data.reservation_mode))
+        results.append(await manager.set_mode(data.reservation_mode, data.beta_month))
+    elif data.beta_month is not None:
+        results.append(await manager.set_mode(await manager.get_mode(), data.beta_month))
     if not results:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="변경할 항목이 없습니다.")
     for ok, message in results:
@@ -1561,6 +1646,13 @@ async def admin_force_reserve(
 ):
     reserve_manager = ReservationManager(conn)
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
+    if data.reservation_type == "monthly":
+        conflicts = await BookingManager(conn).monthly_conflicts(reserve_times_list)
+        if conflicts:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"이미 토큰으로 예약된 시간이 있어요: {', '.join(conflicts[:3])}",
+            )
     is_success, message = await reserve_manager.force_create_reservation(
         data.target_username,
         reserve_times_list,
@@ -1720,9 +1812,204 @@ async def read_about_index():
     return _spa_index()
 
 
+@app.get("/notices")
+async def read_notices_index():
+    return _spa_index()
+
+
+@app.get("/notices/{notice_id}")
+async def read_notice_index(notice_id: int):
+    return _spa_index()
+
+
 @app.get("/favicon.svg")
 async def favicon_svg():
     path = "static/dist/favicon.svg"
     if os.path.exists(path):
         return FileResponse(path, media_type="image/svg+xml")
     raise HTTPException(status_code=404)
+
+
+# ---------------------------------------------------------------- 공지·이용 안내
+def _notice_error(e: NoticeError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+async def get_optional_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+) -> Optional[dict]:
+    """로그인했으면 사용자, 아니면 None (로그인 전 방문자도 볼 수 있는 API용)."""
+    try:
+        return await get_current_user(request, token, conn)
+    except HTTPException:
+        return None
+
+
+@app.get("/api/notices")
+async def list_notices(
+    category: Optional[str] = None,
+    user: Optional[dict] = Depends(get_optional_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await NoticeManager(conn).list(members=user is not None, category=category)
+
+
+@app.get("/api/notices/{notice_id}")
+async def get_notice(
+    notice_id: int,
+    user: Optional[dict] = Depends(get_optional_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    notice = await NoticeManager(conn).get(notice_id, members=user is not None)
+    if not notice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없습니다.")
+    return notice
+
+
+@app.get("/admin/notices")
+async def admin_list_notices(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await NoticeManager(conn).list(include_drafts=True, members=True)
+
+
+@app.get("/admin/notices/{notice_id}")
+async def admin_get_notice(
+    notice_id: int,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    notice = await NoticeManager(conn).get(notice_id, include_drafts=True, members=True)
+    if not notice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없습니다.")
+    return notice
+
+
+@app.post("/admin/notices")
+async def admin_create_notice(
+    data: NoticeCreateRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        return await NoticeManager(conn).create(**data.model_dump(), created_by=admin_user["username"])
+    except NoticeError as e:
+        raise _notice_error(e)
+
+
+@app.put("/admin/notices/{notice_id}")
+async def admin_update_notice(
+    notice_id: int,
+    data: NoticeUpdateRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        return await NoticeManager(conn).update(notice_id, data.model_dump())
+    except NoticeError as e:
+        raise _notice_error(e)
+
+
+@app.delete("/admin/notices/{notice_id}")
+async def admin_delete_notice(
+    notice_id: int,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        await NoticeManager(conn).delete(notice_id)
+    except NoticeError as e:
+        raise _notice_error(e)
+    return {"status": "success", "message": "공지를 삭제했습니다."}
+
+
+@app.get("/admin/notice-api-key")
+async def admin_notice_key_status(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await NoticeManager(conn).key_status()
+
+
+@app.post("/admin/notice-api-key")
+async def admin_rotate_notice_key(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    """에이전트용 키를 새로 만든다 (이전 키는 즉시 못 쓴다). 키는 이 응답에서만 볼 수 있다."""
+    return {"api_key": await NoticeManager(conn).rotate_key()}
+
+
+@app.delete("/admin/notice-api-key")
+async def admin_revoke_notice_key(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await NoticeManager(conn).revoke_key()
+    return {"status": "success", "message": "에이전트 키를 폐기했습니다."}
+
+
+# 에이전트 전용: 공지 작성 권한만 가진 API 키 (Authorization: Bearer ntc_...). 쿠키 로그인은 받지 않는다.
+async def require_notice_agent(request: Request, conn: aiosqlite.Connection = Depends(get_db_conn)) -> str:
+    header = request.headers.get("authorization", "")
+    key = header[7:].strip() if header.lower().startswith("bearer ") else ""
+    if not await NoticeManager(conn).verify_key(key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않은 API 키입니다.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return "agent"
+
+
+@app.get("/api/agent/notices")
+async def agent_list_notices(_: str = Depends(require_notice_agent), conn: aiosqlite.Connection = Depends(get_db_conn)):
+    return await NoticeManager(conn).list(include_drafts=True, members=True)
+
+
+@app.get("/api/agent/notices/{notice_id}")
+async def agent_get_notice(
+    notice_id: int, _: str = Depends(require_notice_agent), conn: aiosqlite.Connection = Depends(get_db_conn)
+):
+    notice = await NoticeManager(conn).get(notice_id, include_drafts=True, members=True)
+    if not notice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없습니다.")
+    return notice
+
+
+@app.post("/api/agent/notices")
+async def agent_create_notice(
+    data: NoticeCreateRequest, _: str = Depends(require_notice_agent), conn: aiosqlite.Connection = Depends(get_db_conn)
+):
+    """published를 생략하면 초안으로 저장되고, 관리자가 검토한 뒤 공개한다."""
+    try:
+        return await NoticeManager(conn).create(**data.model_dump(), created_by="agent")
+    except NoticeError as e:
+        raise _notice_error(e)
+
+
+@app.put("/api/agent/notices/{notice_id}")
+async def agent_update_notice(
+    notice_id: int,
+    data: NoticeUpdateRequest,
+    _: str = Depends(require_notice_agent),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        return await NoticeManager(conn).update(notice_id, data.model_dump())
+    except NoticeError as e:
+        raise _notice_error(e)
+
+
+@app.delete("/api/agent/notices/{notice_id}")
+async def agent_delete_notice(
+    notice_id: int, _: str = Depends(require_notice_agent), conn: aiosqlite.Connection = Depends(get_db_conn)
+):
+    try:
+        await NoticeManager(conn).delete(notice_id)
+    except NoticeError as e:
+        raise _notice_error(e)
+    return {"status": "success", "message": "공지를 삭제했습니다."}

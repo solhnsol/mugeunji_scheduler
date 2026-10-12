@@ -121,6 +121,9 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
             <span className="text-sm sm:text-base font-semibold text-ink truncate">{SITE_NAME}</span>
           </Link>
           <nav className="flex items-center gap-1 shrink-0">
+            <Link to="/notices" className="btn-ghost !min-h-[40px] hidden sm:inline-flex">
+              공지
+            </Link>
             {authed ? (
               <Link to="/" className="btn-primary !w-auto !min-h-[40px] !py-1.5 !px-4 text-sm">
                 내 예약으로
@@ -299,6 +302,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
                 <Link to="/login" className="btn-secondary">로그인</Link>
               </>
             )}
+            <Link to="/notices" className="btn-secondary">공지·이용 안내</Link>
             <ExternalLink href={CONTACT_URL} className="btn-secondary">오픈채팅 문의</ExternalLink>
           </div>
         </div>

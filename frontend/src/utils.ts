@@ -37,3 +37,11 @@ export function formatDateTime(iso: string | null | undefined): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${p.month}/${p.day} ${pad(p.hour)}:${pad(p.minute)}`;
 }
+
+/** 소멸 시각 → "12/31까지" (한국 시간, 소멸 시각 직전 날짜 기준). 없으면 빈 문자열 */
+export function formatExpiry(iso: string | null | undefined): string {
+  const p = kstParts(iso);
+  if (!p) return '';
+  const last = new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - 60_000);
+  return `${last.getUTCMonth() + 1}/${last.getUTCDate()}까지`;
+}

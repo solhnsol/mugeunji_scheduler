@@ -192,6 +192,16 @@ export interface TokenPack {
   tokens: number;
   sort_order: number;
   active: boolean;
+  /** 요청하면 관리자 확인 없이 바로 지급 */
+  auto_confirm: boolean;
+  /** 이 날짜(YYYY-MM-DD) 끝에 소멸. 없으면 충전 후 기본 기간(3개월) */
+  expires_on: string | null;
+  audience: 'all' | 'free';
+}
+
+export interface TokenLot {
+  tokens: number;
+  expires_at: string | null;
 }
 
 export interface TokenLedgerEntry {
@@ -202,6 +212,7 @@ export interface TokenLedgerEntry {
   memo: string | null;
   created_at: string;
   created_by: string | null;
+  expires_at?: string | null;
 }
 
 export interface TokenPurchase {
@@ -224,12 +235,16 @@ export interface TokenBalance {
   username: string;
   name?: string | null;
   phone?: string | null;
+  role?: string;
+  dawn_allowed?: boolean;
   balance: number;
+  next_expiry?: string | null;
   last_activity: string | null;
 }
 
 export interface MyTokens {
   balance: number;
+  lots: TokenLot[];
   ledger: TokenLedgerEntry[];
   purchases: TokenPurchase[];
 }
@@ -246,8 +261,11 @@ export interface RefundTier {
   percent: number;
 }
 
+export type ReservationMode = 'legacy' | 'beta' | 'token';
+
 export interface BookingConfig {
-  mode: 'legacy' | 'token';
+  mode: ReservationMode;
+  beta_month: string;
   reservation_enabled: boolean;
   price_bands: PriceBand[];
   refund_tiers: RefundTier[];
@@ -279,6 +297,8 @@ export interface GridSlot {
   booking_id?: number | null;
   paid?: number | null;
   name?: string;
+  /** 기존 월 신청으로 예약된 칸 (토큰 화면에서는 취소할 수 없다) */
+  legacy?: boolean;
 }
 
 export interface GridDay {
@@ -293,4 +313,34 @@ export interface MyBooking {
   hour: number;
   cost: number;
   cancellable: boolean;
+}
+
+export interface AdminBooking {
+  id: number;
+  username: string;
+  name: string;
+  date: string;
+  hour: number;
+  cost: number;
+  status: 'active' | 'cancelled';
+  refunded: number;
+  created_at: string | null;
+  cancelled_at: string | null;
+  created_by: string | null;
+}
+
+export interface Notice {
+  id: number;
+  title: string;
+  category: 'notice' | 'guide';
+  category_label: string;
+  visibility: 'public' | 'members';
+  pinned: boolean;
+  published: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+  published_at: string | null;
+  created_by: string | null;
+  /** 목록에는 없고 상세·관리자 조회에만 있다 */
+  body?: string;
 }

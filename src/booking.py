@@ -19,6 +19,12 @@ from src.tokens import TokenManager
 
 MODE_LEGACY = "legacy"
 MODE_TOKEN = "token"
+# 베타: 월 신청은 기존 방식 그대로, 자유이용은 막고 토큰 예약으로 대신한다.
+# 기존 월 신청은 beta_month의 매주 같은 요일·시간에 적용되고, 토큰 예약에서는 이미 예약된 시간으로 보인다.
+MODE_BETA = "beta"
+MODES = (MODE_LEGACY, MODE_BETA, MODE_TOKEN)
+SETTING_BETA_MONTH = "beta_month"
+WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # 새벽 시간대 (회원별 허용 체크 대상)
 DAWN_HOURS = (0, 1, 2, 3)
@@ -146,11 +152,77 @@ class BookingManager:
     async def get_mode(self) -> str:
         return (await self._settings()).get(SETTING_MODE) or MODE_LEGACY
 
-    async def set_mode(self, mode: str) -> Tuple[bool, str]:
-        if mode not in (MODE_LEGACY, MODE_TOKEN):
+    async def set_mode(self, mode: str, beta_month: Optional[str] = None) -> Tuple[bool, str]:
+        if mode not in MODES:
             return False, "예약 방식이 올바르지 않습니다."
-        ok, message = await SettingsManager(self.conn).upsert_settings({SETTING_MODE: mode})
+        updates = {SETTING_MODE: mode}
+        if beta_month is not None:
+            try:
+                updates[SETTING_BETA_MONTH] = self._parse_month(beta_month) if beta_month.strip() else ""
+            except BookingError as e:
+                return False, str(e)
+        if mode == MODE_BETA:
+            month = updates.get(SETTING_BETA_MONTH)
+            if month is None:
+                month = (await self._settings()).get(SETTING_BETA_MONTH) or ""
+            if not month:
+                return False, "베타로 전환하려면 기존 월 신청을 적용할 달(예: 2026-11)을 지정해주세요."
+        ok, message = await SettingsManager(self.conn).upsert_settings(updates)
         return ok, ("예약 방식을 저장했습니다." if ok else message)
+
+    @staticmethod
+    def _parse_month(raw: str) -> str:
+        try:
+            year, month = (int(x) for x in raw.strip().split("-"))
+            return date(year, month, 1).strftime("%Y-%m")
+        except (ValueError, TypeError):
+            raise BookingError("달은 YYYY-MM 형식으로 입력해주세요.")
+
+    # ---------- 베타: 기존 월 신청과의 공존 ----------
+    async def _legacy_map(self, settings: Dict) -> Tuple[str, Dict[Tuple[int, int], str]]:
+        """베타 모드에서 기존 월 신청이 점유하는 (요일, 시) -> 아이디. 베타가 아니면 비어 있다."""
+        if (settings.get(SETTING_MODE) or MODE_LEGACY) != MODE_BETA:
+            return "", {}
+        month = settings.get(SETTING_BETA_MONTH) or ""
+        if not month:
+            return "", {}
+        async with self.conn.execute(
+            "SELECT username, reservation_day, time_index FROM reservations WHERE reservation_type = 'monthly'"
+        ) as cursor:
+            rows = await cursor.fetchall()
+        mapping = {}
+        for r in rows:
+            if r["reservation_day"] in WEEKDAY_NAMES:
+                mapping[(WEEKDAY_NAMES.index(r["reservation_day"]), r["time_index"])] = r["username"]
+        return month, mapping
+
+    @staticmethod
+    def _legacy_owner(legacy: Tuple[str, Dict], day: date, hour: int) -> Optional[str]:
+        month, mapping = legacy
+        if month and day.strftime("%Y-%m") == month:
+            return mapping.get((day.weekday(), hour))
+        return None
+
+    async def monthly_conflicts(self, reserve_times: List[Dict]) -> List[str]:
+        """베타 모드에서 새 월 신청이 이미 토큰 예약된 시간과 겹치는지. 겹치는 칸 설명 목록을 돌려준다."""
+        settings = await self._settings()
+        if (settings.get(SETTING_MODE) or MODE_LEGACY) != MODE_BETA or not settings.get(SETTING_BETA_MONTH):
+            return []
+        month = settings[SETTING_BETA_MONTH]
+        today = now_kst().date().isoformat()
+        async with self.conn.execute(
+            "SELECT booking_date, hour FROM bookings WHERE status = 'active' AND booking_date >= ? AND substr(booking_date, 1, 7) = ?",
+            (today, month),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        wanted = {(t["day"], t["time_index"]) for t in reserve_times}
+        conflicts = []
+        for r in rows:
+            day = date.fromisoformat(r["booking_date"])
+            key = (WEEKDAY_NAMES[day.weekday()], r["hour"])
+            if key in wanted:
+                conflicts.append(f"{day.month}/{day.day} {r['hour']}시")
+        return conflicts
 
     async def set_price_bands(self, bands) -> Tuple[bool, str]:
         try:
@@ -213,6 +285,7 @@ class BookingManager:
             dawn_allowed = bool(row["dawn_allowed"]) if row else True
         return {
             "mode": settings.get(SETTING_MODE) or MODE_LEGACY,
+            "beta_month": settings.get(SETTING_BETA_MONTH) or "",
             "reservation_enabled": settings.get("reservation_enabled") != "false",
             "price_bands": self._bands_from(settings),
             "refund_tiers": self._tiers_from(settings),
@@ -286,7 +359,10 @@ class BookingManager:
             if any(c == 0 for c in costs) and balance < 1:
                 raise BookingError("토큰이 1개 이상 있어야 이 시간대를 예약할 수 있어요.")
 
+        legacy = await self._legacy_map(settings)
         for day, hour in slots:
+            if self._legacy_owner(legacy, day, hour):
+                raise BookingError(f"{day.month}월 {day.day}일 {hour}시는 월 신청으로 이미 예약된 시간이에요.")
             async with self.conn.execute(
                 "SELECT 1 FROM bookings WHERE booking_date = ? AND hour = ? AND status = 'active'",
                 (day.isoformat(), hour),
@@ -361,6 +437,10 @@ class BookingManager:
                     raise BookingError("취소할 수 있는 시간이 지났어요.")
             plan.append((row, row["cost"] * percent // 100))
 
+        spend_expiries: Dict[str, Dict] = {}
+        for row, _ in plan:
+            if row["username"] not in spend_expiries:
+                spend_expiries[row["username"]] = await self.tokens.spend_expiries(row["username"])
         try:
             total_refund = 0
             for row, refund in plan:
@@ -375,6 +455,8 @@ class BookingManager:
                         ref_type="booking", ref_id=row["id"],
                         memo=f"{day.month}/{day.day} {row['hour']}시 예약 취소",
                         created_by=admin_username or username, commit=False,
+                        # 환불 토큰은 원래 쓴 토큰의 소멸 시각을 이어받는다
+                        expires_at=spend_expiries[row["username"]].get(("booking", row["id"])),
                     )
                 total_refund += refund
             await self.conn.commit()
@@ -411,6 +493,7 @@ class BookingManager:
             rows = await cursor.fetchall()
         taken = {(r["booking_date"], r["hour"]): r for r in rows}
         names = await self._names()
+        legacy = await self._legacy_map(settings)
 
         result = []
         for offset in range(days):
@@ -428,6 +511,14 @@ class BookingManager:
                 else:
                     status = "free"
                 slot = {"hour": hour, "status": status, "cost": cost_for_hour(bands, hour)}
+                legacy_owner = None if booking else self._legacy_owner(legacy, day, hour)
+                if legacy_owner and status != "past":
+                    # 기존 월 신청: 토큰 화면에서는 예약됨으로만 보이고, 여기서 취소할 수 없다
+                    slot["status"] = "mine" if legacy_owner == username else "taken"
+                    slot["booking_id"] = None
+                    slot["paid"] = None
+                    slot["name"] = names.get(legacy_owner, legacy_owner)
+                    slot["legacy"] = True
                 if booking:
                     own_or_admin = booking["username"] == username or role == "admin"
                     slot["booking_id"] = booking["id"] if own_or_admin else None
@@ -453,6 +544,16 @@ class BookingManager:
         for r in rows:
             cells = occupancy.setdefault(r["booking_date"], ["0"] * 24)
             cells[r["hour"]] = "2" if r["username"] == username else "1"
+        legacy = await self._legacy_map(settings)
+        if legacy[0]:
+            for offset in range((last - first).days + 1):
+                day = first + timedelta(days=offset)
+                for hour in range(24):
+                    owner = self._legacy_owner(legacy, day, hour)
+                    if owner:
+                        cells = occupancy.setdefault(day.isoformat(), ["0"] * 24)
+                        if cells[hour] == "0":
+                            cells[hour] = "2" if owner == username else "1"
         days = []
         for offset in range((last - first).days + 1):
             day = first + timedelta(days=offset)

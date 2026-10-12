@@ -258,7 +258,14 @@ export const api = {
 
   async adminCreateTokenPack(
     token: string,
-    body: { name: string; price_won: number; tokens: number },
+    body: {
+      name: string;
+      price_won: number;
+      tokens: number;
+      auto_confirm?: boolean;
+      expires_on?: string | null;
+      audience?: 'all' | 'free';
+    },
   ) {
     const res = await fetch('/admin/token-packs', {
       method: 'POST',
@@ -271,7 +278,17 @@ export const api = {
   async adminUpdateTokenPack(
     token: string,
     packId: number,
-    body: Partial<{ name: string; price_won: number; tokens: number; sort_order: number; active: boolean }>,
+    body: Partial<{
+      name: string;
+      price_won: number;
+      tokens: number;
+      sort_order: number;
+      active: boolean;
+      auto_confirm: boolean;
+      expires_on: string | null;
+      clear_expires_on: boolean;
+      audience: 'all' | 'free';
+    }>,
   ) {
     const res = await fetch(`/admin/token-packs/${packId}`, {
       method: 'PUT',
@@ -329,10 +346,153 @@ export const api = {
     const res = await fetch(`/admin/token-ledger/${encodeURIComponent(username)}`, {
       headers: authHeaders(token),
     });
-    return parseResponse<{ balance: number; ledger: import('./types').TokenLedgerEntry[] }>(res);
+    return parseResponse<{
+      balance: number;
+      lots: import('./types').TokenLot[];
+      ledger: import('./types').TokenLedgerEntry[];
+    }>(res);
   },
 
-  async adminAdjustTokens(token: string, body: { username: string; tokens: number; memo: string }) {
+  async adminGrantTokens(
+    token: string,
+    body: { usernames: string[]; tokens: number; memo: string; expires_on?: string | null },
+  ) {
+    const res = await fetch('/admin/tokens/grant', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  // ---- 공지·이용 안내
+  async getNotices(category?: 'notice' | 'guide') {
+    const res = await fetch(`/api/notices${category ? `?category=${category}` : ''}`);
+    return parseResponse<import('./types').Notice[]>(res);
+  },
+
+  async getNotice(id: number) {
+    const res = await fetch(`/api/notices/${id}`);
+    return parseResponse<import('./types').Notice>(res);
+  },
+
+  async adminListNotices(token: string) {
+    const res = await fetch('/admin/notices', { headers: authHeaders(token) });
+    return parseResponse<import('./types').Notice[]>(res);
+  },
+
+  async adminGetNotice(token: string, id: number) {
+    const res = await fetch(`/admin/notices/${id}`, { headers: authHeaders(token) });
+    return parseResponse<import('./types').Notice>(res);
+  },
+
+  async adminSaveNotice(
+    token: string,
+    id: number | null,
+    body: Partial<{
+      title: string;
+      body: string;
+      category: 'notice' | 'guide';
+      visibility: 'public' | 'members';
+      pinned: boolean;
+      published: boolean;
+    }>,
+  ) {
+    const res = await fetch(id === null ? '/admin/notices' : `/admin/notices/${id}`, {
+      method: id === null ? 'POST' : 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<import('./types').Notice>(res);
+  },
+
+  async adminDeleteNotice(token: string, id: number) {
+    const res = await fetch(`/admin/notices/${id}`, { method: 'DELETE', headers: authHeaders(token) });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminNoticeKeyStatus(token: string) {
+    const res = await fetch('/admin/notice-api-key', { headers: authHeaders(token) });
+    return parseResponse<{ has_key: boolean }>(res);
+  },
+
+  async adminRotateNoticeKey(token: string) {
+    const res = await fetch('/admin/notice-api-key', { method: 'POST', headers: authHeaders(token) });
+    return parseResponse<{ api_key: string }>(res);
+  },
+
+  async adminRevokeNoticeKey(token: string) {
+    const res = await fetch('/admin/notice-api-key', { method: 'DELETE', headers: authHeaders(token) });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminListBookings(token: string, params: { date?: string; username?: string }) {
+    const q = new URLSearchParams();
+    if (params.date) q.set('date_filter', params.date);
+    if (params.username) q.set('username', params.username);
+    const res = await fetch(`/admin/bookings?${q}`, { headers: authHeaders(token) });
+    return parseResponse<import('./types').AdminBooking[]>(res);
+  },
+
+  async adminCreateBooking(token: string, username: string, slots: { date: string; hour: number }[]) {
+    const res = await fetch('/admin/bookings', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ username, slots }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  /** refund: null이면 환불 정책대로, true면 전액, false면 환불 없음 */
+  async adminCancelBooking(token: string, bookingId: number, refund: boolean | null) {
+    const res = await fetch(`/admin/bookings/${bookingId}/cancel`, {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ refund }),
+    });
+    return parseResponse<{ message: string; refunded: number }>(res);
+  },
+
+  async adminSetDawn(token: string, username: string, allowed: boolean) {
+    const res = await fetch(`/admin/users/${username}/dawn`, {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ allowed }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminGetBookingSettings(token: string) {
+    const res = await fetch('/admin/booking-settings', { headers: authHeaders(token) });
+    return parseResponse<{
+      reservation_mode: import('./types').ReservationMode;
+      beta_month: string;
+      price_bands: import('./types').PriceBand[];
+      refund_tiers: import('./types').RefundTier[];
+    }>(res);
+  },
+
+  async adminUpdateBookingSettings(
+    token: string,
+    body: Partial<{
+      reservation_mode: import('./types').ReservationMode;
+      beta_month: string;
+      price_bands: import('./types').PriceBand[];
+      refund_tiers: import('./types').RefundTier[];
+    }>,
+  ) {
+    const res = await fetch('/admin/booking-settings', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminAdjustTokens(
+    token: string,
+    body: { username: string; tokens: number; memo: string; expires_on?: string | null },
+  ) {
     const res = await fetch('/admin/tokens/adjust', {
       method: 'POST',
       headers: authHeaders(token),
@@ -350,7 +510,8 @@ export const api = {
       next_monthly_open_at?: string;
       payment_guide?: string | null;
       token_charge_enabled?: boolean;
-      reservation_mode?: 'legacy' | 'token';
+      reservation_mode?: import('./types').ReservationMode;
+      beta_month?: string;
     }>(res);
   },
 

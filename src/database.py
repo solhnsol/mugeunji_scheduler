@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 import aiosqlite
 import os
 from dotenv import load_dotenv
@@ -212,6 +213,35 @@ async def setup_database(conn: aiosqlite.Connection):
     await conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_token_ledger_user ON token_ledger(username, id)"
     )
+    # 토큰 소멸·무료 프로모션 팩용 컬럼 (기존 DB 마이그레이션)
+    for table, name, col_type in [
+        ("token_ledger", "expires_at", "TEXT"),            # 지급분이 사라지는 시각 (NULL이면 소멸 없음)
+        ("token_packs", "auto_confirm", "INTEGER NOT NULL DEFAULT 0"),  # 요청 즉시 지급
+        ("token_packs", "expires_on", "TEXT"),             # 이 날짜(KST) 끝에 소멸 (NULL이면 기본 소멸 기간)
+        ("token_packs", "audience", "TEXT NOT NULL DEFAULT 'all'"),     # all | free(자유이용 회원만)
+        ("token_purchases", "expires_on", "TEXT"),
+    ]:
+        if not await _column_exists(conn, table=table, column=name):
+            await conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {col_type}")
+    # 공지·이용 안내 (관리자 또는 에이전트 API로 작성)
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS notices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            body TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT 'notice',
+            visibility TEXT NOT NULL DEFAULT 'members',
+            pinned INTEGER NOT NULL DEFAULT 0,
+            published INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT,
+            updated_at TEXT,
+            published_at TEXT,
+            created_by TEXT
+        );
+    """)
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_notices_list ON notices(published, pinned, published_at)"
+    )
     # 날짜 기반 예약 (토큰 시스템). 기존 reservations 테이블과는 완전히 분리돼 있다.
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS bookings (
@@ -257,6 +287,12 @@ async def setup_database(conn: aiosqlite.Connection):
         ('token_charge_enabled', 'false'),
         # 예약 방식 전환 스위치: legacy(기존 월/자유이용) | token(날짜 기반 토큰 예약)
         ('reservation_mode', 'legacy'),
+        # 충전한 토큰이 사용되지 않으면 사라지는 기간(개월)
+        ('token_expiry_months', '3'),
+        # 베타 모드에서 기존 월 예약을 매주 반복 적용할 달 (YYYY-MM)
+        ('beta_month', ''),
+        # 에이전트가 공지를 올릴 때 쓰는 API 키의 해시 (평문은 저장하지 않는다)
+        ('notice_api_key_hash', ''),
         *[(k, v) for k, v in AUTOMATION_SETTING_DEFAULTS.items()],
     ]
     for key, value in settings_defaults:
@@ -264,6 +300,19 @@ async def setup_database(conn: aiosqlite.Connection):
             "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
             (key, value)
         )
+
+    # 11월 베타 안내 초안 (배포 후 관리자가 읽어보고 공개) — 한 번만 만든다
+    from src.seed_notices import NOV_2026_BODY, NOV_2026_TITLE, SEED_KEY
+    async with conn.execute("SELECT 1 FROM system_settings WHERE key = ?", (SEED_KEY,)) as cursor:
+        seeded = await cursor.fetchone()
+    if not seeded:
+        now = datetime.now(timezone(timedelta(hours=9))).isoformat()
+        await conn.execute(
+            """INSERT INTO notices (title, body, category, visibility, pinned, published, created_at, updated_at, created_by)
+               VALUES (?, ?, 'notice', 'members', 1, 0, ?, ?, 'system')""",
+            (NOV_2026_TITLE, NOV_2026_BODY, now, now),
+        )
+        await conn.execute("INSERT INTO system_settings (key, value) VALUES (?, 'done')", (SEED_KEY,))
 
     async with conn.execute("SELECT COUNT(*) FROM plans") as cursor:
         plan_count = (await cursor.fetchone())[0]

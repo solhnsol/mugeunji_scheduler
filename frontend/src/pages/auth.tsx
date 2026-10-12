@@ -114,6 +114,7 @@ export default function LoginPage({
         <div className="mt-4 flex justify-center gap-4 text-sm">
           <Link to="/register" className="text-sage font-medium hover:underline">회원가입</Link>
           <Link to="/about" className="text-ink-muted hover:text-sage">작업실 소개</Link>
+          <Link to="/notices" className="text-ink-muted hover:text-sage">공지</Link>
           <Link to="/admin" className="text-ink-faint hover:text-ink-muted">관리자</Link>
         </div>
       </div>
