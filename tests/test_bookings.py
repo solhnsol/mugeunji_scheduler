@@ -303,3 +303,12 @@ def test_account_wide_login_throttle(client):
 
 def test_healthz(client):
     assert client.get("/healthz").json() == {"status": "ok"}
+
+
+def test_public_token_rules(client):
+    client.cookies.clear()
+    r = client.get("/token-rules")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["price_bands"] and body["refund_tiers"] and body["expiry_months"] >= 0
+    assert set(body["price_bands"][0]) == {"start", "end", "cost"}

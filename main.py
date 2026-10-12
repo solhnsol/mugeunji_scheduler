@@ -1322,6 +1322,12 @@ def _parse_date(raw: str) -> date:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
 
 
+@app.get("/token-rules")
+async def get_token_rules(conn: aiosqlite.Connection = Depends(get_db_conn)):
+    """토큰 가격표·환불·소멸 규칙. 랜딩·가입 안내가 관리자 설정과 어긋나지 않게 공개한다."""
+    return await BookingManager(conn).public_rules()
+
+
 @app.get("/bookings/config")
 async def get_booking_config(
     current_user: dict = Depends(get_current_user),
