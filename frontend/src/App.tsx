@@ -12,6 +12,7 @@ import Landing from './pages/Landing';
 import BookingPage from './pages/BookingPage';
 import TokensPage from './pages/TokensPage';
 import NoticesPage from './pages/NoticesPage';
+import { PageSkeleton } from './components/Skeleton';
 
 const BRAND = '묵은지 작업실';
 const DEFAULT_TITLE = document.title;
@@ -39,7 +40,7 @@ function TitleManager() {
 function Splash() {
   return (
     <AppShell title="묵은지 작업실">
-      <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+      <PageSkeleton />
     </AppShell>
   );
 }

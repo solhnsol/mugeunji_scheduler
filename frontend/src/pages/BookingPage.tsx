@@ -21,6 +21,7 @@ import {
   startOfWeek,
   summarizeHours,
 } from '../utils/booking';
+import { BookingCalendarSkeleton, TimeGridSkeleton } from '../components/Skeleton';
 
 type SelectedSlot = { date: string; hour: number; cost: number };
 type CancelSlot = { date: string; hour: number; paid: number };
@@ -372,7 +373,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
           </div>
         </div>
       ) : !config || !month ? (
-        <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+        <BookingCalendarSkeleton />
       ) : (
         <div className="flex flex-col flex-1 min-h-0 gap-2">
           {view === 'month' && config.is_admin && (
@@ -492,7 +493,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
               </div>
 
               {!week || !selectedDate ? (
-                <p className="text-center text-ink-faint py-10">불러오는 중…</p>
+                <TimeGridSkeleton />
               ) : detailMode === 'day' ? (
                 <>
                   <div className="shrink-0 flex gap-1 overflow-x-auto -mx-4 px-4" aria-label="이번 주 날짜">
@@ -530,7 +531,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                       onToggleMine={handleMine}
                     />
                   ) : (
-                    <p className="text-center text-ink-faint py-10">불러오는 중…</p>
+                    <TimeGridSkeleton />
                   )}
                 </>
               ) : (

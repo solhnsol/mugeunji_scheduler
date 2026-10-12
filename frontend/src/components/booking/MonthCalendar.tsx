@@ -1,5 +1,6 @@
 import { CalendarDay } from '../../types';
 import { WEEKDAYS_KO, dateFromISO, formatMonthKo, summarizeHours } from '../../utils/booking';
+import { CalendarCellsSkeleton } from '../Skeleton';
 
 /** 한 달 달력. 날짜마다 24칸 점유 막대(빈칸/예약됨/내 예약)를 간단히 보여준다. */
 export function MonthCalendar({
@@ -46,7 +47,7 @@ export function MonthCalendar({
       </div>
 
       {!days ? (
-        <p className="text-center text-sm text-ink-faint py-10">불러오는 중…</p>
+        <CalendarCellsSkeleton />
       ) : (
         <div className="grid grid-cols-7 gap-1">
           {Array.from({ length: firstWeekday }, (_, i) => (

@@ -6,6 +6,7 @@ import { AppShell, Toast } from '../components/ui';
 import { useToast } from '../hooks/useToast';
 import { MyTokens, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiresOn, formatExpiry, formatPrice, formatTokens } from '../utils';
+import { PageSkeleton } from '../components/Skeleton';
 
 const STATUS_LABEL: Record<TokenPurchase['status'], { text: string; cls: string }> = {
   pending: { text: '관리자 확인 대기', cls: 'text-amber-700' },
@@ -110,7 +111,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
           </div>
         </div>
       ) : !mine || !packs ? (
-        <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+        <PageSkeleton />
       ) : (
         <div className="space-y-6">
           <div className="rounded-3xl bg-gradient-to-br from-sage via-[#345045] to-sage-light text-white p-6 sm:p-8 shadow-[0_10px_40px_rgba(58,82,72,0.22)]">
