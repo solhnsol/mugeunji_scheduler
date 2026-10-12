@@ -14,7 +14,8 @@ import { MonthlyPlanHero } from '../components/ScheduleHero';
 import { ScheduleModal } from '../components/ScheduleModal';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { useToast } from '../hooks/useToast';
-import { MeResponse, Plan } from '../types';
+import { TokenHome } from '../components/TokenHome';
+import { MeResponse, MyBooking, Plan } from '../types';
 import { formatTokens } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 
@@ -40,6 +41,8 @@ export default function UserApp({
   const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
   const [tokenChargeEnabled, setTokenChargeEnabled] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+  const [reservationMode, setReservationMode] = useState<'legacy' | 'token'>('legacy');
+  const [upcomingBookings, setUpcomingBookings] = useState<MyBooking[]>([]);
   const navigate = useNavigate();
   const monthlyReservations = useMonthlyReservations();
   const mySummary = summarizeReservations(monthlyReservations, { username, type: 'monthly' });
@@ -59,13 +62,22 @@ export default function UserApp({
     setScheduleMessage(settings.schedule_message || '');
     setNextOpenAt(settings.next_monthly_open_at ?? null);
     setPaymentGuide(settings.payment_guide ?? null);
-    const tokensOpen = !!settings.token_charge_enabled;
+    const mode = settings.reservation_mode ?? 'legacy';
+    setReservationMode(mode);
+    // 토큰 예약으로 전환되면 충전은 항상 열려 있다
+    const tokensOpen = !!settings.token_charge_enabled || mode === 'token';
     setTokenChargeEnabled(tokensOpen);
-    if (tokensOpen) {
+    if (tokensOpen && meData.role !== 'admin') {
       api
         .getMyTokens(token)
         .then((t) => setTokenBalance(t.balance))
         .catch(() => setTokenBalance(null));
+    }
+    if (mode === 'token' && meData.role !== 'admin') {
+      api
+        .getMyBookings(token)
+        .then(setUpcomingBookings)
+        .catch(() => setUpcomingBookings([]));
     }
   }, [token]);
 
@@ -171,16 +183,20 @@ export default function UserApp({
         ? me.message
         : undefined;
 
+  // 토큰 예약으로 전환된 뒤 회원에게 보이는 화면 (관리자는 기존 화면 + 미리보기 링크)
+  const tokenMode = reservationMode === 'token' && me.role !== 'admin';
+
   const headerMenuItems = [
     { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true) },
     {
       id: 'plan',
       label: '요금제',
       onClick: () => setPlanModalOpen(true),
-      hidden: !hasSubscription,
+      hidden: !hasSubscription || tokenMode,
     },
+    { id: 'book', label: '예약', onClick: () => navigate('/book'), hidden: !tokenMode && me.role !== 'admin' },
     { id: 'tokens', label: '토큰', onClick: () => navigate('/tokens'), hidden: !tokenChargeEnabled && me.role !== 'admin' },
-    { id: 'guide', label: '이용 안내', onClick: () => setGuideOpen(true) },
+    { id: 'guide', label: '이용 안내', onClick: () => setGuideOpen(true), hidden: tokenMode },
     { id: 'logout', label: '로그아웃', onClick: onLogout },
   ];
 
@@ -313,6 +329,22 @@ export default function UserApp({
       />
     </ScheduleModal>
   );
+
+  if (tokenMode) {
+    return (
+      <AppShell title={`${displayName}님`} actions={<HeaderActions items={headerMenuItems} />}>
+        <TokenHome
+          balance={tokenBalance}
+          upcoming={upcomingBookings}
+          profileIncomplete={!me.profile_complete}
+          onProfile={() => setProfileOpen(true)}
+        />
+        {profileModal}
+        {confirmDialog}
+        <Toast message={toast.message} type={toast.type} />
+      </AppShell>
+    );
+  }
 
   if (me.access_status === 'no_plan') {
     return (

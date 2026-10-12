@@ -233,3 +233,64 @@ export interface MyTokens {
   ledger: TokenLedgerEntry[];
   purchases: TokenPurchase[];
 }
+
+// ---- 날짜 기반 토큰 예약
+export interface PriceBand {
+  start: number;
+  end: number;
+  cost: number;
+}
+
+export interface RefundTier {
+  hours_before: number;
+  percent: number;
+}
+
+export interface BookingConfig {
+  mode: 'legacy' | 'token';
+  reservation_enabled: boolean;
+  price_bands: PriceBand[];
+  refund_tiers: RefundTier[];
+  bookable_from: string;
+  bookable_until: string;
+  next_month_open_at: string | null;
+  next_month_open: boolean;
+  dawn_hours: number[];
+  dawn_allowed: boolean;
+  balance: number | null;
+  is_admin: boolean;
+}
+
+export interface CalendarDay {
+  date: string;
+  bookable: boolean;
+  booked: number;
+  mine: number;
+  /** 24자: 0 빈칸, 1 예약됨, 2 내 예약 */
+  occupancy: string;
+}
+
+export type SlotStatus = 'free' | 'taken' | 'mine' | 'past' | 'closed';
+
+export interface GridSlot {
+  hour: number;
+  status: SlotStatus;
+  cost: number;
+  booking_id?: number | null;
+  paid?: number | null;
+  name?: string;
+}
+
+export interface GridDay {
+  date: string;
+  bookable: boolean;
+  slots: GridSlot[];
+}
+
+export interface MyBooking {
+  id: number;
+  date: string;
+  hour: number;
+  cost: number;
+  cancellable: boolean;
+}

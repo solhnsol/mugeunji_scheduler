@@ -429,7 +429,10 @@ class BookingManager:
                     status = "free"
                 slot = {"hour": hour, "status": status, "cost": cost_for_hour(bands, hour)}
                 if booking:
-                    slot["booking_id"] = booking["id"] if (booking["username"] == username or role == "admin") else None
+                    own_or_admin = booking["username"] == username or role == "admin"
+                    slot["booking_id"] = booking["id"] if own_or_admin else None
+                    # 취소 시 환불 예상에 쓰는, 그 예약을 했을 때 낸 토큰 (남의 예약에는 노출하지 않는다)
+                    slot["paid"] = booking["cost"] if own_or_admin else None
                     slot["name"] = names.get(booking["username"], booking["username"])
                 slots.append(slot)
             result.append({"date": day.isoformat(), "bookable": in_window, "slots": slots})

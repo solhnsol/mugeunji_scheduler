@@ -148,6 +148,18 @@ export function AdminTokensTab({
       </section>
 
       <section className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-ink">토큰 예약 미리보기</h2>
+            <p className="text-xs text-ink-faint mt-1 leading-relaxed">
+              날짜·시간 단위 토큰 예약 화면을 관리자 계정으로 미리 써볼 수 있어요. 토큰이 차감되지 않아요.
+            </p>
+          </div>
+          <a href="/book" className="btn-secondary shrink-0">예약 화면 열기</a>
+        </div>
+      </section>
+
+      <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h2 className="font-semibold text-ink">충전 요청</h2>
           <div className="flex gap-1.5" role="tablist" aria-label="충전 요청 상태">

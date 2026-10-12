@@ -53,6 +53,17 @@ export default function FreeApp({
     setWindowLabel(formatWindow(schedule.window_start, schedule.window_end));
   }, [token]);
 
+  // 토큰 예약으로 전환된 뒤에는 자유이용 화면을 쓰지 않는다 (관리자는 예외)
+  useEffect(() => {
+    if (isAdminSession) return;
+    api
+      .getSettings()
+      .then((st) => {
+        if (st.reservation_mode === 'token') navigate('/', { replace: true });
+      })
+      .catch(() => undefined);
+  }, [isAdminSession, navigate]);
+
   useEffect(() => {
     load().catch((err) => {
       if (err instanceof ApiError && err.message.includes('권한')) {

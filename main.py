@@ -900,11 +900,14 @@ async def delete_user(
 
 # ---------------------------------------------------------------- 토큰 (회원)
 async def _require_token_charge_open(conn: aiosqlite.Connection, user: dict) -> None:
-    """회원에게 토큰 메뉴가 공개되기 전에는 관리자만 쓸 수 있다 (미리보기)."""
+    """회원에게 토큰 메뉴가 공개되기 전에는 관리자만 쓸 수 있다 (미리보기).
+
+    토큰 예약으로 전환된 뒤에는 충전이 항상 열려 있다.
+    """
     if user["role"] == "admin":
         return
     settings = await SettingsManager(conn).get_settings()
-    if settings.get("token_charge_enabled") != "true":
+    if settings.get("token_charge_enabled") != "true" and settings.get("reservation_mode") != MODE_TOKEN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="아직 토큰 충전을 사용할 수 없습니다.")
 
 
@@ -1699,6 +1702,11 @@ async def read_register_index():
 
 @app.get("/tokens")
 async def read_tokens_index():
+    return _spa_index()
+
+
+@app.get("/book")
+async def read_book_index():
     return _spa_index()
 
 

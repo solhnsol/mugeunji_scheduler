@@ -169,6 +169,45 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
+  // ---- 날짜 기반 토큰 예약
+  async getBookingConfig(token: string) {
+    const res = await fetch('/bookings/config', { headers: authHeaders(token) });
+    return parseResponse<import('./types').BookingConfig>(res);
+  },
+
+  async getBookingCalendar(token: string, month: string) {
+    const res = await fetch(`/bookings/calendar?month=${month}`, { headers: authHeaders(token) });
+    return parseResponse<{ month: string; days: import('./types').CalendarDay[] }>(res);
+  },
+
+  async getBookingRange(token: string, start: string, days: number) {
+    const res = await fetch(`/bookings/range?start=${start}&days=${days}`, { headers: authHeaders(token) });
+    return parseResponse<{ days: import('./types').GridDay[] }>(res);
+  },
+
+  async getMyBookings(token: string) {
+    const res = await fetch('/bookings/mine', { headers: authHeaders(token) });
+    return parseResponse<import('./types').MyBooking[]>(res);
+  },
+
+  async createBookings(token: string, slots: { date: string; hour: number }[]) {
+    const res = await fetch('/bookings', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ slots }),
+    });
+    return parseResponse<{ message: string; count: number; spent: number }>(res);
+  },
+
+  async cancelBookings(token: string, ids: number[]) {
+    const res = await fetch('/bookings/cancel', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ ids }),
+    });
+    return parseResponse<{ message: string; count: number; refunded: number }>(res);
+  },
+
   // ---- 토큰 (회원)
   async getTokenPacks(token: string) {
     const res = await fetch('/tokens/packs', { headers: authHeaders(token) });
@@ -311,6 +350,7 @@ export const api = {
       next_monthly_open_at?: string;
       payment_guide?: string | null;
       token_charge_enabled?: boolean;
+      reservation_mode?: 'legacy' | 'token';
     }>(res);
   },
 

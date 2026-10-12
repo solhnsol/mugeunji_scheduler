@@ -68,6 +68,14 @@ def test_mode_guards(client, admin, make_user):
         client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "legacy"})
 
 
+def test_charging_is_open_in_token_mode(client, admin, make_user, token_mode):
+    """전환되면 충전 공개 스위치와 상관없이 회원이 충전 화면을 쓸 수 있다."""
+    _, member = make_user()
+    client.put("/admin/token-settings", headers=admin, json={"token_charge_enabled": False})
+    assert client.get("/tokens/me", headers=member).status_code == 200
+    assert client.get("/tokens/packs", headers=member).status_code == 200
+
+
 def test_book_spends_tokens_and_shows_in_grids(client, admin, make_user, token_mode):
     u1, m1 = make_user("홍길동")
     u2, m2 = make_user("김철수")
@@ -81,11 +89,11 @@ def test_book_spends_tokens_and_shows_in_grids(client, admin, make_user, token_m
 
     day = client.get("/bookings/range", headers=m1, params={"start": "2026-12-12", "days": 1}).json()["days"][0]
     slots = {s["hour"]: s for s in day["slots"]}
-    assert slots[16]["status"] == "mine" and slots[16]["booking_id"] is not None
+    assert slots[16]["status"] == "mine" and slots[16]["booking_id"] is not None and slots[16]["paid"] == 4
     assert slots[14]["status"] == "free" and slots[14]["cost"] == 2 and slots[5]["cost"] == 0
     # 다른 회원 화면: 예약된 칸은 이름만 보이고 취소용 id는 숨겨진다
     other = {s["hour"]: s for s in client.get("/bookings/range", headers=m2, params={"start": "2026-12-12", "days": 1}).json()["days"][0]["slots"]}
-    assert other[16]["status"] == "taken" and other[16]["name"] == "홍길동" and other[16]["booking_id"] is None
+    assert other[16]["status"] == "taken" and other[16]["name"] == "홍길동" and other[16]["booking_id"] is None and other[16]["paid"] is None
 
     cal = {d["date"]: d for d in client.get("/bookings/calendar", headers=m1, params={"month": "2026-12"}).json()["days"]}
     assert cal["2026-12-12"]["booked"] == 3 and cal["2026-12-12"]["mine"] == 3 and cal["2026-12-12"]["occupancy"][16] == "2"
