@@ -163,13 +163,15 @@ export function AppShell({
 
 export function Toast({ message, type }: { message: string; type: 'success' | 'error' | '' }) {
   if (!message) return null;
+  // 하단 고정 예약 바·입력창을 가리지 않도록 헤더 아래(상단)에 띄운다
   return (
     <div
-      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] max-w-sm w-[calc(100%-2rem)]
+      className={`toast-in fixed left-1/2 -translate-x-1/2 z-[80] max-w-sm w-[calc(100%-2rem)] pointer-events-none
+        top-[calc(env(safe-area-inset-top)+4rem)]
         rounded-2xl px-4 py-3 text-sm font-medium shadow-lg backdrop-blur-sm ${
         type === 'error' ? 'bg-[#c45c5c] text-white' : 'bg-ink text-white'
       }`}
-      role="status"
+      role={type === 'error' ? 'alert' : 'status'}
     >
       {message}
     </div>
