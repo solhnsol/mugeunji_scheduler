@@ -616,7 +616,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                   </>
                 )
               ) : (
-                <>빈 시간을 누르거나 끌어서 선택하세요{balance !== null && <> · 보유 {formatTokens(balance)}</>}</>
+                <>빈 시간을 누르거나, 길게 눌러 끌어서 선택하세요{balance !== null && <> · 보유 {formatTokens(balance)}</>}</>
               )}
             </p>
             {barMode === 'cancel' ? (

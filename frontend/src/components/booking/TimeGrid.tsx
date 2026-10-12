@@ -44,6 +44,9 @@ export function buildBlocks(day: GridDay): GridBlock[] {
   return blocks;
 }
 
+/** 터치로 끌어서 선택을 시작하기 위해 길게 누르는 시간 */
+const LONG_PRESS_MS = 350;
+
 const STRIPES = 'repeating-linear-gradient(135deg, rgba(0,0,0,0.05) 0 6px, transparent 6px 12px)';
 
 /**
@@ -102,11 +105,25 @@ export function TimeGrid({
     colTop: number;
     pointerId: number;
   } | null>(null);
+  /** 터치로 길게 누르기를 기다리는 중인 상태 */
+  const press = useRef<{ pointerId: number; x: number; y: number; timer: number } | null>(null);
   /** 마우스 누름에서 이미 처리했으면 뒤따르는 click은 무시한다 */
   const mouseHandled = useRef(false);
   const latest = useRef({ days, selected, cancelSelected });
   latest.current = { days, selected, cancelSelected };
   const [nowTick, setNowTick] = useState(0);
+
+  // 끌어서 선택하는 동안에는 손가락 움직임이 화면 스크롤로 넘어가지 않게 막는다 (passive: false여야 막을 수 있다)
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const block = (e: TouchEvent) => {
+      if (drag.current && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchmove', block, { passive: false });
+    return () => el.removeEventListener('touchmove', block);
+  }, []);
+  useEffect(() => () => window.clearTimeout(press.current?.timer), []);
 
   useEffect(() => {
     const id = window.setInterval(() => setNowTick((n) => n + 1), 60_000);
@@ -146,16 +163,15 @@ export function TimeGrid({
     }
   };
 
-  const onRootPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    mouseHandled.current = false;
-    if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    const col = (e.target as HTMLElement).closest<HTMLElement>('[data-col]');
-    if (!col) return;
+  /** 눌린 위치에서 끌기를 시작한다. 시작할 수 없는 칸(남의 예약·지난 시간)이면 false */
+  const startDrag = (target: HTMLElement, pointerId: number, clientY: number) => {
+    const col = target.closest<HTMLElement>('[data-col]');
+    if (!col) return false;
     const date = col.dataset.col as string;
     const colTop = col.getBoundingClientRect().top;
-    const hour = hourAt(colTop, e.clientY);
+    const hour = hourAt(colTop, clientY);
     const slot = latest.current.days.find((d) => d.date === date)?.slots[hour];
-    if (!slot) return;
+    if (!slot) return false;
     let mode: 'free' | 'mine';
     let on: boolean;
     if (slot.status === 'free') {
@@ -165,15 +181,53 @@ export function TimeGrid({
       mode = 'mine';
       on = !latest.current.cancelSelected.has(slot.booking_id);
     } else {
-      return; // 남의 예약·지난 시간은 끌기를 시작하지 않는다 (남의 예약 클릭은 블록이 따로 처리)
+      return false; // 남의 예약·지난 시간은 끌기를 시작하지 않는다 (남의 예약 클릭은 블록이 따로 처리)
     }
-    drag.current = { mode, on, date, last: hour, colTop, pointerId: e.pointerId };
+    drag.current = { mode, on, date, last: hour, colTop, pointerId };
     mouseHandled.current = true;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    scroller.current?.setPointerCapture(pointerId);
     paintHour(mode, on, date, hour);
+    return true;
+  };
+
+  const cancelPendingPress = () => {
+    if (press.current) {
+      window.clearTimeout(press.current.timer);
+      press.current = null;
+    }
+  };
+
+  const onRootPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    mouseHandled.current = false;
+    if (e.pointerType === 'mouse') {
+      if (e.button !== 0) return;
+      startDrag(e.target as HTMLElement, e.pointerId, e.clientY);
+      return;
+    }
+    // 터치·펜: 짧게 누르면 탭, 스크롤하면 스크롤. 길게(≈350ms) 누른 채로 있으면 끌어서 선택이 시작된다
+    cancelPendingPress();
+    const target = e.target as HTMLElement;
+    const { pointerId, clientX, clientY } = e;
+    press.current = {
+      pointerId,
+      x: clientX,
+      y: clientY,
+      timer: window.setTimeout(() => {
+        const pending = press.current;
+        press.current = null;
+        if (!pending) return;
+        if (startDrag(target, pointerId, pending.y)) navigator.vibrate?.(10);
+      }, LONG_PRESS_MS),
+    };
   };
 
   const onRootPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const pending = press.current;
+    if (pending && pending.pointerId === e.pointerId) {
+      pending.y = e.clientY;
+      // 길게 누르기 전에 손가락이 움직이면 스크롤로 본다
+      if (Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) cancelPendingPress();
+    }
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     // 가장자리 근처에서는 안쪽 스크롤을 따라 움직인다
@@ -193,10 +247,13 @@ export function TimeGrid({
   };
 
   const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (press.current?.pointerId === e.pointerId) cancelPendingPress();
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     drag.current = null;
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    // 터치는 손을 뗀 뒤 click이 안 올 수도 있어서, 잠시 뒤에도 플래그가 남아 다음 탭을 삼키지 않게 정리한다
+    if (e.pointerType !== 'mouse') window.setTimeout(() => (mouseHandled.current = false), 500);
   };
 
   const cols = `${single ? 40 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
@@ -215,6 +272,11 @@ export function TimeGrid({
           if (mouseHandled.current) e.preventDefault();
         }}
         onDragStart={(e) => e.preventDefault()}
+        onContextMenu={(e) => {
+          // 길게 누를 때 뜨는 시스템 메뉴/확대경이 끌기를 방해하지 않게 한다
+          if (drag.current || press.current) e.preventDefault();
+        }}
+        style={{ WebkitTouchCallout: 'none' }}
       >
         {showHeader && (
           <div className="grid sticky top-0 z-20 bg-cream border-b border-line/70" style={{ gridTemplateColumns: cols }}>
