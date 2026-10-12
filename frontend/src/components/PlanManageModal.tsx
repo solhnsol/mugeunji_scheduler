@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PlanGrid } from './ui';
 import { MeResponse, Plan } from '../types';
 import { formatPrice } from '../utils';
+import { ModalOverlay } from './Modal';
 
 export function PlanManageModal({
   me,
@@ -49,10 +50,7 @@ export function PlanManageModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center"
-      onClick={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         className="card w-full sm:max-w-md max-h-[88dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
         onClick={(e) => e.stopPropagation()}
@@ -135,6 +133,6 @@ export function PlanManageModal({
           <p className="text-center text-xs text-ink-faint mt-4">중단 취소 후 변경할 수 있습니다</p>
         )}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

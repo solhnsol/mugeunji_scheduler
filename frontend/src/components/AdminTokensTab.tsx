@@ -6,6 +6,7 @@ import { ExpiryInput } from './ExpiryInput';
 import { AdminBookingSettings } from './AdminBookingSettings';
 import { AdminBookingsPanel } from './AdminBookingsPanel';
 import { useConfirm } from './ConfirmDialog';
+import { ModalOverlay } from './Modal';
 
 type PurchaseFilter = 'pending' | 'confirmed' | 'cancelled';
 
@@ -17,7 +18,7 @@ const FILTERS: { id: PurchaseFilter; label: string }[] = [
 
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div
         className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -26,7 +27,7 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
         {subtitle && <p className="text-xs text-ink-faint mt-0.5">{subtitle}</p>}
         <div className="mt-5">{children}</div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

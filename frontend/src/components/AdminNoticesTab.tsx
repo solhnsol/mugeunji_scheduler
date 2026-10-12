@@ -4,15 +4,16 @@ import { Notice } from '../types';
 import { formatDateTime } from '../utils';
 import { useConfirm } from './ConfirmDialog';
 import { Markdown } from './Markdown';
+import { ModalOverlay } from './Modal';
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div className="card p-6 w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl max-h-[92dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg text-ink">{title}</h3>
         <div className="mt-5">{children}</div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

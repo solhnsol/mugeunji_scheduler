@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { api, ApiError } from '../api';
 import { MeResponse } from '../types';
 import { formatPhone } from '../utils';
+import { ModalOverlay } from './Modal';
 
 export function ProfileModal({
   me,
@@ -62,10 +63,7 @@ export function ProfileModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center"
-      onClick={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <form
         className="card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 max-h-[90dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -139,6 +137,6 @@ export function ProfileModal({
           {saving ? '저장 중…' : '저장'}
         </button>
       </form>
-    </div>
+    </ModalOverlay>
   );
 }

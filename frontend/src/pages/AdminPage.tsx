@@ -20,6 +20,7 @@ import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { Plan, Reservation, UserInfo } from '../types';
 import { formatPhone } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
+import { ModalOverlay } from '../components/Modal';
 
 const TABS = [
   { id: 'roster' as const, label: '정산' },
@@ -658,7 +659,7 @@ function EditAdminModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg text-ink">{user.name || user.username}</h3>
         <p className="text-xs text-ink-faint mb-1">@{user.username}</p>
@@ -700,7 +701,7 @@ function EditAdminModal({
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>취소</button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -828,7 +829,7 @@ function EditUserModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg text-ink">{user.name || user.username}</h3>
         <p className="text-xs text-ink-faint mb-5">@{user.username}</p>
@@ -984,6 +985,6 @@ function EditUserModal({
           onClose={() => setTempPassword(null)}
         />
       )}
-    </div>
+    </ModalOverlay>
   );
 }

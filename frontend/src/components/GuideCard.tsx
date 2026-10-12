@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MeResponse } from '../types';
+import { ModalOverlay } from './Modal';
 
 type Step = {
   id: string;
@@ -173,10 +174,7 @@ export function UsageGuideModal({
   paymentGuide?: string | null;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center"
-      onClick={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         className="card p-6 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[88dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -194,6 +192,6 @@ export function UsageGuideModal({
           닫기
         </button>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

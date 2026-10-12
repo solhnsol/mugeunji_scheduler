@@ -1,4 +1,5 @@
-import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { ReactNode, useCallback, useRef, useState } from 'react';
+import { ModalOverlay } from './Modal';
 
 type ConfirmOptions = {
   title: string;
@@ -16,22 +17,8 @@ function ConfirmDialog({
   options: ConfirmOptions;
   onResult: (ok: boolean) => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onResult(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onResult]);
-
   return (
-    <div
-      className="fixed inset-0 z-[70] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
-      onClick={() => onResult(false)}
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="confirm-title"
-    >
+    <ModalOverlay onClose={() => onResult(false)} className="z-[70] items-end sm:items-center p-4" role="alertdialog" labelledBy="confirm-title">
       <div className="card w-full max-w-sm p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 id="confirm-title" className="font-semibold text-ink">
           {options.title}
@@ -57,7 +44,7 @@ function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
