@@ -1282,6 +1282,7 @@ async def get_booking_settings(
     config = await BookingManager(conn).get_config(admin_user["username"], "admin")
     return {
         "reservation_mode": config["mode"],
+        "beta_month": config["beta_month"],
         "price_bands": config["price_bands"],
         "refund_tiers": config["refund_tiers"],
     }
@@ -1301,6 +1302,8 @@ async def update_booking_settings(
         results.append(await manager.set_refund_tiers([t.model_dump() for t in data.refund_tiers]))
     if data.reservation_mode is not None:
         results.append(await manager.set_mode(data.reservation_mode, data.beta_month))
+    elif data.beta_month is not None:
+        results.append(await manager.set_mode(await manager.get_mode(), data.beta_month))
     if not results:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="변경할 항목이 없습니다.")
     for ok, message in results:

@@ -258,7 +258,14 @@ export const api = {
 
   async adminCreateTokenPack(
     token: string,
-    body: { name: string; price_won: number; tokens: number },
+    body: {
+      name: string;
+      price_won: number;
+      tokens: number;
+      auto_confirm?: boolean;
+      expires_on?: string | null;
+      audience?: 'all' | 'free';
+    },
   ) {
     const res = await fetch('/admin/token-packs', {
       method: 'POST',
@@ -271,7 +278,17 @@ export const api = {
   async adminUpdateTokenPack(
     token: string,
     packId: number,
-    body: Partial<{ name: string; price_won: number; tokens: number; sort_order: number; active: boolean }>,
+    body: Partial<{
+      name: string;
+      price_won: number;
+      tokens: number;
+      sort_order: number;
+      active: boolean;
+      auto_confirm: boolean;
+      expires_on: string | null;
+      clear_expires_on: boolean;
+      audience: 'all' | 'free';
+    }>,
   ) {
     const res = await fetch(`/admin/token-packs/${packId}`, {
       method: 'PUT',
@@ -329,10 +346,56 @@ export const api = {
     const res = await fetch(`/admin/token-ledger/${encodeURIComponent(username)}`, {
       headers: authHeaders(token),
     });
-    return parseResponse<{ balance: number; ledger: import('./types').TokenLedgerEntry[] }>(res);
+    return parseResponse<{
+      balance: number;
+      lots: import('./types').TokenLot[];
+      ledger: import('./types').TokenLedgerEntry[];
+    }>(res);
   },
 
-  async adminAdjustTokens(token: string, body: { username: string; tokens: number; memo: string }) {
+  async adminGrantTokens(
+    token: string,
+    body: { usernames: string[]; tokens: number; memo: string; expires_on?: string | null },
+  ) {
+    const res = await fetch('/admin/tokens/grant', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminGetBookingSettings(token: string) {
+    const res = await fetch('/admin/booking-settings', { headers: authHeaders(token) });
+    return parseResponse<{
+      reservation_mode: import('./types').ReservationMode;
+      beta_month: string;
+      price_bands: import('./types').PriceBand[];
+      refund_tiers: import('./types').RefundTier[];
+    }>(res);
+  },
+
+  async adminUpdateBookingSettings(
+    token: string,
+    body: Partial<{
+      reservation_mode: import('./types').ReservationMode;
+      beta_month: string;
+      price_bands: import('./types').PriceBand[];
+      refund_tiers: import('./types').RefundTier[];
+    }>,
+  ) {
+    const res = await fetch('/admin/booking-settings', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminAdjustTokens(
+    token: string,
+    body: { username: string; tokens: number; memo: string; expires_on?: string | null },
+  ) {
     const res = await fetch('/admin/tokens/adjust', {
       method: 'POST',
       headers: authHeaders(token),
@@ -350,7 +413,8 @@ export const api = {
       next_monthly_open_at?: string;
       payment_guide?: string | null;
       token_charge_enabled?: boolean;
-      reservation_mode?: 'legacy' | 'token';
+      reservation_mode?: import('./types').ReservationMode;
+      beta_month?: string;
     }>(res);
   },
 

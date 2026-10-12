@@ -59,7 +59,7 @@ export default function FreeApp({
     api
       .getSettings()
       .then((st) => {
-        if (st.reservation_mode === 'token') navigate('/', { replace: true });
+        if (st.reservation_mode === 'token' || st.reservation_mode === 'beta') navigate('/', { replace: true });
       })
       .catch(() => undefined);
   }, [isAdminSession, navigate]);

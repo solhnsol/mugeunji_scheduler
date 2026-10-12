@@ -1,7 +1,8 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api';
 import { TokenBalance, TokenLedgerEntry, TokenPack, TokenPurchase } from '../types';
-import { formatDateTime, formatPhone, formatPrice, formatTokens } from '../utils';
+import { formatDateTime, formatExpiry, formatPhone, formatPrice, formatTokens } from '../utils';
+import { AdminBookingSettings } from './AdminBookingSettings';
 import { useConfirm } from './ConfirmDialog';
 
 type PurchaseFilter = 'pending' | 'confirmed' | 'cancelled';
@@ -45,6 +46,7 @@ export function AdminTokensTab({
   const [packModal, setPackModal] = useState<TokenPack | 'new' | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<TokenBalance | null>(null);
   const [ledgerTarget, setLedgerTarget] = useState<TokenBalance | null>(null);
+  const [grantOpen, setGrantOpen] = useState(false);
   const { confirm, dialog } = useConfirm();
 
   const fail = useCallback(
@@ -128,6 +130,8 @@ export function AdminTokensTab({
 
   return (
     <div className="space-y-5">
+      <AdminBookingSettings token={token} show={show} />
+
       <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -283,9 +287,12 @@ export function AdminTokensTab({
                   <p className="font-medium text-ink">
                     {pack.name}
                     {!pack.active && <span className="badge badge-closed ml-2">판매 중지</span>}
+                    {pack.auto_confirm && <span className="badge ml-2">바로 지급</span>}
+                    {pack.audience === 'free' && <span className="badge ml-2">자유이용 회원</span>}
                   </p>
                   <p className="text-sm text-ink-muted tabular-nums">
-                    {formatPrice(pack.price_won)} → {formatTokens(pack.tokens)}토큰
+                    {pack.price_won === 0 ? '무료' : formatPrice(pack.price_won)} → {formatTokens(pack.tokens)}토큰
+                    {pack.expires_on && ` · ${pack.expires_on.slice(5).replace('-', '/')}까지 사용`}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -318,6 +325,9 @@ export function AdminTokensTab({
       <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <h2 className="font-semibold text-ink">회원 토큰</h2>
+          <button type="button" className="btn-secondary !min-h-[40px] !py-2 !w-auto text-sm" onClick={() => setGrantOpen(true)}>
+            무료 일괄 지급
+          </button>
           <input
             className="input !py-2 max-w-[200px]"
             placeholder="이름·아이디·전화 검색"
@@ -333,7 +343,11 @@ export function AdminTokensTab({
               <li key={b.username} className="py-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-medium text-ink truncate">{memberLabel(b)}</p>
-                  <p className="text-xs text-ink-faint truncate">{b.phone ? formatPhone(b.phone) : `@${b.username}`}</p>
+                  <p className="text-xs text-ink-faint truncate">
+                    {b.phone ? formatPhone(b.phone) : `@${b.username}`}
+                    {b.role === 'free' && ' · 자유이용'}
+                    {b.balance > 0 && b.next_expiry && ` · ${formatExpiry(b.next_expiry)} 소멸 예정 있음`}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1 ml-auto">
                   <span className="text-lg font-semibold text-ink tabular-nums mr-2">{formatTokens(b.balance)}</span>
@@ -377,6 +391,16 @@ export function AdminTokensTab({
           }}
         />
       )}
+      {grantOpen && (
+        <GrantModal
+          balances={balances}
+          onClose={() => setGrantOpen(false)}
+          onSubmit={async (body) => {
+            await run('grant', async () => api.adminGrantTokens(token, body));
+            setGrantOpen(false);
+          }}
+        />
+      )}
       {ledgerTarget && <LedgerModal token={token} target={ledgerTarget} onClose={() => setLedgerTarget(null)} onError={(e) => fail(e, '불러오지 못했어요')} />}
       {dialog}
     </div>
@@ -390,12 +414,24 @@ function PackModal({
 }: {
   pack: TokenPack | null;
   onClose: () => void;
-  onSubmit: (body: { name: string; price_won: number; tokens: number; active?: boolean }) => Promise<void>;
+  onSubmit: (body: {
+    name: string;
+    price_won: number;
+    tokens: number;
+    active?: boolean;
+    auto_confirm: boolean;
+    expires_on?: string | null;
+    clear_expires_on?: boolean;
+    audience: 'all' | 'free';
+  }) => Promise<void>;
 }) {
   const [name, setName] = useState(pack?.name ?? '');
   const [price, setPrice] = useState(pack ? String(pack.price_won) : '');
   const [tokens, setTokens] = useState(pack ? String(pack.tokens) : '');
   const [active, setActive] = useState(pack?.active ?? true);
+  const [autoConfirm, setAutoConfirm] = useState(pack?.auto_confirm ?? false);
+  const [expiresOn, setExpiresOn] = useState(pack?.expires_on ?? '');
+  const [freeOnly, setFreeOnly] = useState(pack?.audience === 'free');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -403,11 +439,21 @@ function PackModal({
     const priceNum = Number(price);
     const tokenNum = Number(tokens);
     if (!name.trim()) return setError('상품 이름을 입력해주세요.');
-    if (!Number.isFinite(priceNum) || priceNum < 1) return setError('결제 금액을 1원 이상으로 입력해주세요.');
+    if (!Number.isFinite(priceNum) || priceNum < (autoConfirm ? 0 : 1)) {
+      return setError(autoConfirm ? '결제 금액은 0원 이상이어야 해요.' : '결제 금액을 1원 이상으로 입력해주세요. (무료는 "바로 지급"을 켜세요)');
+    }
     if (!Number.isInteger(tokenNum) || tokenNum < 1) return setError('토큰은 1 이상의 정수로 입력해주세요.');
     setBusy(true);
     try {
-      await onSubmit({ name: name.trim(), price_won: Math.round(priceNum), tokens: tokenNum, ...(pack ? { active } : {}) });
+      await onSubmit({
+        name: name.trim(),
+        price_won: Math.round(priceNum),
+        tokens: tokenNum,
+        auto_confirm: autoConfirm,
+        audience: freeOnly ? 'free' : 'all',
+        ...(expiresOn ? { expires_on: expiresOn } : { clear_expires_on: true }),
+        ...(pack ? { active } : {}),
+      });
     } finally {
       setBusy(false);
     }
@@ -423,13 +469,28 @@ function PackModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label" htmlFor="pack-price">결제 금액(원)</label>
-            <input id="pack-price" className="input" type="number" min={1} inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} />
+            <input id="pack-price" className="input" type="number" min={0} inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} />
           </div>
           <div>
             <label className="label" htmlFor="pack-tokens">부여 토큰</label>
             <input id="pack-tokens" className="input" type="number" min={1} step={1} inputMode="numeric" value={tokens} onChange={(e) => setTokens(e.target.value)} />
           </div>
         </div>
+        <div>
+          <label className="label" htmlFor="pack-expires">사용 기한 (선택)</label>
+          <input id="pack-expires" className="input" type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} />
+          <p className="text-xs text-ink-faint mt-1.5 leading-relaxed">
+            비워 두면 충전한 날부터 3개월 뒤 사라져요. 날짜를 정하면 그날 끝까지 쓰고 사라져요. (예: 11월 한정 무료분 → 11-30)
+          </p>
+        </div>
+        <label className="flex items-center gap-3 rounded-2xl border border-line p-4 cursor-pointer">
+          <input type="checkbox" className="w-5 h-5 accent-sage" checked={autoConfirm} onChange={(e) => setAutoConfirm(e.target.checked)} />
+          <span className="text-sm"><b className="font-medium">바로 지급</b> · 요청하면 관리자 확인 없이 바로 들어와요</span>
+        </label>
+        <label className="flex items-center gap-3 rounded-2xl border border-line p-4 cursor-pointer">
+          <input type="checkbox" className="w-5 h-5 accent-sage" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} />
+          <span className="text-sm"><b className="font-medium">자유이용 회원만</b> · 6시간 이상 이용 회원에게만 보여요</span>
+        </label>
         {pack && (
           <label className="flex items-center gap-3 rounded-2xl border border-line p-4 cursor-pointer">
             <input type="checkbox" className="w-5 h-5 accent-sage" checked={active} onChange={(e) => setActive(e.target.checked)} />
@@ -531,6 +592,7 @@ function LedgerModal({
                   {formatDateTime(l.created_at)}
                   {l.memo ? ` · ${l.memo}` : ''}
                   {l.created_by ? ` · ${l.created_by}` : ''}
+                  {l.tokens > 0 && l.expires_at ? ` · ${formatExpiry(l.expires_at)} 사용` : ''}
                 </p>
               </div>
               <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-[#b04040]'}`}>
@@ -542,6 +604,91 @@ function LedgerModal({
         </ul>
       )}
       <button type="button" className="btn-secondary w-full mt-5" onClick={onClose}>닫기</button>
+    </Modal>
+  );
+}
+
+function GrantModal({
+  balances,
+  onClose,
+  onSubmit,
+}: {
+  balances: TokenBalance[];
+  onClose: () => void;
+  onSubmit: (body: { usernames: string[]; tokens: number; memo: string; expires_on?: string | null }) => Promise<void>;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [amount, setAmount] = useState('10');
+  const [memo, setMemo] = useState('11월 베타 무료 지급');
+  const [expiresOn, setExpiresOn] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const pickGroup = (match: (b: TokenBalance) => boolean) =>
+    setSelected(new Set(balances.filter(match).map((b) => b.username)));
+  const toggle = (username: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(username)) next.delete(username);
+      else next.add(username);
+      return next;
+    });
+
+  const submit = async () => {
+    const value = Number(amount);
+    if (selected.size === 0) return setError('지급할 회원을 선택해주세요.');
+    if (!Number.isInteger(value) || value < 1) return setError('지급 토큰은 1 이상의 정수로 입력해주세요.');
+    if (!memo.trim()) return setError('지급 사유를 입력해주세요.');
+    setBusy(true);
+    try {
+      await onSubmit({ usernames: Array.from(selected), tokens: value, memo: memo.trim(), ...(expiresOn ? { expires_on: expiresOn } : {}) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="무료 일괄 지급" subtitle="선택한 회원에게 같은 토큰을 한 번에 지급해요" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-1.5">
+          <button type="button" className="text-xs rounded-full border border-line px-3 py-1.5 min-h-[32px]" onClick={() => pickGroup((b) => b.role !== 'free')}>4시간 회원</button>
+          <button type="button" className="text-xs rounded-full border border-line px-3 py-1.5 min-h-[32px]" onClick={() => pickGroup((b) => b.role === 'free')}>자유이용 회원</button>
+          <button type="button" className="text-xs rounded-full border border-line px-3 py-1.5 min-h-[32px]" onClick={() => pickGroup(() => true)}>전체</button>
+          <button type="button" className="text-xs text-ink-faint px-2 min-h-[32px]" onClick={() => setSelected(new Set())}>해제</button>
+        </div>
+        <ul className="max-h-48 overflow-y-auto divide-y divide-line/60 rounded-2xl border border-line">
+          {balances.map((b) => (
+            <li key={b.username}>
+              <label className="flex items-center gap-3 px-3 py-2 cursor-pointer min-h-[44px]">
+                <input type="checkbox" className="w-5 h-5 accent-sage" checked={selected.has(b.username)} onChange={() => toggle(b.username)} />
+                <span className="text-sm text-ink truncate">{b.name || b.username}</span>
+                <span className="text-xs text-ink-faint ml-auto shrink-0">{b.role === 'free' ? '자유이용' : '일반'} · {formatTokens(b.balance)}토큰</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-ink-faint">{selected.size}명 선택</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label" htmlFor="grant-amount">1인당 토큰</label>
+            <input id="grant-amount" className="input" type="number" min={1} step={1} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="grant-expires">사용 기한</label>
+            <input id="grant-expires" className="input" type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} />
+          </div>
+        </div>
+        <p className="text-xs text-ink-faint -mt-2">기한을 비우면 3개월 뒤 사라져요. 11월 한정이면 11-30을 고르세요.</p>
+        <div>
+          <label className="label" htmlFor="grant-memo">사유</label>
+          <input id="grant-memo" className="input" value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={200} />
+        </div>
+        {error && <p className="text-xs text-[#b04040]" role="alert">{error}</p>}
+      </div>
+      <div className="flex gap-2 mt-6">
+        <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>{busy ? '지급 중…' : '지급'}</button>
+        <button type="button" className="btn-secondary flex-1" onClick={onClose}>취소</button>
+      </div>
     </Modal>
   );
 }

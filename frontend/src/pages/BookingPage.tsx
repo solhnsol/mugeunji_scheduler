@@ -295,6 +295,11 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
               관리자 미리보기예요. 토큰이 차감되지 않고, 아직 열리지 않은 날짜도 볼 수 있어요.
             </p>
           )}
+          {config.mode === 'beta' && (
+            <p className="text-xs text-sage bg-sage-muted/40 border border-sage/20 rounded-2xl px-4 py-2.5 leading-relaxed">
+              토큰 예약 베타예요. 월 신청으로 잡힌 시간은 &quot;월 신청&quot;으로 표시되고 여기서 바꿀 수 없어요. 불편한 점은 단톡방으로 알려주세요.
+            </p>
+          )}
           {!config.reservation_enabled && !config.is_admin && (
             <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
               지금은 예약을 받지 않아요. 열리면 이 화면에서 예약할 수 있어요.

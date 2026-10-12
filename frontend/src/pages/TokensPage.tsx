@@ -5,7 +5,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { AppShell, Toast } from '../components/ui';
 import { useToast } from '../hooks/useToast';
 import { MyTokens, TokenPack, TokenPurchase } from '../types';
-import { formatDateTime, formatPrice, formatTokens } from '../utils';
+import { formatDateTime, formatExpiry, formatPrice, formatTokens } from '../utils';
 
 const STATUS_LABEL: Record<TokenPurchase['status'], { text: string; cls: string }> = {
   pending: { text: '관리자 확인 대기', cls: 'text-amber-700' },
@@ -38,11 +38,19 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
 
   const requestPack = async (pack: TokenPack) => {
     if (busy) return;
-    const ok = await confirm({
-      title: `${pack.name} 충전을 요청할까요?`,
-      message: `${formatPrice(pack.price_won)} → ${formatTokens(pack.tokens)}토큰\n요청하면 관리자가 확인한 뒤 등록하신 연락처로 입금 안내를 드려요. 입금이 확인되면 토큰이 지급돼요.`,
-      confirmLabel: '충전 요청',
-    });
+    const ok = await confirm(
+      pack.auto_confirm
+        ? {
+            title: `${pack.name} 토큰을 받을까요?`,
+            message: `${formatTokens(pack.tokens)}토큰이 바로 지급돼요.${pack.expires_on ? `\n${pack.expires_on.slice(5).replace('-', '/')}까지 쓰지 않으면 사라져요.` : ''}`,
+            confirmLabel: '받기',
+          }
+        : {
+            title: `${pack.name} 충전을 요청할까요?`,
+            message: `${formatPrice(pack.price_won)} → ${formatTokens(pack.tokens)}토큰\n요청하면 관리자가 확인한 뒤 등록하신 연락처로 입금 안내를 드려요. 입금이 확인되면 토큰이 지급돼요.`,
+            confirmLabel: '충전 요청',
+          },
+    );
     if (!ok) return;
     setBusy(true);
     try {
@@ -111,13 +119,25 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
             <p className="text-sm text-white/70 mt-4 leading-relaxed">
               토큰으로 원하는 날짜와 시간에 예약해요. 충전은 언제든 요청할 수 있어요.
             </p>
+            {mine.lots.some((lot) => lot.expires_at) && (
+              <ul className="mt-3 space-y-0.5 text-xs text-white/75 tabular-nums">
+                {mine.lots
+                  .filter((lot) => lot.expires_at)
+                  .slice(0, 4)
+                  .map((lot, i) => (
+                    <li key={i}>
+                      {formatTokens(lot.tokens)}토큰 · {formatExpiry(lot.expires_at)} 쓰지 않으면 사라져요
+                    </li>
+                  ))}
+              </ul>
+            )}
           </div>
 
           <section>
             <h2 className="text-lg font-bold text-ink">토큰 충전</h2>
             <p className="text-sm text-ink-muted mt-1 leading-relaxed">
               상품을 고르면 관리자가 확인한 뒤 연락처로 입금 안내를 드려요. 조금만 기다려 주세요. 안내받은 금액을 입금하면
-              관리자가 확인하고 토큰을 지급해요.
+              관리자가 확인하고 토큰을 지급해요. 충전한 토큰은 3개월 동안 쓰지 않으면 사라지고, 쓰는 동안은 계속 이어져요.
             </p>
             {packs.length === 0 ? (
               <p className="text-sm text-ink-faint mt-4">지금 선택할 수 있는 상품이 없어요. 관리자에게 문의해주세요.</p>
@@ -136,7 +156,12 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                       {formatTokens(pack.tokens)}
                       <span className="text-base font-medium text-ink-muted"> 토큰</span>
                     </p>
-                    <p className="text-lg font-semibold text-sage mt-3 tabular-nums">{formatPrice(pack.price_won)}</p>
+                    <p className="text-lg font-semibold text-sage mt-3 tabular-nums">
+                      {pack.price_won === 0 ? '무료' : formatPrice(pack.price_won)}
+                    </p>
+                    {pack.expires_on && (
+                      <p className="text-xs text-ink-faint mt-1">{pack.expires_on.slice(5).replace('-', '/')}까지 사용</p>
+                    )}
                   </button>
                 ))}
               </div>
@@ -192,6 +217,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                       <p className="text-xs text-ink-faint truncate">
                         {formatDateTime(l.created_at)}
                         {l.memo ? ` · ${l.memo}` : ''}
+                        {l.tokens > 0 && l.expires_at ? ` · ${formatExpiry(l.expires_at)} 사용` : ''}
                       </p>
                     </div>
                     <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-[#b04040]'}`}>

@@ -15,7 +15,7 @@ import { ScheduleModal } from '../components/ScheduleModal';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { useToast } from '../hooks/useToast';
 import { TokenHome } from '../components/TokenHome';
-import { MeResponse, MyBooking, Plan } from '../types';
+import { MeResponse, MyBooking, Plan, ReservationMode } from '../types';
 import { formatTokens } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 
@@ -41,7 +41,7 @@ export default function UserApp({
   const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
   const [tokenChargeEnabled, setTokenChargeEnabled] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
-  const [reservationMode, setReservationMode] = useState<'legacy' | 'token'>('legacy');
+  const [reservationMode, setReservationMode] = useState<ReservationMode>('legacy');
   const [upcomingBookings, setUpcomingBookings] = useState<MyBooking[]>([]);
   const navigate = useNavigate();
   const monthlyReservations = useMonthlyReservations();
@@ -65,7 +65,7 @@ export default function UserApp({
     const mode = settings.reservation_mode ?? 'legacy';
     setReservationMode(mode);
     // 토큰 예약으로 전환되면 충전은 항상 열려 있다
-    const tokensOpen = !!settings.token_charge_enabled || mode === 'token';
+    const tokensOpen = !!settings.token_charge_enabled || mode === 'token' || mode === 'beta';
     setTokenChargeEnabled(tokensOpen);
     if (tokensOpen && meData.role !== 'admin') {
       api
@@ -73,7 +73,7 @@ export default function UserApp({
         .then((t) => setTokenBalance(t.balance))
         .catch(() => setTokenBalance(null));
     }
-    if (mode === 'token' && meData.role !== 'admin') {
+    if ((mode === 'token' || mode === 'beta') && meData.role !== 'admin') {
       api
         .getMyBookings(token)
         .then(setUpcomingBookings)
@@ -185,6 +185,8 @@ export default function UserApp({
 
   // 토큰 예약으로 전환된 뒤 회원에게 보이는 화면 (관리자는 기존 화면 + 미리보기 링크)
   const tokenMode = reservationMode === 'token' && me.role !== 'admin';
+  // 베타: 월 신청은 기존 화면 그대로, 자유이용 자리를 토큰 예약이 대신한다
+  const betaMode = reservationMode === 'beta' && me.role !== 'admin';
 
   const headerMenuItems = [
     { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true) },
@@ -194,13 +196,13 @@ export default function UserApp({
       onClick: () => setPlanModalOpen(true),
       hidden: !hasSubscription || tokenMode,
     },
-    { id: 'book', label: '예약', onClick: () => navigate('/book'), hidden: !tokenMode && me.role !== 'admin' },
+    { id: 'book', label: '예약', onClick: () => navigate('/book'), hidden: !tokenMode && !betaMode && me.role !== 'admin' },
     { id: 'tokens', label: '토큰', onClick: () => navigate('/tokens'), hidden: !tokenChargeEnabled && me.role !== 'admin' },
     { id: 'guide', label: '이용 안내', onClick: () => setGuideOpen(true), hidden: tokenMode },
     { id: 'logout', label: '로그아웃', onClick: onLogout },
   ];
 
-  const headerNav = me.can_access_free_schedule ? (
+  const headerNav = me.can_access_free_schedule && !betaMode ? (
     <ScheduleModeNav mode="monthly" />
   ) : undefined;
 
@@ -245,7 +247,7 @@ export default function UserApp({
     reserve.done = steps[steps.length - 2].done;
   }
   const tokenCard =
-    tokenChargeEnabled && tokenBalance !== null ? (
+    tokenChargeEnabled && tokenBalance !== null && !betaMode ? (
       <Link to="/tokens" className="card p-4 flex items-center justify-between gap-3 hover:border-sage/30">
         <div>
           <p className="text-xs text-ink-faint">내 토큰</p>
@@ -254,6 +256,30 @@ export default function UserApp({
         <span className="btn-secondary !w-auto text-sm">충전하기</span>
       </Link>
     ) : null;
+  const betaCard = betaMode ? (
+    <div className="card p-4 border-sage/30 bg-sage-muted/30 space-y-3">
+      <div>
+        <p className="text-sm font-semibold text-ink">토큰 예약 베타</p>
+        <p className="text-xs text-ink-muted mt-1 leading-relaxed">
+          자유이용은 토큰 예약으로 바뀌었어요. 월 신청은 지금처럼 쓰고, 그 외 시간은 토큰으로 예약해요. 불편한 점이나
+          오류가 있으면 단톡방으로 알려주세요.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-ink-faint">내 토큰</p>
+          <p className="text-2xl font-bold text-ink tabular-nums">{tokenBalance === null ? '–' : formatTokens(tokenBalance)}</p>
+        </div>
+        <div className="flex gap-2">
+          <Link to="/tokens" className="btn-secondary !w-auto text-sm">충전·받기</Link>
+          <Link to="/book" className="btn-primary !w-auto text-sm">토큰으로 예약</Link>
+        </div>
+      </div>
+      {upcomingBookings.length > 0 && (
+        <p className="text-xs text-ink-muted">앞으로의 토큰 예약 {upcomingBookings.length}시간</p>
+      )}
+    </div>
+  ) : null;
   const guideVisible = steps.some((s) => !s.done);
   const guideCard = guideVisible ? <GuideCard steps={steps} /> : null;
   const guideModal = guideOpen && (
@@ -361,6 +387,7 @@ export default function UserApp({
             </p>
           </div>
           {guideCard}
+          {betaCard}
           {tokenCard}
           <div>
             <h3 className="text-sm font-semibold text-ink mb-3">요금제 선택</h3>
@@ -399,6 +426,7 @@ export default function UserApp({
         {profileBanner}
         {guideCard}
 
+        {betaCard}
         {tokenCard}
 
         {me.subscription && (
@@ -414,7 +442,7 @@ export default function UserApp({
           />
         )}
 
-        {isFreeOnly(me) && me.can_access_free_schedule && (
+        {isFreeOnly(me) && me.can_access_free_schedule && !betaMode && (
           <Link to="/free" className="btn-primary shadow-lg shadow-sage/20 inline-flex items-center justify-center">
             자유이용 시간표 열기
           </Link>

@@ -83,7 +83,7 @@ export function DayTimeline({
                 </span>
                 {(slot.status === 'free' || slot.status === 'mine') && (
                   <span className={`text-xs tabular-nums shrink-0 ${isSelected || isCancelSelected || slot.status === 'mine' ? 'text-white/80' : 'text-ink-faint'}`}>
-                    {slot.status === 'mine' ? (slot.paid ?? slot.cost) : slot.cost}토큰
+                    {slot.legacy ? '월 신청' : `${slot.status === 'mine' ? (slot.paid ?? slot.cost) : slot.cost}토큰`}
                   </span>
                 )}
               </button>
