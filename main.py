@@ -34,7 +34,7 @@ from src.reservation import ReservationManager
 from src.settings import SettingsManager
 from src.notices import NoticeError, NoticeManager
 from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
-from src.tokens import TokenManager
+from src.tokens import TokenManager, is_expired
 
 load_dotenv()
 
@@ -965,12 +965,11 @@ async def list_token_packs(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     await _require_token_charge_open(conn, current_user)
-    today = now_kst().date().isoformat()
     packs = await TokenManager(conn).list_packs(active_only=True)
     is_free_member = current_user["role"] in ("free", "admin")
     return [
         p for p in packs
-        if (is_free_member or p["audience"] != "free") and not (p["expires_on"] and p["expires_on"] < today)
+        if (is_free_member or p["audience"] != "free") and not is_expired(p["expires_on"])
     ]
 
 
@@ -1302,6 +1301,11 @@ async def get_booking_settings(
     return {
         "reservation_mode": config["mode"],
         "beta_month": config["beta_month"],
+        # 베타 달이 끝나며 다음 달 예약이 열리는 시각 (11월 한정 토큰의 사용 기한으로 쓴다)
+        "beta_month_open_at": (
+            lambda at: at.isoformat() if at else None
+        )(BookingManager.month_open_at(await SettingsManager(conn).get_settings(), config["beta_month"])),
+        "next_month_open_at": config["next_month_open_at"],
         "price_bands": config["price_bands"],
         "refund_tiers": config["refund_tiers"],
     }

@@ -467,6 +467,8 @@ export const api = {
     return parseResponse<{
       reservation_mode: import('./types').ReservationMode;
       beta_month: string;
+      beta_month_open_at: string | null;
+      next_month_open_at: string | null;
       price_bands: import('./types').PriceBand[];
       refund_tiers: import('./types').RefundTier[];
     }>(res);

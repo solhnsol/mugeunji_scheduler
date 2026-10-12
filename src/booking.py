@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Tuple
 
 import aiosqlite
 
-from src.automation_config import KST, ScheduleConfig, get_current_monthly_open, now_kst
+from src.automation_config import KST, ScheduleConfig, get_current_monthly_open, get_monthly_open_datetime, now_kst
 from src.settings import SettingsManager
 from src.tokens import TokenManager
 
@@ -273,6 +273,26 @@ class BookingManager:
             "next_month_open_at": next_open,
             "next_month_open": next_month_open,
         }
+
+    @staticmethod
+    def month_open_at(settings: Dict, month: str) -> Optional[datetime]:
+        """month(YYYY-MM)의 마지막에 열리는 '다음 달 예약' 오픈 시각. 수동 오픈 시각이 그 달에 있으면 그것을 쓴다."""
+        try:
+            year, mon = (int(x) for x in month.split("-"))
+            date(year, mon, 1)
+        except (ValueError, AttributeError):
+            return None
+        config = ScheduleConfig.from_settings(settings)
+        if not config.auto_monthly_open_enabled:
+            raw = settings.get("reservation_opens_at")
+            if raw:
+                try:
+                    manual = datetime.fromisoformat(raw).astimezone(KST)
+                    if (manual.year, manual.month) == (year, mon):
+                        return manual
+                except (ValueError, TypeError):
+                    pass
+        return get_monthly_open_datetime(year, mon, config)
 
     async def get_config(self, username: str, role: str) -> Dict:
         settings = await self._settings()

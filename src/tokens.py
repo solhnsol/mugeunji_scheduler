@@ -40,20 +40,32 @@ def add_months(moment: datetime, months: int) -> datetime:
 
 
 def parse_expires_on(value: Optional[str]) -> Optional[str]:
-    """'YYYY-MM-DD'를 검증해 돌려준다. 빈 값이면 None."""
+    """소멸 기한을 검증해 돌려준다. 'YYYY-MM-DD'(그날 끝까지) 또는 'YYYY-MM-DDTHH:MM'(그 시각까지, KST). 빈 값이면 None."""
     value = (value or "").strip()
     if not value:
         return None
     try:
+        if "T" in value:
+            return datetime.fromisoformat(value).replace(tzinfo=None, second=0, microsecond=0).isoformat(timespec="minutes")
         return date.fromisoformat(value).isoformat()
     except ValueError:
-        raise ValueError("소멸 날짜는 YYYY-MM-DD 형식이어야 합니다.")
+        raise ValueError("사용 기한은 YYYY-MM-DD 또는 YYYY-MM-DDTHH:MM 형식이어야 합니다.")
 
 
-def expiry_at_end_of(day_iso: str) -> str:
-    """해당 날짜(KST)가 끝나는 순간(다음 날 0시)을 소멸 시각으로 쓴다."""
-    day = date.fromisoformat(day_iso) + timedelta(days=1)
-    return datetime(day.year, day.month, day.day, tzinfo=KST).isoformat()
+def expiry_moment(value: str) -> datetime:
+    """기한 값이 끝나는 순간. 날짜만 있으면 그날이 끝나는 순간(다음 날 0시), 시각이 있으면 그 시각."""
+    if "T" in value:
+        return datetime.fromisoformat(value).replace(tzinfo=KST)
+    day = date.fromisoformat(value) + timedelta(days=1)
+    return datetime(day.year, day.month, day.day, tzinfo=KST)
+
+
+def expiry_at_end_of(value: str) -> str:
+    return expiry_moment(value).isoformat()
+
+
+def is_expired(value: Optional[str]) -> bool:
+    return bool(value) and expiry_moment(value) <= datetime.now(KST)
 
 
 def replay_lots(rows, now: datetime) -> Tuple[List[Dict], Dict]:
@@ -374,6 +386,8 @@ class TokenManager:
             expires_at = await self.default_expiry_at(parse_expires_on(expires_on)) if tokens > 0 else None
         except ValueError as e:
             return False, str(e)
+        if expires_at and datetime.fromisoformat(expires_at) <= datetime.now(KST):
+            return False, "사용 기한이 이미 지났어요."
         try:
             await self.add_ledger(
                 username, tokens, "adjust", memo=memo, created_by=admin_username, expires_at=expires_at
@@ -400,6 +414,8 @@ class TokenManager:
             expires_at = await self.default_expiry_at(parse_expires_on(expires_on))
         except ValueError as e:
             return False, str(e)
+        if datetime.fromisoformat(expires_at) <= datetime.now(KST):
+            return False, "사용 기한이 이미 지났어요."
         placeholders = ",".join("?" * len(usernames))
         async with self.conn.execute(
             f"SELECT username FROM users WHERE role != 'admin' AND username IN ({placeholders})", usernames
@@ -444,7 +460,7 @@ class TokenManager:
         pack = await self.get_pack(pack_id)
         if not pack or not pack["active"]:
             return False, "선택할 수 없는 상품입니다."
-        if pack["expires_on"] and pack["expires_on"] < datetime.now(KST).date().isoformat():
+        if is_expired(pack["expires_on"]):
             return False, "이미 종료된 상품입니다."
         if pack["audience"] == "free":
             async with self.conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:

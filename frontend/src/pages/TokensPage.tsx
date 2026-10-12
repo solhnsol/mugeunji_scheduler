@@ -5,7 +5,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { AppShell, Toast } from '../components/ui';
 import { useToast } from '../hooks/useToast';
 import { MyTokens, TokenPack, TokenPurchase } from '../types';
-import { formatDateTime, formatExpiry, formatPrice, formatTokens } from '../utils';
+import { formatDateTime, formatExpiresOn, formatExpiry, formatPrice, formatTokens } from '../utils';
 
 const STATUS_LABEL: Record<TokenPurchase['status'], { text: string; cls: string }> = {
   pending: { text: '관리자 확인 대기', cls: 'text-amber-700' },
@@ -42,7 +42,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
       pack.auto_confirm
         ? {
             title: `${pack.name} 토큰을 받을까요?`,
-            message: `${formatTokens(pack.tokens)}토큰이 바로 지급돼요.${pack.expires_on ? `\n${pack.expires_on.slice(5).replace('-', '/')}까지 쓰지 않으면 사라져요.` : ''}`,
+            message: `${formatTokens(pack.tokens)}토큰이 바로 지급돼요.${pack.expires_on ? `\n${formatExpiresOn(pack.expires_on)} 쓰지 않으면 사라져요.` : ''}`,
             confirmLabel: '받기',
           }
         : {
@@ -160,7 +160,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                       {pack.price_won === 0 ? '무료' : formatPrice(pack.price_won)}
                     </p>
                     {pack.expires_on && (
-                      <p className="text-xs text-ink-faint mt-1">{pack.expires_on.slice(5).replace('-', '/')}까지 사용</p>
+                      <p className="text-xs text-ink-faint mt-1">{formatExpiresOn(pack.expires_on)} 사용</p>
                     )}
                   </button>
                 ))}
