@@ -165,13 +165,13 @@ async def setup_database(conn: aiosqlite.Connection):
         );
     """)
 
-    # --- 토큰 시스템 (금액 단위는 '유닛' = 0.5토큰, 정수로 저장) ---
+    # --- 토큰 시스템 (토큰은 최소 단위 1의 정수) ---
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS token_packs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             price_won INTEGER NOT NULL,
-            tokens_units INTEGER NOT NULL,
+            tokens INTEGER NOT NULL,
             sort_order INTEGER NOT NULL DEFAULT 0,
             active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT
@@ -184,7 +184,7 @@ async def setup_database(conn: aiosqlite.Connection):
             pack_id INTEGER,
             pack_name TEXT NOT NULL,
             price_won INTEGER NOT NULL,
-            tokens_units INTEGER NOT NULL,
+            tokens INTEGER NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
             created_at TEXT,
             confirmed_at TEXT,
@@ -197,7 +197,7 @@ async def setup_database(conn: aiosqlite.Connection):
         CREATE TABLE IF NOT EXISTS token_ledger (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
-            delta_units INTEGER NOT NULL,
+            delta INTEGER NOT NULL,
             kind TEXT NOT NULL,
             ref_type TEXT,
             ref_id INTEGER,

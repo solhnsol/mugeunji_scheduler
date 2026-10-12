@@ -9,9 +9,9 @@ export function formatPhone(value: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
-/** 토큰 수 표시. 정수는 그대로, 0.5 단위는 소수 한 자리. */
+/** 토큰 수 표시 (정수). */
 export function formatTokens(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return String(Math.trunc(value));
 }
 
 /** ISO 시각 → "10/12 14:30" */

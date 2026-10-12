@@ -392,8 +392,7 @@ function PackModal({
     const tokenNum = Number(tokens);
     if (!name.trim()) return setError('상품 이름을 입력해주세요.');
     if (!Number.isFinite(priceNum) || priceNum < 1) return setError('결제 금액을 1원 이상으로 입력해주세요.');
-    if (!Number.isFinite(tokenNum) || tokenNum <= 0) return setError('토큰을 0보다 크게 입력해주세요.');
-    if (Math.abs(tokenNum * 2 - Math.round(tokenNum * 2)) > 1e-9) return setError('토큰은 0.5 단위로 입력해주세요.');
+    if (!Number.isInteger(tokenNum) || tokenNum < 1) return setError('토큰은 1 이상의 정수로 입력해주세요.');
     setBusy(true);
     try {
       await onSubmit({ name: name.trim(), price_won: Math.round(priceNum), tokens: tokenNum, ...(pack ? { active } : {}) });
@@ -416,7 +415,7 @@ function PackModal({
           </div>
           <div>
             <label className="label" htmlFor="pack-tokens">부여 토큰</label>
-            <input id="pack-tokens" className="input" type="number" min={0.5} step={0.5} inputMode="decimal" value={tokens} onChange={(e) => setTokens(e.target.value)} />
+            <input id="pack-tokens" className="input" type="number" min={1} step={1} inputMode="numeric" value={tokens} onChange={(e) => setTokens(e.target.value)} />
           </div>
         </div>
         {pack && (
@@ -451,8 +450,7 @@ function AdjustModal({
 
   const submit = async () => {
     const value = Number(amount);
-    if (!Number.isFinite(value) || value === 0) return setError('조정할 토큰을 입력해주세요. (차감은 -)');
-    if (Math.abs(value * 2 - Math.round(value * 2)) > 1e-9) return setError('토큰은 0.5 단위로 입력해주세요.');
+    if (!Number.isInteger(value) || value === 0) return setError('조정할 토큰을 0이 아닌 정수로 입력해주세요. (차감은 -)');
     if (!memo.trim()) return setError('조정 사유를 입력해주세요.');
     setBusy(true);
     try {
@@ -468,8 +466,8 @@ function AdjustModal({
       <div className="space-y-4">
         <div>
           <label className="label" htmlFor="adj-amount">조정 토큰 (차감은 -)</label>
-          <input id="adj-amount" className="input" type="number" step={0.5} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="예: 8 또는 -2" />
-          {Number.isFinite(preview) && preview !== 0 && (
+          <input id="adj-amount" className="input" type="number" step={1} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="예: 8 또는 -2" />
+          {Number.isInteger(preview) && preview !== 0 && (
             <p className="text-xs text-ink-faint mt-1.5 tabular-nums">조정 후 {formatTokens(target.balance + preview)}토큰</p>
           )}
         </div>

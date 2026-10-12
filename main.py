@@ -208,13 +208,13 @@ class UpdateUserProfileRequest(BaseModel):
 class TokenPackCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=30)
     price_won: int = Field(..., ge=1)
-    tokens: float = Field(..., gt=0)
+    tokens: int = Field(..., ge=1)
 
 
 class TokenPackUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=30)
     price_won: Optional[int] = Field(None, ge=1)
-    tokens: Optional[float] = Field(None, gt=0)
+    tokens: Optional[int] = Field(None, ge=1)
     sort_order: Optional[int] = None
     active: Optional[bool] = None
 
@@ -225,7 +225,7 @@ class TokenPurchaseRequest(BaseModel):
 
 class TokenAdjustRequest(BaseModel):
     username: str = Field(..., min_length=1)
-    tokens: float
+    tokens: int
     memo: str = Field(..., min_length=1, max_length=200)
 
 
