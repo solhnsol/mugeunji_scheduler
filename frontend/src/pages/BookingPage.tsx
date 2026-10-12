@@ -506,7 +506,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                           type="button"
                           onClick={() => setSelectedDate(d.date)}
                           className={`flex-1 min-w-[40px] rounded-xl py-1 text-center border transition ${
-                            active ? 'bg-sage text-white border-sage' : 'bg-white border-line/70 text-ink-muted'
+                            active ? 'bg-sage text-white border-sage' : 'bg-surface border-line/70 text-ink-muted'
                           } ${d.date < today ? 'opacity-50' : ''}`}
                         >
                           <span className="block text-[10px] leading-tight">{WEEKDAYS_KO[jd.getDay()]}</span>
@@ -560,7 +560,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
 
       {/* 예약 바: 일정표 화면에서는 항상 같은 자리·같은 높이로 있고, 선택 상태에 따라 내용과 버튼 상태만 바뀐다 */}
       {config && view === 'detail' && (
-        <div className="shrink-0 -mx-4 bg-white border-t border-line/70">
+        <div className="shrink-0 -mx-4 bg-surface border-t border-line/70">
           <div className="px-4 py-2 space-y-1">
             <div className="flex items-center justify-between gap-3 text-sm h-5">
               <span className="text-ink-muted min-w-0 truncate">
@@ -587,7 +587,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
               </button>
             </div>
             <p
-              className={`text-xs tabular-nums truncate h-4 ${blockReason || (barMode === 'cancel' && refundPreview.blocked) ? 'text-[#b04040]' : 'text-ink-muted'}`}
+              className={`text-xs tabular-nums truncate h-4 ${blockReason || (barMode === 'cancel' && refundPreview.blocked) ? 'text-danger-ink' : 'text-ink-muted'}`}
               role="status"
               aria-live="polite"
             >

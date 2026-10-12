@@ -36,7 +36,7 @@ export function TokenHome({
         <div className="flex flex-wrap gap-2 mt-5">
           <Link
             to="/book"
-            className="inline-flex items-center justify-center rounded-full bg-white text-sage font-semibold min-h-[48px] px-6 hover:bg-cream transition"
+            className="inline-flex items-center justify-center rounded-full bg-white text-[#3a5248] font-semibold min-h-[48px] px-6 hover:bg-white/90 transition"
           >
             예약하기
           </Link>

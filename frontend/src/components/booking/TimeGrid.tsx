@@ -47,7 +47,7 @@ export function buildBlocks(day: GridDay): GridBlock[] {
 /** 터치로 끌어서 선택을 시작하기 위해 길게 누르는 시간 */
 const LONG_PRESS_MS = 350;
 
-const STRIPES = 'repeating-linear-gradient(135deg, rgba(0,0,0,0.05) 0 6px, transparent 6px 12px)';
+const STRIPES = 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-ink) 7%, transparent) 0 6px, transparent 6px 12px)';
 
 /**
  * 캘린더 일정표 형태의 시간표. 세로는 0~24시, 가로는 날짜(1일 또는 7일).
@@ -305,7 +305,7 @@ export function TimeGrid({
                   className={`py-1.5 text-center border-l border-line/50 ${onOpenDay ? 'hover:bg-sage-muted/40' : ''}`}
                   title={onOpenDay ? '이 날 자세히 보기' : undefined}
                 >
-                  <span className={`block text-[10px] ${jd.getDay() === 0 ? 'text-[#b04040]/80' : jd.getDay() === 6 ? 'text-slot-pick' : 'text-ink-faint'}`}>
+                  <span className={`block text-[10px] ${jd.getDay() === 0 ? 'text-danger-ink/80' : jd.getDay() === 6 ? 'text-slot-pick' : 'text-ink-faint'}`}>
                     {WEEKDAYS_KO[jd.getDay()]}
                   </span>
                   <span
@@ -366,8 +366,8 @@ export function TimeGrid({
                   if (isSelected) cls += 'bg-slot-pick/90 ';
                   else if (slot.status === 'past') cls += 'bg-cream-dark/50 ';
                   else if (slot.status === 'closed') cls += 'bg-cream-dark/70 ';
-                  else if (free) cls += `${band && band.cost === 0 ? 'bg-sage-muted/25' : 'bg-white'} hover:bg-sage-muted/50 cursor-pointer `;
-                  else cls += 'bg-white ';
+                  else if (free) cls += `${band && band.cost === 0 ? 'bg-sage-muted/25' : 'bg-surface'} hover:bg-sage-muted/50 cursor-pointer `;
+                  else cls += 'bg-surface ';
                   return (
                     <div
                       key={slot.hour}
@@ -410,7 +410,7 @@ export function TimeGrid({
                   const tone = b.legacy
                     ? mine
                       ? 'bg-sage/80 text-white'
-                      : 'bg-[#cfc9bb] text-ink'
+                      : 'bg-slot-legacy text-ink'
                     : mine
                       ? 'bg-sage text-white'
                       : 'bg-slot-taken text-ink';
@@ -492,7 +492,7 @@ export function TimeGrid({
         <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 border-t border-line/60 text-[10px] text-ink-muted">
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage inline-block" />내 예약</span>
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-slot-taken inline-block" />예약됨</span>
-          <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block bg-[#cfc9bb]" style={{ backgroundImage: STRIPES }} />월 신청</span>
+          <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block bg-slot-legacy" style={{ backgroundImage: STRIPES }} />월 신청</span>
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-slot-pick inline-block" />선택</span>
           <span className="text-ink-faint">t = 시간당 토큰</span>
         </div>

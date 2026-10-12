@@ -94,7 +94,7 @@ export function HeaderActions({ items }: { items: HeaderMenuItem[] }) {
               aria-label="메뉴 닫기"
               onClick={() => setOpen(false)}
             />
-            <div className="absolute right-0 top-[calc(100%+4px)] z-40 min-w-[9.5rem] rounded-2xl border border-line bg-white py-1 shadow-lg">
+            <div className="absolute right-0 top-[calc(100%+4px)] z-40 min-w-[9.5rem] rounded-2xl border border-line bg-surface py-1 shadow-lg">
               {visible.map((item) => (
                 <button
                   key={item.id}

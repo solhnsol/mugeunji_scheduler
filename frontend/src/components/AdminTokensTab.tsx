@@ -187,7 +187,7 @@ export function AdminTokensTab({
                 role="tab"
                 aria-selected={filter === f.id}
                 className={`rounded-full px-3 py-1.5 text-xs min-h-[32px] border transition ${
-                  filter === f.id ? 'bg-sage text-white border-sage' : 'bg-white text-ink-muted border-line hover:border-sage/30'
+                  filter === f.id ? 'bg-sage text-white border-sage' : 'bg-surface text-ink-muted border-line hover:border-sage/30'
                 }`}
                 onClick={() => setFilter(f.id)}
               >
@@ -242,7 +242,7 @@ export function AdminTokensTab({
                       </button>
                       <button
                         type="button"
-                        className="text-xs text-[#8b4040] min-h-[36px] px-2 disabled:opacity-40"
+                        className="text-xs text-danger-ink min-h-[36px] px-2 disabled:opacity-40"
                         disabled={busy}
                         onClick={async () => {
                           const ok = await confirm({
@@ -314,7 +314,7 @@ export function AdminTokensTab({
                   </button>
                   <button
                     type="button"
-                    className="text-xs text-[#8b4040] min-h-[36px] px-2 disabled:opacity-40"
+                    className="text-xs text-danger-ink min-h-[36px] px-2 disabled:opacity-40"
                     disabled={busy}
                     onClick={async () => {
                       const ok = await confirm({
@@ -521,7 +521,7 @@ function PackModal({
             <span className="text-sm font-medium">회원에게 판매 중</span>
           </label>
         )}
-        {error && <p className="text-xs text-[#b04040]" role="alert">{error}</p>}
+        {error && <p className="text-xs text-danger-ink" role="alert">{error}</p>}
       </div>
       <div className="flex gap-2 mt-6">
         <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>{busy ? '저장 중…' : '저장'}</button>
@@ -572,7 +572,7 @@ function AdjustModal({
           <label className="label" htmlFor="adj-memo">사유</label>
           <input id="adj-memo" className="input" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="예: 11월 이용권 환산 지급" maxLength={200} />
         </div>
-        {error && <p className="text-xs text-[#b04040]" role="alert">{error}</p>}
+        {error && <p className="text-xs text-danger-ink" role="alert">{error}</p>}
       </div>
       <div className="flex gap-2 mt-6">
         <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>{busy ? '처리 중…' : '조정'}</button>
@@ -619,7 +619,7 @@ function LedgerModal({
                   {l.tokens > 0 && l.expires_at ? ` · ${formatExpiry(l.expires_at)} 사용` : ''}
                 </p>
               </div>
-              <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-[#b04040]'}`}>
+              <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-danger-ink'}`}>
                 {l.tokens >= 0 ? '+' : ''}
                 {formatTokens(l.tokens)}
               </p>
@@ -703,7 +703,7 @@ function GrantModal({
           <label className="label" htmlFor="grant-memo">사유</label>
           <input id="grant-memo" className="input" value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={200} />
         </div>
-        {error && <p className="text-xs text-[#b04040]" role="alert">{error}</p>}
+        {error && <p className="text-xs text-danger-ink" role="alert">{error}</p>}
       </div>
       <div className="flex gap-2 mt-6">
         <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>{busy ? '지급 중…' : '지급'}</button>

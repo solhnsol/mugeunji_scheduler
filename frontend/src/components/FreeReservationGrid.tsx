@@ -99,7 +99,7 @@ export function FreeReservationGrid({
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted shrink-0 mb-3">
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-mine inline-block" />내 자유이용</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-taken inline-block" />자유이용</span>
-        <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-[#d4cfc4] inline-block" />월간</span>
+        <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-monthly inline-block" />월간</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded border-2 border-dashed border-sage/40 inline-block" />신청 가능</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-pick inline-block" />선택</span>
         {bookingOpen && (
@@ -141,11 +141,11 @@ export function FreeReservationGrid({
 
                     let cellClass = dayCellClass(last, '');
                     if (mine) cellClass += ' bg-slot-mine cursor-default';
-                    else if (isMonthly) cellClass += ' bg-[#d4cfc4] cursor-default';
+                    else if (isMonthly) cellClass += ' bg-slot-monthly cursor-default';
                     else if (taken) cellClass += ' bg-slot-taken cursor-default';
                     else if (isSelected) cellClass += ' bg-slot-pick cursor-pointer';
                     else if (bookable && bookingOpen) cellClass += ' bg-sage-muted/30 hover:bg-sage-muted/60 cursor-pointer ring-1 ring-inset ring-sage/10';
-                    else cellClass += ' bg-white/60 text-ink-faint';
+                    else cellClass += ' bg-surface/60 text-ink-faint';
 
                     return (
                       <td key={key} className={cellClass} {...(bookable ? picker.cellProps(day, time) : {})}>

@@ -214,7 +214,7 @@ export function RegisterPage() {
               setPasswordError('');
             }}
           />
-          {passwordError && <p className="text-xs text-[#b04040] mt-1" role="alert">{passwordError}</p>}
+          {passwordError && <p className="text-xs text-danger-ink mt-1" role="alert">{passwordError}</p>}
         </div>
         <button type="submit" className="btn-primary" disabled={busy}>{busy ? '가입 중…' : '가입하기'}</button>
         <div className="rounded-2xl bg-cream-dark/60 px-4 py-3 text-xs text-ink-muted leading-relaxed">

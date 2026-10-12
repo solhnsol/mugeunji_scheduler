@@ -14,9 +14,47 @@
   --color-slot-mine: #3a5248;
   --color-slot-taken: #ddd9d0;
   --color-slot-pick: #5b7f96;
+  --color-surface: #ffffff;
+  --color-danger-ink: #b04040;
+  --color-danger-soft: #fdf5f5;
+  --color-danger-line: #e8c4c4;
+  --color-slot-legacy: #cfc9bb;
+  --color-slot-taken-bar: #b9b3a6;
+  --color-slot-monthly: #d4cfc4;
+}
+
+/* 다크 모드: 기기 설정을 따른다. 색은 모두 위 토큰을 거치므로 값만 바꾼다 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-cream: #111412;
+    --color-cream-dark: #1d221f;
+    --color-ink: #ecebe6;
+    --color-ink-muted: #b0b4ad;
+    --color-ink-faint: #8a8f88;
+    --color-sage: #4f7a65;
+    --color-sage-light: #5f8d76;
+    --color-sage-muted: #1f2c26;
+    --color-line: #2f3631;
+    --color-slot-taken: #3b413c;
+    --color-slot-pick: #4d7690;
+    --color-surface: #1a1e1b;
+    --color-danger-ink: #e8837f;
+    --color-danger-soft: #2c1e1e;
+    --color-danger-line: #5a3636;
+    --color-slot-legacy: #4a4f49;
+    --color-slot-taken-bar: #5a5f58;
+    --color-slot-monthly: #444942;
+    --color-amber-50: #2e2819;
+    --color-amber-200: #5c4d22;
+    --color-amber-700: #e0b85a;
+    --color-amber-800: #e6c36e;
+    --color-amber-900: #ecd08a;
+  }
 }
 
 html {
+  color-scheme: light dark;
   -webkit-tap-highlight-color: transparent;
   /* 화면 밖으로 넓어진 요소가 있어도 페이지가 가로로 밀리지 않게 한다 */
   overflow-x: clip;
@@ -41,7 +79,7 @@ body {
 }
 
 .card {
-  @apply bg-white rounded-2xl border border-line/80 shadow-[0_1px_3px_rgba(20,20,20,0.04)];
+  @apply bg-surface rounded-2xl border border-line/80 shadow-[0_1px_3px_rgba(20,20,20,0.04)];
 }
 
 .btn-primary {
@@ -52,7 +90,7 @@ body {
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center rounded-full border border-line bg-white text-ink
+  @apply inline-flex items-center justify-center rounded-full border border-line bg-surface text-ink
     font-medium py-2.5 px-4 min-h-[44px]
     hover:bg-cream active:scale-[0.98] transition-all;
 }
@@ -68,7 +106,7 @@ body {
 }
 
 .input {
-  @apply w-full rounded-2xl border border-line bg-white px-4 py-3.5 text-ink text-base
+  @apply w-full rounded-2xl border border-line bg-surface px-4 py-3.5 text-ink text-base
     placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/40
     transition-shadow;
 }
@@ -109,7 +147,7 @@ body {
 
 /* 시간표: 가로·세로 스크롤, 요일 헤더 고정, 일요일 열 여백 */
 .schedule-grid-scroll {
-  @apply overflow-auto bg-white;
+  @apply overflow-auto bg-surface;
   max-height: min(70dvh, 36rem);
   border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
   border-radius: 1rem;
@@ -119,7 +157,7 @@ body {
 }
 
 .schedule-grid-scroll--fill {
-  @apply flex-1 min-h-0 overflow-auto bg-white;
+  @apply flex-1 min-h-0 overflow-auto bg-surface;
   max-height: none;
   border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
   border-radius: 1rem;
@@ -162,7 +200,7 @@ body {
   top: 0;
   left: 0;
   z-index: 50;
-  background: #fff;
+  background: var(--color-surface);
   border-top-left-radius: calc(1rem - 1px);
   box-shadow:
     inset -1px 0 0 var(--color-line),
@@ -173,7 +211,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow: inset 0 -1px 0 var(--color-line);
 }
 
@@ -186,7 +224,7 @@ body {
   position: sticky;
   left: 0;
   z-index: 30;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow: inset -1px 0 0 var(--color-line);
 }
 

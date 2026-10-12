@@ -192,9 +192,9 @@ export function ReservationGrid({
                   if (isCancelSelected) cellClass += ' bg-[#c45c5c] cursor-pointer';
                   else if (mine) cellClass += canCancel ? ' bg-slot-mine cursor-pointer hover:brightness-95' : ' bg-slot-mine cursor-default';
                   else if (taken) cellClass += ' bg-slot-taken cursor-default';
-                  else if (!canInteract) cellClass += ' bg-white';
+                  else if (!canInteract) cellClass += ' bg-surface';
                   else if (isSelected) cellClass += ' bg-slot-pick cursor-pointer';
-                  else cellClass += ' bg-white hover:bg-sage-muted/50 cursor-pointer active:bg-sage-muted';
+                  else cellClass += ' bg-surface hover:bg-sage-muted/50 cursor-pointer active:bg-sage-muted';
 
                   const interactive = canInteract && (!taken || (mine && canCancel));
                   return (

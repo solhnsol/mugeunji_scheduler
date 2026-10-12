@@ -72,13 +72,13 @@ export function PlanManageModal({
         )}
 
         {pendingCancel && (
-          <div className="rounded-2xl border border-[#e8c4c4] bg-[#fdf5f5] p-4 mb-5 flex items-center justify-between gap-3">
-            <p className="text-sm text-[#8b4040]">
+          <div className="rounded-2xl border border-danger-line bg-danger-soft p-4 mb-5 flex items-center justify-between gap-3">
+            <p className="text-sm text-danger-ink">
               {pendingCancel.effective_period}부터 중단
             </p>
             <button
               type="button"
-              className="text-sm font-medium text-[#8b4040] underline shrink-0"
+              className="text-sm font-medium text-danger-ink underline shrink-0"
               onClick={() => onRevokeCancellation()}
             >
               취소

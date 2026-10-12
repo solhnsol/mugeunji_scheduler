@@ -191,7 +191,7 @@ export function AdminRosterTab({
           {summary.paid > 0 && (
             <button
               type="button"
-              className="text-xs border border-[#e8c4c4] text-[#8b4040] rounded-full px-3 py-1.5 min-h-[40px] hover:bg-[#fdf5f5] disabled:opacity-40"
+              className="text-xs border border-danger-line text-danger-ink rounded-full px-3 py-1.5 min-h-[40px] hover:bg-danger-soft disabled:opacity-40"
               disabled={busy}
               onClick={async () => {
                 const ok = await confirm({
@@ -242,7 +242,7 @@ export function AdminRosterTab({
               className={`rounded-full px-3 py-1.5 text-xs min-h-[32px] border transition ${
                 statusFilter === f.id
                   ? 'bg-sage text-white border-sage'
-                  : 'bg-white text-ink-muted border-line hover:border-sage/30'
+                  : 'bg-surface text-ink-muted border-line hover:border-sage/30'
               }`}
               onClick={() => setStatusFilter(f.id)}
             >
@@ -308,7 +308,7 @@ export function AdminRosterTab({
                     </button>
                     <button
                       type="button"
-                      className="text-xs text-[#8b4040] min-h-[36px] px-2 disabled:opacity-40"
+                      className="text-xs text-danger-ink min-h-[36px] px-2 disabled:opacity-40"
                       disabled={busy || m.billing_status === 'paid' || isPast}
                       title={
                         isPast
@@ -479,7 +479,7 @@ function AddMemberModal({
                     <button
                       key={h}
                       type="button"
-                      className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${hours === h ? 'bg-sage text-white border-sage' : 'bg-white text-ink-muted border-line hover:border-sage/30'}`}
+                      className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${hours === h ? 'bg-sage text-white border-sage' : 'bg-surface text-ink-muted border-line hover:border-sage/30'}`}
                       onClick={() => setHours(h)}
                     >
                       {h === 0 ? '없음' : `${h}h`}

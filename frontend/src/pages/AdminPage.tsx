@@ -675,7 +675,7 @@ function EditAdminModal({
                   className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${
                     !useCustom && allowedHours === h
                       ? 'bg-sage text-white border-sage'
-                      : 'bg-white text-ink-muted border-line hover:border-sage/30'
+                      : 'bg-surface text-ink-muted border-line hover:border-sage/30'
                   }`}
                   onClick={() => { setAllowedHours(h); setCustomInput(''); }}
                 >
@@ -893,7 +893,7 @@ function EditUserModal({
                     className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${
                       allowedHours === h
                         ? 'bg-sage text-white border-sage'
-                        : 'bg-white text-ink-muted border-line hover:border-sage/30'
+                        : 'bg-surface text-ink-muted border-line hover:border-sage/30'
                     }`}
                     onClick={() => setAllowedHours(h)}
                   >
@@ -968,7 +968,7 @@ function EditUserModal({
             </button>
             <button
               type="button"
-              className="flex-1 rounded-full border border-[#e8c4c4] text-[#8b4040] text-sm min-h-[48px] hover:bg-[#fdf5f5] disabled:opacity-50"
+              className="flex-1 rounded-full border border-danger-line text-danger-ink text-sm min-h-[48px] hover:bg-danger-soft disabled:opacity-50"
               disabled={accountBusy}
               onClick={removeUser}
             >

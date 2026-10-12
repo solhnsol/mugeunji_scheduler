@@ -92,7 +92,7 @@ export function AdminFreeReservationGrid({
     <div className={`flex flex-col min-h-0 ${fillHeight ? 'flex-1' : 'space-y-4'}`}>
       <div className="flex flex-wrap gap-3 text-xs text-ink-muted shrink-0 mb-3">
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-taken inline-block" />자유이용</span>
-        <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-[#d4cfc4] inline-block" />월간 (선택 불가)</span>
+        <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-monthly inline-block" />월간 (선택 불가)</span>
         <span className="flex items-center gap-1.5"><i className="w-3 h-3 rounded bg-slot-pick inline-block" />선택</span>
       </div>
 
@@ -115,7 +115,7 @@ export function AdminFreeReservationGrid({
         </button>
         <button
           type="button"
-          className="btn-ghost text-[#c45c5c]"
+          className="btn-ghost text-danger-ink"
           disabled={busy}
           onClick={async () => {
             if (!(await confirm({ title: '자유이용 예약을 전체 초기화할까요?', message: '자유이용 예약이 모두 삭제돼요. 월간 예약은 유지돼요.', confirmLabel: '전체 초기화', danger: true }))) return;
@@ -162,7 +162,7 @@ export function AdminFreeReservationGrid({
                             isSelected
                               ? 'bg-slot-pick text-white cursor-pointer'
                               : isMonthly
-                                ? 'bg-[#d4cfc4] cursor-default'
+                                ? 'bg-slot-monthly cursor-default'
                                 : slot
                                   ? 'bg-slot-taken cursor-pointer'
                                   : 'hover:bg-sage-muted/40 cursor-pointer'

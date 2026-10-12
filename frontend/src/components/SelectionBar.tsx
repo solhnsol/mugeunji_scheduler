@@ -39,7 +39,7 @@ export function SelectionBar({
             '원하는 칸을 눌러 선택하세요'
           )}
           {hasLimit && (
-            <span className={`ml-2 tabular-nums ${over ? 'text-[#b04040] font-medium' : 'text-ink-faint'}`}>
+            <span className={`ml-2 tabular-nums ${over ? 'text-danger-ink font-medium' : 'text-ink-faint'}`}>
               · 남은 {remaining}시간 (내 예약 {usedCount}/{limit})
             </span>
           )}

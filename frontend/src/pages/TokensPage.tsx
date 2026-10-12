@@ -190,7 +190,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                         {p.status === 'pending' && (
                           <button
                             type="button"
-                            className="text-xs text-[#8b4040] min-h-[32px] px-2 disabled:opacity-40"
+                            className="text-xs text-danger-ink min-h-[32px] px-2 disabled:opacity-40"
                             disabled={busy}
                             onClick={() => cancelRequest(p)}
                           >
@@ -221,7 +221,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                         {l.tokens > 0 && l.expires_at ? ` · ${formatExpiry(l.expires_at)} 사용` : ''}
                       </p>
                     </div>
-                    <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-[#b04040]'}`}>
+                    <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-danger-ink'}`}>
                       {l.tokens >= 0 ? '+' : ''}
                       {formatTokens(l.tokens)}
                     </p>

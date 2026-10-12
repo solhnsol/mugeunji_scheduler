@@ -40,7 +40,7 @@ export function MonthCalendar({
 
       <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-ink-faint mb-1">
         {WEEKDAYS_KO.map((w, i) => (
-          <span key={w} className={i === 0 ? 'text-[#b04040]/70' : i === 6 ? 'text-slot-pick' : ''}>
+          <span key={w} className={i === 0 ? 'text-danger-ink/70' : i === 6 ? 'text-slot-pick' : ''}>
             {w}
           </span>
         ))}
@@ -70,7 +70,7 @@ export function MonthCalendar({
                 className={`relative rounded-xl border px-1 pt-1.5 pb-1.5 min-h-[78px] sm:min-h-[96px] flex flex-col items-stretch gap-1 transition ${
                   isSelected
                     ? 'border-sage bg-sage-muted/60 ring-1 ring-sage/40'
-                    : 'border-line/70 bg-white hover:border-sage/40'
+                    : 'border-line/70 bg-surface hover:border-sage/40'
                 } ${inactive ? 'opacity-45' : ''}`}
                 aria-label={`${dayNum}일${day.mine ? `, 내 예약 ${day.mine}시간` : ''}`}
               >
@@ -89,7 +89,7 @@ export function MonthCalendar({
                   {day.occupancy.split('').map((c, i) => (
                     <i
                       key={i}
-                      className={c === '2' ? 'bg-sage' : c === '1' ? 'bg-[#b9b3a6]' : 'bg-sage-muted'}
+                      className={c === '2' ? 'bg-sage' : c === '1' ? 'bg-slot-taken-bar' : 'bg-sage-muted'}
                     />
                   ))}
                 </span>
@@ -112,7 +112,7 @@ export function MonthCalendar({
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] text-ink-muted">
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage-muted inline-block" />빈 시간</span>
-        <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-[#b9b3a6] inline-block" />예약됨</span>
+        <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-slot-taken-bar inline-block" />예약됨</span>
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage inline-block" />내 예약</span>
       </div>
     </section>
