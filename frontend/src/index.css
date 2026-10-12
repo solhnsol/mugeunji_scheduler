@@ -18,6 +18,10 @@
 
 html {
   -webkit-tap-highlight-color: transparent;
+  /* 화면 밖으로 넓어진 요소가 있어도 페이지가 가로로 밀리지 않게 한다 */
+  overflow-x: clip;
+  /* 앱처럼: 당겨서 새로고침/끝에서 튕기는 동작이 화면 전체를 흔들지 않게 */
+  overscroll-behavior-y: none;
 }
 
 body {

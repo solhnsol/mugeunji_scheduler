@@ -59,7 +59,7 @@ export function MonthCalendar({
             const isSelected = day.date === selected;
             const inactive = isPast || !day.bookable;
             const mineHours = day.occupancy.split('').flatMap((c, h) => (c === '2' ? [h] : []));
-            const mineChips = summarizeHours(mineHours).split(', ').filter(Boolean);
+            const mineChips = summarizeHours(mineHours).replace(/시/g, '').split(', ').filter(Boolean);
             const othersBooked = day.booked - day.mine;
             return (
               <button
