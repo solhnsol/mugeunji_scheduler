@@ -1,6 +1,8 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { describeRefundPolicy } from '../utils/booking';
+import { TokenRules } from '../types';
 import {
   ADDRESS,
   CONTACT_URL,
@@ -83,6 +85,53 @@ function ModeNotice() {
       아래는 12월부터 적용되는 토큰 예약 방식이에요. 지금은 정식 시작 전이라 일부 회원에게만 먼저 열려 있어요.
       현재 이용 방법은 <Link to="/notices" className="underline underline-offset-2 font-medium">공지·이용 안내</Link>에서
       확인하거나 오픈채팅으로 문의해주세요.
+    </div>
+  );
+}
+
+/** 관리자가 설정한 현재 토큰 규칙 (시간대별 토큰, 환불, 유효기간). 불러오지 못하면 보여주지 않는다. */
+function TokenRulesTable() {
+  const [rules, setRules] = useState<TokenRules | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    api.getTokenRules().then(setRules).catch(() => setFailed(true));
+  }, []);
+  if (failed) {
+    return (
+      <p className="text-sm text-ink-muted mt-3">
+        시간대별 토큰과 환불 규칙은 로그인 후 예약 화면이나 공지·이용 안내에서 확인할 수 있어요.
+      </p>
+    );
+  }
+  if (!rules) return null;
+  const bands = [...rules.price_bands].sort((a, b) => a.start - b.start);
+  const hasZero = bands.some((b) => b.cost === 0);
+  return (
+    <div className="card p-5 mt-3">
+      <p className="font-semibold text-ink">시간대별 필요 토큰 (1시간 기준)</p>
+      <ul className="mt-3 divide-y divide-line/60 text-sm">
+        {bands.map((b) => (
+          <li key={`${b.start}-${b.end}`} className="py-2 flex items-center justify-between gap-3">
+            <span className="text-ink-muted tabular-nums">
+              {String(b.start).padStart(2, '0')}~{String(b.end).padStart(2, '0')}시
+            </span>
+            <span className="font-medium text-ink tabular-nums">{b.cost}토큰</span>
+          </li>
+        ))}
+      </ul>
+      {hasZero && (
+        <p className="text-xs text-ink-faint mt-2">0토큰 시간대도 토큰이 1개 이상 있어야 예약할 수 있어요.</p>
+      )}
+      <p className="font-semibold text-ink mt-5">취소·환불</p>
+      <ul className="mt-2 text-sm text-ink-muted space-y-0.5">
+        {describeRefundPolicy(rules).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+      <p className="text-xs text-ink-faint mt-4">
+        충전한 토큰은 {rules.expiry_months}개월 동안 쓰지 않으면 사라져요. 규칙은 운영 상황에 따라 바뀔 수 있고, 바뀌면 공지로
+        알려드려요.
+      </p>
     </div>
   );
 }
@@ -249,6 +298,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
               </div>
             ))}
           </div>
+          <TokenRulesTable />
         </Section>
 
         <Section id="faq" title="자주 묻는 질문">

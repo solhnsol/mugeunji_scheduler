@@ -14,6 +14,7 @@ import {
   addDays,
   addMonths,
   dateFromISO,
+  describeRefundPolicy,
   estimateRefund,
   formatDateKo,
   monthOf,
@@ -24,15 +25,6 @@ import {
 
 type SelectedSlot = { date: string; hour: number; cost: number };
 type CancelSlot = { date: string; hour: number; paid: number };
-
-function describeRefundPolicy(config: BookingConfig): string[] {
-  const tiers = [...config.refund_tiers].sort((a, b) => b.hours_before - a.hours_before);
-  const label = (h: number) => (h === 0 ? '시작 전까지' : h % 24 === 0 ? `${h / 24}일 전까지` : `${h}시간 전까지`);
-  const lines = tiers.map((t) => `${label(t.hours_before)} 취소하면 ${t.percent}% 환불`);
-  const last = tiers[tiers.length - 1];
-  if (last && last.hours_before > 0) lines.push(`그보다 늦으면 취소할 수 없어요`);
-  return lines;
-}
 
 const shortDate = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8))}`;
 
