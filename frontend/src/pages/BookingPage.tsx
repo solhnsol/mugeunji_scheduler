@@ -294,6 +294,21 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     });
   };
 
+  // 오늘을 보고 있으면 지금 시각 한 시간 전부터, 다른 날은 낮 시간대(7시)부터 보여준다
+  const initialHour = (() => {
+    if (selectedDate && selectedDate === today) {
+      const p = kstParts(new Date().toISOString());
+      if (p) return Math.max(p.hour - 1, 0);
+    }
+    return 7;
+  })();
+  const isOnToday =
+    !!selectedDate && !!today && (detailMode === 'day' ? selectedDate === today : startOfWeek(selectedDate) === startOfWeek(today));
+  const goToday = () => {
+    if (!today) return;
+    setMonth(monthOf(today));
+    setSelectedDate(today);
+  };
   const todayMonth = today ? monthOf(today) : null;
   const barMode: 'book' | 'cancel' | 'idle' = selected.size > 0 ? 'book' : cancelSel.size > 0 ? 'cancel' : 'idle';
   const currentDay = selectedDate && week ? week.days.find((d) => d.date === selectedDate) : undefined;
@@ -407,11 +422,20 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                     <button type="button" className="btn-ghost !min-h-[36px] !px-2" aria-label={detailMode === 'week' ? '이전 주' : '이전 날'} onClick={() => setSelectedDate(addDays(selectedDate, detailMode === 'week' ? -7 : -1))}>
                       ‹
                     </button>
-                    <h2 className="text-sm font-bold text-ink tabular-nums whitespace-nowrap">
+                    <button
+                      type="button"
+                      className={`rounded-full px-2 min-h-[36px] text-sm font-bold text-ink tabular-nums whitespace-nowrap transition-colors ${
+                        isOnToday ? '' : 'bg-sage-muted/70 hover:bg-sage-muted'
+                      }`}
+                      aria-label={isOnToday ? undefined : '오늘로 이동'}
+                      title={isOnToday ? undefined : '오늘로 이동'}
+                      disabled={isOnToday}
+                      onClick={goToday}
+                    >
                       {detailMode === 'week'
                         ? `${shortDate(startOfWeek(selectedDate))} ~ ${Number(addDays(startOfWeek(selectedDate), 6).slice(8))}`
                         : `${shortDate(selectedDate)} (${WEEKDAYS_KO[dateFromISO(selectedDate).getDay()]})`}
-                    </h2>
+                    </button>
                     <button type="button" className="btn-ghost !min-h-[36px] !px-2" aria-label={detailMode === 'week' ? '다음 주' : '다음 날'} onClick={() => setSelectedDate(addDays(selectedDate, detailMode === 'week' ? 7 : 1))}>
                       ›
                     </button>
@@ -471,7 +495,8 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                       today={today}
                       showHeader={false}
                       rowHeight={38}
-                      scrollToHour={7}
+                      scrollToHour={initialHour}
+                      scrollKey={selectedDate}
                       selected={new Set(selected.keys())}
                       cancelSelected={new Set(cancelSel.keys())}
                       onToggleFree={handleFree}
@@ -485,7 +510,8 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                 <TimeGrid
                   fill
                   days={week.days}
-                  scrollToHour={7}
+                  scrollToHour={initialHour}
+                  scrollKey={week.start}
                   rowHeight={30}
                   bands={config.price_bands}
                   today={today}

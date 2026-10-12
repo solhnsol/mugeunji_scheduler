@@ -64,6 +64,7 @@ export function TimeGrid({
   rowHeight = 30,
   fill = false,
   scrollToHour,
+  scrollKey,
   emptyLabel,
   legend,
 }: {
@@ -84,6 +85,8 @@ export function TimeGrid({
   fill?: boolean;
   /** 열릴 때 페이지를 이 시각 근처까지 내린다 (없으면 그대로) */
   scrollToHour?: number;
+  /** 이 값이 바뀔 때마다 scrollToHour 위치로 다시 내린다 (예: 보고 있는 날짜) */
+  scrollKey?: string;
   emptyLabel?: ReactNode;
   legend?: boolean;
 }) {
@@ -110,13 +113,13 @@ export function TimeGrid({
     return () => window.clearInterval(id);
   }, []);
 
-  // 처음 열릴 때만, 자주 쓰는 시간대가 보이게 안쪽 스크롤을 내린다
+  // 처음 열릴 때와 scrollKey가 바뀔 때, 보고 싶은 시간대가 보이게 안쪽 스크롤을 내린다
   useEffect(() => {
     if (fill && scrollToHour != null && scroller.current) {
       scroller.current.scrollTop = Math.max(scrollToHour - 0.3, 0) * H;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [scrollKey]);
 
   const blocksByDate = useMemo(() => new Map(days.map((d) => [d.date, buildBlocks(d)])), [days]);
 
