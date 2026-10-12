@@ -34,6 +34,8 @@ function describeRefundPolicy(config: BookingConfig): string[] {
   return lines;
 }
 
+const shortDate = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8))}`;
+
 export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   const [config, setConfig] = useState<BookingConfig | null>(null);
   const [error, setError] = useState('');
@@ -246,6 +248,16 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     return `다음 달 예약은 ${p.month}월 ${p.day}일(${WEEKDAYS_KO[p.weekday]}) ${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}에 열려요.`;
   })();
 
+  const showRefundPolicy = () => {
+    if (!config) return;
+    void confirm({
+      title: '취소·환불 정책',
+      message: describeRefundPolicy(config).join('\n'),
+      confirmLabel: '확인',
+      cancelLabel: '닫기',
+    });
+  };
+
   const todayMonth = today ? monthOf(today) : null;
   const barVisible = selected.size > 0 || cancelSel.size > 0;
   const currentDay = selectedDate && week ? week.days.find((d) => d.date === selectedDate) : undefined;
@@ -260,6 +272,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   return (
     <AppShell
       title="예약"
+      fillMain
       actions={
         <div className="flex items-center gap-1">
           {config && config.balance !== null && (
@@ -288,25 +301,25 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
       ) : !config || !month ? (
         <p className="text-center text-ink-faint py-16">불러오는 중…</p>
       ) : (
-        <div className={`space-y-4 ${barVisible ? 'pb-32' : ''}`}>
-          {config.is_admin && (
-            <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2.5 leading-relaxed">
-              관리자 미리보기예요. 토큰이 차감되지 않고, 아직 열리지 않은 날짜도 볼 수 있어요.
+        <div className="flex flex-col flex-1 min-h-0 gap-2">
+          {view === 'month' && config.is_admin && (
+            <p className="shrink-0 text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 leading-snug">
+              관리자 미리보기 · 토큰이 차감되지 않고 아직 열리지 않은 날짜도 볼 수 있어요.
             </p>
           )}
-          {config.mode === 'beta' && (
-            <p className="text-xs text-sage bg-sage-muted/40 border border-sage/20 rounded-2xl px-4 py-2.5 leading-relaxed">
-              토큰 예약 베타예요. 월 신청으로 잡힌 시간은 &quot;월 신청&quot;으로 표시되고 여기서 바꿀 수 없어요. 불편한 점은 단톡방으로 알려주세요.
+          {view === 'month' && config.mode === 'beta' && (
+            <p className="shrink-0 text-[11px] text-sage bg-sage-muted/40 border border-sage/20 rounded-xl px-3 py-1.5 leading-snug">
+              토큰 예약 베타 · 줄무늬는 월 신청 시간이라 여기서 바꿀 수 없어요. 불편한 점은 단톡방으로 알려주세요.
             </p>
           )}
           {!config.reservation_enabled && !config.is_admin && (
-            <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+            <p className="shrink-0 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
               지금은 예약을 받지 않아요. 열리면 이 화면에서 예약할 수 있어요.
             </p>
           )}
 
           {view === 'month' ? (
-            <>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 pb-2">
               <MonthCalendar
                 month={month}
                 days={calendar}
@@ -346,48 +359,56 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                   </ul>
                 )}
               </section>
-            </>
+            </div>
           ) : (
             <>
-              <div className="flex items-center justify-between gap-2">
-                <button type="button" className="btn-ghost !min-h-[40px]" onClick={() => setView('month')}>
+              <div className="shrink-0 flex items-center justify-between gap-1.5">
+                <button type="button" className="btn-ghost !min-h-[36px] !px-2 text-sm whitespace-nowrap shrink-0" onClick={() => setView('month')}>
                   ‹ 달력
                 </button>
-                <div className="flex items-center gap-1 p-1 rounded-full bg-cream-dark/50" role="tablist" aria-label="보기 방식">
-                  {(['day', 'week'] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      role="tab"
-                      aria-selected={detailMode === m}
-                      className={`rounded-full px-3 py-1.5 text-sm min-h-[36px] transition ${
-                        detailMode === m ? 'bg-sage text-white' : 'text-ink-muted'
-                      }`}
-                      onClick={() => setDetailMode(m)}
-                    >
-                      {m === 'day' ? '하루' : '한 주'}
+                {selectedDate && (
+                  <div className="flex items-center min-w-0">
+                    <button type="button" className="btn-ghost !min-h-[36px] !px-2" aria-label={detailMode === 'week' ? '이전 주' : '이전 날'} onClick={() => setSelectedDate(addDays(selectedDate, detailMode === 'week' ? -7 : -1))}>
+                      ‹
                     </button>
-                  ))}
+                    <h2 className="text-sm font-bold text-ink tabular-nums whitespace-nowrap">
+                      {detailMode === 'week'
+                        ? `${shortDate(startOfWeek(selectedDate))} ~ ${Number(addDays(startOfWeek(selectedDate), 6).slice(8))}`
+                        : `${shortDate(selectedDate)} (${WEEKDAYS_KO[dateFromISO(selectedDate).getDay()]})`}
+                    </h2>
+                    <button type="button" className="btn-ghost !min-h-[36px] !px-2" aria-label={detailMode === 'week' ? '다음 주' : '다음 날'} onClick={() => setSelectedDate(addDays(selectedDate, detailMode === 'week' ? 7 : 1))}>
+                      ›
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button type="button" className="btn-ghost !min-h-[36px] !px-2 text-xs whitespace-nowrap" aria-label="환불 정책" onClick={showRefundPolicy}>
+                    환불
+                  </button>
+                  <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-cream-dark/50" role="tablist" aria-label="보기 방식">
+                    {(['day', 'week'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        role="tab"
+                        aria-selected={detailMode === m}
+                        className={`rounded-full px-2.5 py-1 text-xs min-h-[30px] whitespace-nowrap transition ${
+                          detailMode === m ? 'bg-sage text-white' : 'text-ink-muted'
+                        }`}
+                        onClick={() => setDetailMode(m)}
+                      >
+                        {m === 'day' ? '하루' : '한 주'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-
-              {selectedDate && (
-                <div className="flex items-center justify-between">
-                  <button type="button" className="btn-ghost !min-h-[40px] !px-3" aria-label="이전 날" onClick={() => setSelectedDate(addDays(selectedDate, -1))}>
-                    ‹
-                  </button>
-                  <h2 className="text-lg font-bold text-ink tabular-nums">{formatDateKo(selectedDate)}</h2>
-                  <button type="button" className="btn-ghost !min-h-[40px] !px-3" aria-label="다음 날" onClick={() => setSelectedDate(addDays(selectedDate, 1))}>
-                    ›
-                  </button>
-                </div>
-              )}
 
               {!week || !selectedDate ? (
                 <p className="text-center text-ink-faint py-10">불러오는 중…</p>
               ) : detailMode === 'day' ? (
                 <>
-                  <div className="flex gap-1 overflow-x-auto -mx-4 px-4 pb-1" aria-label="이번 주 날짜">
+                  <div className="shrink-0 flex gap-1 overflow-x-auto -mx-4 px-4" aria-label="이번 주 날짜">
                     {week.days.map((d) => {
                       const jd = dateFromISO(d.date);
                       const active = d.date === selectedDate;
@@ -396,23 +417,24 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                           key={d.date}
                           type="button"
                           onClick={() => setSelectedDate(d.date)}
-                          className={`shrink-0 w-11 rounded-2xl py-1.5 text-center border transition ${
+                          className={`flex-1 min-w-[40px] rounded-xl py-1 text-center border transition ${
                             active ? 'bg-sage text-white border-sage' : 'bg-white border-line/70 text-ink-muted'
                           } ${d.date < today ? 'opacity-50' : ''}`}
                         >
-                          <span className="block text-[11px]">{WEEKDAYS_KO[jd.getDay()]}</span>
-                          <span className="block text-sm font-semibold tabular-nums">{jd.getDate()}</span>
+                          <span className="block text-[10px] leading-tight">{WEEKDAYS_KO[jd.getDay()]}</span>
+                          <span className="block text-sm font-semibold tabular-nums leading-tight">{jd.getDate()}</span>
                         </button>
                       );
                     })}
                   </div>
                   {currentDay ? (
                     <TimeGrid
+                      fill
                       days={[currentDay]}
                       bands={config.price_bands}
                       today={today}
                       showHeader={false}
-                      rowHeight={44}
+                      rowHeight={38}
                       scrollToHour={7}
                       selected={new Set(selected.keys())}
                       cancelSelected={new Set(cancelSel.keys())}
@@ -425,8 +447,10 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                 </>
               ) : (
                 <TimeGrid
+                  fill
                   days={week.days}
                   scrollToHour={7}
+                  rowHeight={30}
                   bands={config.price_bands}
                   today={today}
                   selected={new Set(selected.keys())}
@@ -439,23 +463,14 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                   }}
                 />
               )}
-
-              <details className="text-xs text-ink-muted">
-                <summary className="cursor-pointer select-none">환불 정책 보기</summary>
-                <ul className="mt-2 space-y-1 list-disc pl-5">
-                  {describeRefundPolicy(config).map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              </details>
             </>
           )}
         </div>
       )}
 
       {config && barVisible && (
-        <div className="fixed inset-x-0 bottom-0 z-30 bg-cream/95 backdrop-blur-md border-t border-line/70 pb-[env(safe-area-inset-bottom)]">
-          <div className="mx-auto max-w-3xl px-4 py-3 space-y-2">
+        <div className="shrink-0 -mx-4 bg-white border-t border-line/70">
+          <div className="px-4 py-2.5 space-y-1.5">
             {selected.size > 0 ? (
               <>
                 <div className="flex items-center justify-between gap-3 text-sm">

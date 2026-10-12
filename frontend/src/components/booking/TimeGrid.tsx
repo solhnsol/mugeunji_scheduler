@@ -61,7 +61,8 @@ export function TimeGrid({
   onBlockClick,
   onOpenDay,
   showHeader = true,
-  rowHeight = 36,
+  rowHeight = 30,
+  fill = false,
   scrollToHour,
   emptyLabel,
   legend,
@@ -79,6 +80,8 @@ export function TimeGrid({
   onOpenDay?: (date: string) => void;
   showHeader?: boolean;
   rowHeight?: number;
+  /** true면 부모가 정해 준 남은 높이를 꽉 채우고, 그 안에서만 위아래로 스크롤한다 */
+  fill?: boolean;
   /** 열릴 때 페이지를 이 시각 근처까지 내린다 (없으면 그대로) */
   scrollToHour?: number;
   emptyLabel?: ReactNode;
@@ -86,8 +89,7 @@ export function TimeGrid({
 }) {
   const H = rowHeight;
   const single = days.length === 1;
-  const root = useRef<HTMLDivElement>(null);
-  const [stickyTop, setStickyTop] = useState(0);
+  const scroller = useRef<HTMLDivElement>(null);
   const paint = useRef<{ on: boolean } | null>(null);
   const skipClick = useRef(false);
   const [nowTick, setNowTick] = useState(0);
@@ -104,21 +106,11 @@ export function TimeGrid({
     };
   }, []);
 
-  // 스크롤은 페이지 하나만 쓴다 (안쪽에 따로 스크롤 영역을 두면 모바일에서 화면 전체와 겹쳐 움직인다).
-  // 날짜 머리글은 상단 고정 헤더 바로 아래에 붙는다.
+  // 처음 열릴 때만, 자주 쓰는 시간대가 보이게 안쪽 스크롤을 내린다
   useEffect(() => {
-    const measure = () => setStickyTop(document.querySelector('header')?.getBoundingClientRect().height ?? 0);
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, []);
-
-  // 처음 열릴 때만, 자주 쓰는 시간대가 보이게 내린다
-  useEffect(() => {
-    if (scrollToHour == null || !root.current) return;
-    const headerH = document.querySelector('header')?.getBoundingClientRect().height ?? 0;
-    const top = root.current.getBoundingClientRect().top + window.scrollY + Math.max(scrollToHour - 0.5, 0) * H - headerH - (showHeader ? 48 : 0);
-    if (top > window.scrollY) window.scrollTo({ top });
+    if (fill && scrollToHour != null && scroller.current) {
+      scroller.current.scrollTop = Math.max(scrollToHour - 0.3, 0) * H;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -139,10 +131,10 @@ export function TimeGrid({
   const cols = `${single ? 40 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
 
   return (
-    <div ref={root} className="card">
-      <div>
+    <div className={fill ? 'card flex flex-col flex-1 min-h-0 overflow-hidden' : 'card'}>
+      <div ref={scroller} className={fill ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain' : ''}>
         {showHeader && (
-          <div className="grid sticky z-20 bg-cream border-b border-line/70 rounded-t-[inherit]" style={{ gridTemplateColumns: cols, top: stickyTop }}>
+          <div className="grid sticky top-0 z-20 bg-cream border-b border-line/70" style={{ gridTemplateColumns: cols }}>
             <span />
             {days.map((d) => {
               const jd = dateFromISO(d.date);
@@ -316,12 +308,12 @@ export function TimeGrid({
         </div>
       </div>
       {legend !== false && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 px-3 py-2 border-t border-line/60 text-[11px] text-ink-muted">
-          <span className="flex items-center gap-1"><i className="w-3 h-3 rounded bg-sage inline-block" />내 예약</span>
-          <span className="flex items-center gap-1"><i className="w-3 h-3 rounded bg-slot-taken inline-block" />예약됨</span>
-          <span className="flex items-center gap-1"><i className="w-3 h-3 rounded inline-block bg-[#cfc9bb]" style={{ backgroundImage: STRIPES }} />월 신청</span>
-          <span className="flex items-center gap-1"><i className="w-3 h-3 rounded bg-slot-pick inline-block" />선택</span>
-          <span className="text-ink-faint">축의 숫자(t)는 시간당 토큰 · 눌러서, 마우스는 끌어서 선택</span>
+        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 border-t border-line/60 text-[10px] text-ink-muted">
+          <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage inline-block" />내 예약</span>
+          <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-slot-taken inline-block" />예약됨</span>
+          <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block bg-[#cfc9bb]" style={{ backgroundImage: STRIPES }} />월 신청</span>
+          <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-slot-pick inline-block" />선택</span>
+          <span className="text-ink-faint">t = 시간당 토큰</span>
         </div>
       )}
       {emptyLabel}
