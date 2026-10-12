@@ -24,6 +24,17 @@ html {
   overscroll-behavior-y: none;
 }
 
+/* 키보드로 이동할 때만 현재 위치를 또렷하게 보여준다 (마우스/터치 클릭에는 나타나지 않음) */
+:focus-visible {
+  outline: 2px solid var(--color-sage);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
 body {
   @apply bg-cream text-ink font-sans antialiased;
   min-height: 100dvh;
