@@ -62,7 +62,7 @@ export function TimeGrid({
   onOpenDay,
   showHeader = true,
   rowHeight = 36,
-  scrollToHour = 7,
+  scrollToHour,
   emptyLabel,
   legend,
 }: {
@@ -79,13 +79,15 @@ export function TimeGrid({
   onOpenDay?: (date: string) => void;
   showHeader?: boolean;
   rowHeight?: number;
+  /** 열릴 때 페이지를 이 시각 근처까지 내린다 (없으면 그대로) */
   scrollToHour?: number;
   emptyLabel?: ReactNode;
   legend?: boolean;
 }) {
   const H = rowHeight;
   const single = days.length === 1;
-  const scroller = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const [stickyTop, setStickyTop] = useState(0);
   const paint = useRef<{ on: boolean } | null>(null);
   const skipClick = useRef(false);
   const [nowTick, setNowTick] = useState(0);
@@ -102,11 +104,23 @@ export function TimeGrid({
     };
   }, []);
 
-  // 열 때 하루의 이른 오전이 아니라 주로 쓰는 시간대부터 보이게 한다
-  const firstDate = days[0]?.date;
+  // 스크롤은 페이지 하나만 쓴다 (안쪽에 따로 스크롤 영역을 두면 모바일에서 화면 전체와 겹쳐 움직인다).
+  // 날짜 머리글은 상단 고정 헤더 바로 아래에 붙는다.
   useEffect(() => {
-    if (scroller.current) scroller.current.scrollTop = Math.max(scrollToHour - 0.5, 0) * H;
-  }, [firstDate, scrollToHour, H]);
+    const measure = () => setStickyTop(document.querySelector('header')?.getBoundingClientRect().height ?? 0);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  // 처음 열릴 때만, 자주 쓰는 시간대가 보이게 내린다
+  useEffect(() => {
+    if (scrollToHour == null || !root.current) return;
+    const headerH = document.querySelector('header')?.getBoundingClientRect().height ?? 0;
+    const top = root.current.getBoundingClientRect().top + window.scrollY + Math.max(scrollToHour - 0.5, 0) * H - headerH - (showHeader ? 48 : 0);
+    if (top > window.scrollY) window.scrollTo({ top });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const blocksByDate = useMemo(() => new Map(days.map((d) => [d.date, buildBlocks(d)])), [days]);
 
@@ -125,10 +139,10 @@ export function TimeGrid({
   const cols = `${single ? 40 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
 
   return (
-    <div className="card overflow-hidden">
-      <div ref={scroller} className="overflow-y-auto overscroll-contain max-h-[66dvh]" style={{ touchAction: 'pan-y' }}>
+    <div ref={root} className="card">
+      <div>
         {showHeader && (
-          <div className="grid sticky top-0 z-20 bg-cream/95 backdrop-blur border-b border-line/70" style={{ gridTemplateColumns: cols }}>
+          <div className="grid sticky z-20 bg-cream border-b border-line/70 rounded-t-[inherit]" style={{ gridTemplateColumns: cols, top: stickyTop }}>
             <span />
             {days.map((d) => {
               const jd = dateFromISO(d.date);

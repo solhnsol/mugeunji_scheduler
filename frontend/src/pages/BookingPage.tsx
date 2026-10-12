@@ -413,6 +413,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                       today={today}
                       showHeader={false}
                       rowHeight={44}
+                      scrollToHour={7}
                       selected={new Set(selected.keys())}
                       cancelSelected={new Set(cancelSel.keys())}
                       onToggleFree={handleFree}
@@ -425,6 +426,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
               ) : (
                 <TimeGrid
                   days={week.days}
+                  scrollToHour={7}
                   bands={config.price_bands}
                   today={today}
                   selected={new Set(selected.keys())}
