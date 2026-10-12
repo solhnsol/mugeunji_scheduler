@@ -1,4 +1,5 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { TokenBalance, TokenLedgerEntry, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiresOn, formatExpiry, formatPhone, formatPrice, formatTokens } from '../utils';
@@ -39,12 +40,25 @@ export function AdminTokensTab({
   show: (m: string, t: 'success' | 'error') => void;
 }) {
   const [chargeEnabled, setChargeEnabled] = useState<boolean | null>(null);
-  const [filter, setFilter] = useState<PurchaseFilter>('pending');
+  // 요청 상태 필터와 회원 검색어는 주소에 둬서 새로고침·뒤로가기 뒤에도 유지된다 (tab 값은 그대로 보존)
+  const [params, setParams] = useSearchParams();
+  const patchParams = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) next.set(k, v);
+      else next.delete(k);
+    }
+    setParams(next, { replace: true });
+  };
+  const filterParam = params.get('pf');
+  const filter: PurchaseFilter = FILTERS.some((f) => f.id === filterParam) ? (filterParam as PurchaseFilter) : 'pending';
+  const setFilter = (f: PurchaseFilter) => patchParams({ pf: f === 'pending' ? null : f });
+  const query = params.get('tq') ?? '';
+  const setQuery = (value: string) => patchParams({ tq: value || null });
   const [purchases, setPurchases] = useState<TokenPurchase[] | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [packs, setPacks] = useState<TokenPack[]>([]);
   const [balances, setBalances] = useState<TokenBalance[]>([]);
-  const [query, setQuery] = useState('');
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [packModal, setPackModal] = useState<TokenPack | 'new' | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<TokenBalance | null>(null);
