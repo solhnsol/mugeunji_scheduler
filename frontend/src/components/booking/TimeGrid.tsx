@@ -289,6 +289,13 @@ export function TimeGrid({
                         backgroundImage: slot.status === 'past' || slot.status === 'closed' ? STRIPES : undefined,
                       }}
                       role={free ? 'button' : undefined}
+                      tabIndex={free ? 0 : undefined}
+                      onKeyDown={(e) => {
+                        if (free && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          onToggleFree(day.date, slot.hour);
+                        }
+                      }}
                       aria-label={free ? `${day.date} ${slot.hour}시 ${slot.cost}토큰` : undefined}
                       aria-pressed={free ? isSelected : undefined}
                       onClick={() => {
@@ -322,6 +329,17 @@ export function TimeGrid({
                   return (
                     <div
                       key={`${b.start}-${b.name}`}
+                      role={interactive ? 'button' : undefined}
+                      tabIndex={interactive ? 0 : undefined}
+                      aria-label={`${b.date} ${b.start}~${b.end}시 ${b.legacy ? '월 신청' : mine ? '내 예약' : '예약됨'} ${b.name}`}
+                      onKeyDown={(e) => {
+                        if (!interactive || (e.key !== 'Enter' && e.key !== ' ')) return;
+                        e.preventDefault();
+                        if (mine) {
+                          const id = b.ids[0];
+                          if (id != null) onToggleMine?.(id);
+                        } else onBlockClick?.(b, b.start);
+                      }}
                       className={`absolute inset-x-[2px] rounded-md overflow-hidden shadow-sm text-left ${tone} ${interactive ? 'cursor-pointer hover:brightness-95' : ''}`}
                       style={{
                         top: b.start * H + 1,
@@ -344,8 +362,8 @@ export function TimeGrid({
                         }
                       }}
                     >
-                      <div className={`px-1.5 ${single ? 'py-1.5' : 'py-1'} leading-tight`}>
-                        <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-[11px]'}`}>
+                      <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight`}>
+                        <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-[10px]'}`}>
                           {b.legacy ? (single ? `월 신청 · ${b.name}` : b.name || '월 신청') : mine ? (single ? '내 예약' : b.name || '내 예약') : b.name || '예약됨'}
                         </p>
                         {(single || tall >= 2) && (

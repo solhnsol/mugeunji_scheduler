@@ -23,7 +23,7 @@ function Back({ authed }: { authed: boolean }) {
 /** 공지·이용 안내 목록과 상세. 로그인 전에는 전체 공개 글만 보인다. */
 export default function NoticesPage({ authed }: { authed: boolean }) {
   const { id } = useParams();
-  const noticeId = id ? Number(id) : null;
+  const noticeId = id !== undefined ? Number(id) : null;
   const navigate = useNavigate();
   const [filter, setFilter] = useState<'all' | 'notice' | 'guide'>('all');
   const [list, setList] = useState<Notice[] | null>(null);
@@ -32,7 +32,10 @@ export default function NoticesPage({ authed }: { authed: boolean }) {
 
   useEffect(() => {
     setError('');
-    if (noticeId !== null && Number.isFinite(noticeId)) {
+    if (noticeId !== null && !Number.isInteger(noticeId)) {
+      setDetail(null);
+      setError('글을 찾을 수 없어요.');
+    } else if (noticeId !== null) {
       setDetail(null);
       api
         .getNotice(noticeId)

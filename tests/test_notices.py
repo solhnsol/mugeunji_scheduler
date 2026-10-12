@@ -70,3 +70,14 @@ def test_agent_api_key(client, admin):
     assert client.delete(f"/api/agent/notices/{notice['id']}", headers=_agent(new_key)).status_code == 200
     assert client.delete("/admin/notice-api-key", headers=admin).status_code == 200
     assert client.get("/api/agent/notices", headers=_agent(new_key)).status_code == 401
+
+
+def test_login_is_throttled_after_repeated_failures(client):
+    client.cookies.clear()
+    for _ in range(8):
+        r = client.post("/login", json={"username": "no_such_user_x", "password": "wrong"})
+        assert r.status_code == 401
+    blocked = client.post("/login", json={"username": "no_such_user_x", "password": "wrong"})
+    assert blocked.status_code == 429 and "잠시" in blocked.json()["detail"]
+    # 다른 아이디는 영향받지 않는다 (IP 전체 한도 30회 안에서)
+    assert client.post("/login", json={"username": "another_user_y", "password": "wrong"}).status_code == 401

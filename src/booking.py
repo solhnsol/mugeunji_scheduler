@@ -161,13 +161,12 @@ class BookingManager:
                 updates[SETTING_BETA_MONTH] = self._parse_month(beta_month) if beta_month.strip() else ""
             except BookingError as e:
                 return False, str(e)
-        if mode == MODE_BETA:
-            month = updates.get(SETTING_BETA_MONTH)
-            if month is None:
-                month = (await self._settings()).get(SETTING_BETA_MONTH) or ""
-            if not month:
-                return False, "베타로 전환하려면 기존 월 신청을 적용할 달(예: 2026-11)을 지정해주세요."
+        previous = await self.get_mode()
         ok, message = await SettingsManager(self.conn).upsert_settings(updates)
+        if ok and mode in (MODE_BETA, MODE_TOKEN) and previous == MODE_LEGACY:
+            # 자유이용은 토큰 예약으로 대신하므로, 남아 있는 자유이용 예약은 비운다 (같은 시간을 이중으로 잡지 않게)
+            await self.conn.execute("DELETE FROM reservations WHERE reservation_type = 'free'")
+            await self.conn.commit()
         return ok, ("예약 방식을 저장했습니다." if ok else message)
 
     @staticmethod
@@ -179,13 +178,20 @@ class BookingManager:
             raise BookingError("달은 YYYY-MM 형식으로 입력해주세요.")
 
     # ---------- 베타: 기존 월 신청과의 공존 ----------
+    async def _legacy_month(self, settings: Dict) -> str:
+        """기존 월 신청 패턴이 적용되는 달(YYYY-MM). 지금 받고 있는 월 신청의 대상 달을 그대로 쓴다."""
+        from src.membership import MembershipManager
+
+        return await MembershipManager(self.conn).get_reservation_target_period(now_kst())
+
     async def _legacy_map(self, settings: Dict) -> Tuple[str, Dict[Tuple[int, int], str]]:
-        """베타 모드에서 기존 월 신청이 점유하는 (요일, 시) -> 아이디. 베타가 아니면 비어 있다."""
+        """베타 모드에서 기존 월 신청이 점유하는 (요일, 시) -> 아이디. 베타가 아니면 비어 있다.
+
+        월 신청은 날짜 없는 요일·시간 패턴이라, 지금 받고 있는 월 신청의 대상 달에 매주 반복 적용한다.
+        """
         if (settings.get(SETTING_MODE) or MODE_LEGACY) != MODE_BETA:
             return "", {}
-        month = settings.get(SETTING_BETA_MONTH) or ""
-        if not month:
-            return "", {}
+        month = await self._legacy_month(settings)
         async with self.conn.execute(
             "SELECT username, reservation_day, time_index FROM reservations WHERE reservation_type = 'monthly'"
         ) as cursor:
@@ -206,9 +212,9 @@ class BookingManager:
     async def monthly_conflicts(self, reserve_times: List[Dict]) -> List[str]:
         """베타 모드에서 새 월 신청이 이미 토큰 예약된 시간과 겹치는지. 겹치는 칸 설명 목록을 돌려준다."""
         settings = await self._settings()
-        if (settings.get(SETTING_MODE) or MODE_LEGACY) != MODE_BETA or not settings.get(SETTING_BETA_MONTH):
+        if (settings.get(SETTING_MODE) or MODE_LEGACY) != MODE_BETA:
             return []
-        month = settings[SETTING_BETA_MONTH]
+        month = await self._legacy_month(settings)
         today = now_kst().date().isoformat()
         async with self.conn.execute(
             "SELECT booking_date, hour FROM bookings WHERE status = 'active' AND booking_date >= ? AND substr(booking_date, 1, 7) = ?",

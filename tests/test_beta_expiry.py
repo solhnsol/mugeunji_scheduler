@@ -128,10 +128,27 @@ def beta_mode(client, admin):
     client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "legacy"})
 
 
-def test_beta_requires_month(client, admin):
+def test_beta_does_not_require_month_and_uses_current_monthly_period(client, admin, make_user):
+    """월 신청 패턴은 '지금 받고 있는 월 신청의 대상 달'에 적용된다 (베타 달 설정과 무관)."""
     client.put("/admin/booking-settings", headers=admin, json={"beta_month": ""})
     r = client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "beta"})
-    assert r.status_code == 400 or "달" in str(r.json())
+    assert r.status_code == 200, r.text
+    try:
+        owner, _ = make_user("월신청러2")
+        booker, booker_h = make_user("토큰러2")
+        client.post("/admin/tokens/adjust", headers=admin, json={"username": booker, "tokens": 30, "memo": "t"})
+        client.post("/admin/reservations/create", headers=admin, json={
+            "target_username": owner, "reservation_type": "monthly",
+            "reservations": [{"day": "Wednesday", "time_index": 11}],
+        })
+        # NOW=2026-12-10 → 월 신청 대상 달은 2026-12: 수요일 11시는 막히고 다른 달에는 적용되지 않는다
+        blocked = client.post("/bookings", headers=booker_h, json={"slots": [{"date": "2026-12-16", "hour": 11}]})
+        assert blocked.status_code == 400 and "월 신청" in blocked.json()["detail"]
+        ok = client.post("/bookings", headers=booker_h, json={"slots": [{"date": "2026-12-16", "hour": 12}]})
+        assert ok.status_code == 200, ok.text
+    finally:
+        client.post("/admin/reservations/delete", headers=admin, json={"reservations": [{"day": "Wednesday", "time_index": 11}]})
+        client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "legacy"})
 
 
 def test_beta_monthly_vs_token_conflicts(client, admin, make_user, beta_mode):
@@ -212,3 +229,21 @@ def test_beta_month_open_time_exposed(client, admin):
     client.put("/admin/booking-settings", headers=admin, json={"beta_month": "2026-11"})
     s = client.get("/admin/booking-settings", headers=admin).json()
     assert s["beta_month_open_at"].startswith("2026-11-30T21:00")
+
+
+def test_switching_to_beta_clears_leftover_free_reservations(client, admin, make_user):
+    u, _ = make_user("자유러")
+    client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "legacy"})
+    r = client.post("/admin/reservations/create", headers=admin, json={
+        "target_username": u, "reservation_type": "free",
+        "reservations": [{"day": "Saturday", "time_index": 3}],
+    })
+    assert r.status_code == 200, r.text
+    before = client.get("/free/schedule", headers=admin).json()["free_reservations"]
+    assert any(x["username"] == u for x in before)
+    client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "beta"})
+    try:
+        after = client.get("/free/schedule", headers=admin).json()["free_reservations"]
+        assert not any(x["username"] == u for x in after)
+    finally:
+        client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "legacy"})
