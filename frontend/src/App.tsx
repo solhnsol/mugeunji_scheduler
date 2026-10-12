@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { SESSION } from './api';
 import { AppShell } from './components/ui';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
@@ -54,11 +54,17 @@ function UserRoute() {
   return <UserApp token={SESSION} username={session.username} onLogout={logout} />;
 }
 
+/** 로그인 뒤 돌아갈 사이트 안 경로. 외부 주소는 받지 않는다 */
+function safeNext(next: string | null): string {
+  return next && /^\/(?!\/)/.test(next) && !next.startsWith('/login') ? next : '/';
+}
+
 function LoginRoute() {
+  const [params] = useSearchParams();
   const { session, refresh } = useSession();
 
   if (session.status === 'loading') return <Splash />;
-  if (session.status === 'authed') return <Navigate to="/" replace />;
+  if (session.status === 'authed') return <Navigate to={safeNext(params.get('next'))} replace />;
   return <LoginPage onLogin={refresh} />;
 }
 
@@ -66,7 +72,7 @@ function TokensRoute() {
   const { session, refresh, logout } = useSession();
 
   if (session.status === 'loading') return <Splash />;
-  if (session.status === 'anon') return <Navigate to="/login" replace />;
+  if (session.status === 'anon') return <Navigate to="/login?next=/tokens" replace />;
   if (session.mustChangePassword) return <ForcePasswordChange onDone={refresh} onLogout={logout} />;
   return <TokensPage onLogout={logout} />;
 }
@@ -81,7 +87,7 @@ function BookingRoute() {
   const { session, refresh, logout } = useSession();
 
   if (session.status === 'loading') return <Splash />;
-  if (session.status === 'anon') return <Navigate to="/login" replace />;
+  if (session.status === 'anon') return <Navigate to="/login?next=/book" replace />;
   if (session.mustChangePassword) return <ForcePasswordChange onDone={refresh} onLogout={logout} />;
   return <BookingPage onLogout={logout} />;
 }
