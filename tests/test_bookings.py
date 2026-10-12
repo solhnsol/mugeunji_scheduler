@@ -299,3 +299,7 @@ def test_account_wide_login_throttle(client):
     r = client.post("/login", json={"username": "victim", "password": "x"}, headers={"x-forwarded-for": "1.2.3.4"})
     main._login_failures.clear()
     assert r.status_code == 429
+
+
+def test_healthz(client):
+    assert client.get("/healthz").json() == {"status": "ok"}

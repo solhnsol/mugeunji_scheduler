@@ -1904,6 +1904,14 @@ if os.path.isdir("static/dist/landing"):
     app.mount("/landing", StaticFiles(directory="static/dist/landing"), name="landing")
 
 
+@app.get("/healthz")
+async def healthz(conn: aiosqlite.Connection = Depends(get_db_conn)):
+    """배포 상태 점검용: 앱이 떠 있고 DB가 응답하면 200."""
+    async with conn.execute("SELECT 1") as cursor:
+        await cursor.fetchone()
+    return {"status": "ok"}
+
+
 @app.get("/")
 async def read_index():
     return _spa_index()
