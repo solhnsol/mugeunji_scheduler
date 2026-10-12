@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, SESSION } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
-import { DayTimeline } from '../components/booking/DayTimeline';
 import { MonthCalendar } from '../components/booking/MonthCalendar';
-import { WeekGrid } from '../components/booking/WeekGrid';
+import { TimeGrid } from '../components/booking/TimeGrid';
 import { AppShell, Toast } from '../components/ui';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { useToast } from '../hooks/useToast';
@@ -42,7 +41,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   const [calendar, setCalendar] = useState<CalendarDay[] | null>(null);
   const [view, setView] = useState<'month' | 'detail'>('month');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [detailMode, setDetailMode] = useState<'day' | 'week'>('day');
+  const [detailMode, setDetailMode] = useState<'day' | 'week'>(() => (typeof window !== 'undefined' && window.innerWidth >= 640 ? 'week' : 'day'));
   const [week, setWeek] = useState<{ start: string; days: GridDay[] } | null>(null);
   const [selected, setSelected] = useState<Map<string, SelectedSlot>>(new Map());
   const [cancelSel, setCancelSel] = useState<Map<number, CancelSlot>>(new Map());
@@ -408,9 +407,12 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                     })}
                   </div>
                   {currentDay ? (
-                    <DayTimeline
-                      day={currentDay}
+                    <TimeGrid
+                      days={[currentDay]}
                       bands={config.price_bands}
+                      today={today}
+                      showHeader={false}
+                      rowHeight={44}
                       selected={new Set(selected.keys())}
                       cancelSelected={new Set(cancelSel.keys())}
                       onToggleFree={handleFree}
@@ -421,11 +423,12 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                   )}
                 </>
               ) : (
-                <WeekGrid
+                <TimeGrid
                   days={week.days}
+                  bands={config.price_bands}
+                  today={today}
                   selected={new Set(selected.keys())}
                   cancelSelected={new Set(cancelSel.keys())}
-                  today={today}
                   onToggleFree={handleFree}
                   onToggleMine={handleMine}
                   onOpenDay={(d) => {

@@ -1,5 +1,5 @@
 import { CalendarDay } from '../../types';
-import { WEEKDAYS_KO, dateFromISO, formatMonthKo } from '../../utils/booking';
+import { WEEKDAYS_KO, dateFromISO, formatMonthKo, summarizeHours } from '../../utils/booking';
 
 /** 한 달 달력. 날짜마다 24칸 점유 막대(빈칸/예약됨/내 예약)를 간단히 보여준다. */
 export function MonthCalendar({
@@ -58,12 +58,15 @@ export function MonthCalendar({
             const isToday = day.date === today;
             const isSelected = day.date === selected;
             const inactive = isPast || !day.bookable;
+            const mineHours = day.occupancy.split('').flatMap((c, h) => (c === '2' ? [h] : []));
+            const mineChips = summarizeHours(mineHours).split(', ').filter(Boolean);
+            const othersBooked = day.booked - day.mine;
             return (
               <button
                 key={day.date}
                 type="button"
                 onClick={() => onSelect(day.date)}
-                className={`relative rounded-xl border px-1 pt-1.5 pb-1.5 min-h-[58px] flex flex-col items-stretch gap-1 transition ${
+                className={`relative rounded-xl border px-1 pt-1.5 pb-1.5 min-h-[78px] sm:min-h-[96px] flex flex-col items-stretch gap-1 transition ${
                   isSelected
                     ? 'border-sage bg-sage-muted/60 ring-1 ring-sage/40'
                     : 'border-line/70 bg-white hover:border-sage/40'
@@ -89,9 +92,17 @@ export function MonthCalendar({
                     />
                   ))}
                 </span>
-                {day.mine > 0 && (
-                  <span className="text-[10px] leading-none text-sage font-medium text-center tabular-nums">내 {day.mine}h</span>
-                )}
+                <span className="flex flex-col gap-0.5 min-w-0">
+                  {mineChips.slice(0, 2).map((chip) => (
+                    <span key={chip} className="rounded bg-sage text-white text-[10px] leading-4 px-1 truncate tabular-nums text-left">
+                      {chip}
+                    </span>
+                  ))}
+                  {mineChips.length > 2 && <span className="text-[10px] leading-none text-sage text-left">+{mineChips.length - 2}</span>}
+                  {othersBooked > 0 && (
+                    <span className="text-[10px] leading-none text-ink-faint text-left tabular-nums">예약 {othersBooked}h</span>
+                  )}
+                </span>
               </button>
             );
           })}
