@@ -257,3 +257,13 @@ def test_websocket_requires_login(client, make_user):
     token = headers["Authorization"].split()[1]
     with client.websocket_connect("/ws", cookies={"session": token}) as ws:
         assert ws.receive_json()["type"] == "RESERVATION_UPDATE"
+
+
+def test_payment_guide_hidden_from_anonymous(client, admin, make_user):
+    r = client.put("/admin/settings/payment-guide", json={"payment_guide": "은행 123-456"}, headers=admin)
+    assert r.status_code == 200, r.text
+    client.cookies.clear()
+    assert client.get("/settings").json()["payment_guide"] is None
+    _u, headers = make_user()
+    assert client.get("/settings", headers=headers).json()["payment_guide"] == "은행 123-456"
+    client.cookies.clear()

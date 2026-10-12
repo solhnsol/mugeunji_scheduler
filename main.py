@@ -457,6 +457,18 @@ async def get_current_user(
     return await _user_from_token(token or request.cookies.get(SESSION_COOKIE), conn, request.url.path)
 
 
+async def get_optional_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+) -> Optional[dict]:
+    """로그인했으면 사용자, 아니면 None (로그인 전 방문자도 볼 수 있는 API용)."""
+    try:
+        return await get_current_user(request, token, conn)
+    except HTTPException:
+        return None
+
+
 async def get_current_admin_user(user: dict = Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 권한이 필요합니다.")
@@ -727,9 +739,15 @@ async def logout(
 
 
 @app.get("/settings", response_model=SettingsResponse)
-async def get_public_settings(conn: aiosqlite.Connection = Depends(get_db_conn)):
+async def get_public_settings(
+    user: Optional[dict] = Depends(get_optional_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
     reserve_manager = ReservationManager(conn)
     status = await reserve_manager.get_public_schedule_status()
+    # 입금 안내(계좌 등)는 로그인한 회원에게만 보여준다
+    if user is None:
+        status["payment_guide"] = None
     if status.pop("did_clear", False):
         await broadcast_reservation_updates(conn)
     settings = await SettingsManager(conn).get_settings()
@@ -1918,18 +1936,6 @@ async def favicon_svg():
 # ---------------------------------------------------------------- 공지·이용 안내
 def _notice_error(e: NoticeError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-async def get_optional_user(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme),
-    conn: aiosqlite.Connection = Depends(get_db_conn),
-) -> Optional[dict]:
-    """로그인했으면 사용자, 아니면 None (로그인 전 방문자도 볼 수 있는 API용)."""
-    try:
-        return await get_current_user(request, token, conn)
-    except HTTPException:
-        return None
 
 
 @app.get("/api/notices")
