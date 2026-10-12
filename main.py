@@ -2,7 +2,7 @@ import asyncio
 import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional, Literal
 
 import aiosqlite
@@ -32,6 +32,8 @@ from src.database import init_db
 from src.membership import MembershipManager, period_from_offset, usage_period
 from src.reservation import ReservationManager
 from src.settings import SettingsManager
+from src.booking import MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
+from src.tokens import TokenManager
 
 load_dotenv()
 
@@ -204,6 +206,82 @@ class UpdateUserProfileRequest(BaseModel):
     phone: Optional[str] = Field(None, min_length=9)
 
 
+class TokenPackCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=30)
+    price_won: int = Field(..., ge=1)
+    tokens: int = Field(..., ge=1)
+
+
+class TokenPackUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=30)
+    price_won: Optional[int] = Field(None, ge=1)
+    tokens: Optional[int] = Field(None, ge=1)
+    sort_order: Optional[int] = None
+    active: Optional[bool] = None
+
+
+class TokenPurchaseRequest(BaseModel):
+    pack_id: int = Field(..., ge=1)
+
+
+class TokenAdjustRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    tokens: int
+    memo: str = Field(..., min_length=1, max_length=200)
+
+
+class RejectPurchaseRequest(BaseModel):
+    memo: Optional[str] = Field(None, max_length=200)
+
+
+class TokenSettingsRequest(BaseModel):
+    token_charge_enabled: bool
+
+
+class BookingSlot(BaseModel):
+    date: str
+    hour: int = Field(..., ge=0, le=23)
+
+
+class BookingCreateRequest(BaseModel):
+    slots: List[BookingSlot] = Field(..., min_length=1, max_length=168)
+
+
+class BookingCancelRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1, max_length=168)
+
+
+class AdminBookingCreateRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    slots: List[BookingSlot] = Field(..., min_length=1, max_length=168)
+
+
+class AdminBookingCancelRequest(BaseModel):
+    # None이면 환불 정책대로, True면 전액 환불, False면 환불 없음
+    refund: Optional[bool] = None
+
+
+class PriceBandModel(BaseModel):
+    start: int
+    end: int
+    cost: int
+
+
+class RefundTierModel(BaseModel):
+    hours_before: int
+    percent: int
+
+
+class BookingSettingsRequest(BaseModel):
+    reservation_mode: Optional[Literal["legacy", "token"]] = None
+    price_bands: Optional[List[PriceBandModel]] = None
+    refund_tiers: Optional[List[RefundTierModel]] = None
+
+
+class DawnPermissionRequest(BaseModel):
+    allowed: bool
+
+
 class UpdateSettingsRequest(BaseModel):
     reservation_enabled: bool
     reservation_opens_at: Optional[str] = None
@@ -261,6 +339,7 @@ class UserInfoResponse(BaseModel):
     custom_allowed_hours: Optional[int] = None
     plan_id: Optional[int] = None
     plan_allowed_hours: Optional[int] = None
+    dawn_allowed: Optional[bool] = None
 
 
 class PlanResponse(BaseModel):
@@ -276,6 +355,8 @@ class SettingsResponse(BaseModel):
     next_monthly_open_at: Optional[str] = None
     schedule_message: Optional[str] = None
     payment_guide: Optional[str] = None
+    token_charge_enabled: bool = False
+    reservation_mode: str = "legacy"
 
 
 def set_session_cookie(response: Response, request: Request, token: str) -> None:
@@ -347,6 +428,11 @@ async def broadcast_reservation_updates(conn: aiosqlite.Connection):
     free = await reserve_manager.get_reservations(RESERVATION_FREE)
     await connection_manager.broadcast_json({"type": "RESERVATION_UPDATE", "data": monthly})
     await connection_manager.broadcast_json({"type": "FREE_RESERVATION_UPDATE", "data": free})
+
+
+async def broadcast_booking_update(dates: List[str]):
+    """토큰 예약이 바뀐 날짜를 접속 중인 화면에 알려 새로 불러오게 한다."""
+    await connection_manager.broadcast_json({"type": "BOOKING_UPDATE", "dates": dates})
 
 
 @app.post("/register")
@@ -552,7 +638,29 @@ async def get_public_settings(conn: aiosqlite.Connection = Depends(get_db_conn))
     status = await reserve_manager.get_public_schedule_status()
     if status.pop("did_clear", False):
         await broadcast_reservation_updates(conn)
+    settings = await SettingsManager(conn).get_settings()
+    status["token_charge_enabled"] = settings.get("token_charge_enabled") == "true"
+    status["reservation_mode"] = settings.get("reservation_mode") or MODE_LEGACY
     return status
+
+
+async def _require_legacy_mode(conn: aiosqlite.Connection, user: dict) -> None:
+    """토큰 예약으로 전환된 뒤에는 기존 월/자유이용 예약을 회원이 쓸 수 없다."""
+    if user["role"] == "admin":
+        return
+    if (await BookingManager(conn).get_mode()) == MODE_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="새 예약 시스템(토큰 예약)으로 전환됐어요. 토큰으로 예약해주세요.",
+        )
+
+
+async def _require_token_mode(conn: aiosqlite.Connection, user: dict) -> None:
+    """토큰 예약은 전환된 뒤에만 회원이 쓸 수 있다. 관리자는 전환 전에도 미리 써볼 수 있다."""
+    if user["role"] == "admin":
+        return
+    if (await BookingManager(conn).get_mode()) != MODE_TOKEN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="토큰 예약은 아직 열리지 않았어요.")
 
 
 @app.post("/reserve")
@@ -561,6 +669,7 @@ async def reserve_time(
     current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
+    await _require_legacy_mode(conn, current_user)
     reserve_manager = ReservationManager(conn)
     username = current_user["username"]
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
@@ -577,6 +686,7 @@ async def cancel_reservation(
     current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
+    await _require_legacy_mode(conn, current_user)
     reserve_manager = ReservationManager(conn)
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
     is_success, message = await reserve_manager.cancel_own_reservations(
@@ -594,6 +704,7 @@ async def reserve_free_time(
     current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
+    await _require_legacy_mode(conn, current_user)
     reserve_manager = ReservationManager(conn)
     username = current_user["username"]
     reserve_times_list = [item.model_dump(mode="python") for item in data.reservations]
@@ -657,6 +768,7 @@ async def get_all_users_by_admin(
             "subscription_status": user.get("subscription_status"),
             "monthly_price": price,
             "custom_monthly_fee": user.get("custom_monthly_fee"),
+            "dawn_allowed": bool(user.get("dawn_allowed", 1)),
         })
     return result
 
@@ -784,6 +896,415 @@ async def delete_user(
         await broadcast_reservation_updates(conn)
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+# ---------------------------------------------------------------- 토큰 (회원)
+async def _require_token_charge_open(conn: aiosqlite.Connection, user: dict) -> None:
+    """회원에게 토큰 메뉴가 공개되기 전에는 관리자만 쓸 수 있다 (미리보기).
+
+    토큰 예약으로 전환된 뒤에는 충전이 항상 열려 있다.
+    """
+    if user["role"] == "admin":
+        return
+    settings = await SettingsManager(conn).get_settings()
+    if settings.get("token_charge_enabled") != "true" and settings.get("reservation_mode") != MODE_TOKEN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="아직 토큰 충전을 사용할 수 없습니다.")
+
+
+@app.get("/tokens/packs")
+async def list_token_packs(
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await _require_token_charge_open(conn, current_user)
+    return await TokenManager(conn).list_packs(active_only=True)
+
+
+@app.get("/tokens/me")
+async def get_my_tokens(
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await _require_token_charge_open(conn, current_user)
+    tokens = TokenManager(conn)
+    username = current_user["username"]
+    return {
+        "balance": await tokens.get_balance(username),
+        "ledger": await tokens.list_ledger(username, limit=50),
+        "purchases": await tokens.list_user_purchases(username, limit=20),
+    }
+
+
+@app.post("/tokens/purchases")
+async def request_token_purchase(
+    data: TokenPurchaseRequest,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await _require_token_charge_open(conn, current_user)
+    if current_user["role"] == "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="관리자 계정은 토큰을 충전할 수 없습니다.")
+    ok, message = await TokenManager(conn).request_purchase(current_user["username"], data.pack_id)
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/tokens/purchases/{purchase_id}/cancel")
+async def cancel_my_token_purchase(
+    purchase_id: int,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await TokenManager(conn).cancel_own_purchase(current_user["username"], purchase_id)
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+# ---------------------------------------------------------------- 토큰 (관리자)
+@app.get("/admin/token-settings")
+async def get_token_settings(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    settings = await SettingsManager(conn).get_settings()
+    return {"token_charge_enabled": settings.get("token_charge_enabled") == "true"}
+
+
+@app.put("/admin/token-settings")
+async def update_token_settings(
+    data: TokenSettingsRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await SettingsManager(conn).upsert_settings(
+        {"token_charge_enabled": "true" if data.token_charge_enabled else "false"}
+    )
+    if ok:
+        return {"status": "success", "message": "토큰 충전 공개 설정을 저장했습니다."}
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
+
+
+@app.get("/admin/token-packs")
+async def admin_list_token_packs(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await TokenManager(conn).list_packs(active_only=False)
+
+
+@app.post("/admin/token-packs")
+async def admin_create_token_pack(
+    data: TokenPackCreate,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await TokenManager(conn).create_pack(data.name, data.price_won, data.tokens)
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.put("/admin/token-packs/{pack_id}")
+async def admin_update_token_pack(
+    pack_id: int,
+    data: TokenPackUpdate,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await TokenManager(conn).update_pack(
+        pack_id,
+        name=data.name,
+        price_won=data.price_won,
+        tokens=data.tokens,
+        sort_order=data.sort_order,
+        active=data.active,
+    )
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.delete("/admin/token-packs/{pack_id}")
+async def admin_delete_token_pack(
+    pack_id: int,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await TokenManager(conn).delete_pack(pack_id)
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.get("/admin/token-purchases")
+async def admin_list_token_purchases(
+    status_filter: Optional[str] = None,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    if status_filter not in (None, "pending", "confirmed", "cancelled"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status_filter가 올바르지 않습니다.")
+    return await TokenManager(conn).list_purchases(status_filter)
+
+
+@app.post("/admin/token-purchases/{purchase_id}/confirm")
+async def admin_confirm_token_purchase(
+    purchase_id: int,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await TokenManager(conn).confirm_purchase(purchase_id, admin_user["username"])
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/token-purchases/{purchase_id}/reject")
+async def admin_reject_token_purchase(
+    purchase_id: int,
+    data: RejectPurchaseRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await TokenManager(conn).reject_purchase(purchase_id, data.memo)
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.post("/admin/token-purchases/{purchase_id}/undo")
+async def admin_undo_token_purchase(
+    purchase_id: int,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await TokenManager(conn).undo_confirm_purchase(purchase_id, admin_user["username"])
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+@app.get("/admin/token-balances")
+async def admin_token_balances(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await TokenManager(conn).list_balances()
+
+
+@app.get("/admin/token-ledger/{username}")
+async def admin_token_ledger(
+    username: str,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    tokens = TokenManager(conn)
+    return {"balance": await tokens.get_balance(username), "ledger": await tokens.list_ledger(username, limit=200)}
+
+
+@app.post("/admin/tokens/adjust")
+async def admin_adjust_tokens(
+    data: TokenAdjustRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    ok, message = await TokenManager(conn).adjust(data.username, data.tokens, data.memo, admin_user["username"])
+    if ok:
+        return {"status": "success", "message": message}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+# ---------------------------------------------------------------- 토큰 예약 (회원)
+def _booking_error(e: BookingError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+def _parse_date(raw: str) -> date:
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+
+
+@app.get("/bookings/config")
+async def get_booking_config(
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await BookingManager(conn).get_config(current_user["username"], current_user["role"])
+
+
+@app.get("/bookings/calendar")
+async def get_booking_calendar(
+    month: str,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await _require_token_mode(conn, current_user)
+    try:
+        year, mon = (int(x) for x in month.split("-"))
+        date(year, mon, 1)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="month 형식이 올바르지 않습니다. (YYYY-MM)")
+    days = await BookingManager(conn).month_summary(current_user["username"], current_user["role"], year, mon)
+    return {"month": month, "days": days}
+
+
+@app.get("/bookings/range")
+async def get_booking_range(
+    start: str,
+    days: int = 7,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await _require_token_mode(conn, current_user)
+    try:
+        grid = await BookingManager(conn).range_grid(current_user["username"], current_user["role"], _parse_date(start), days)
+    except BookingError as e:
+        raise _booking_error(e)
+    return {"days": grid}
+
+
+@app.get("/bookings/mine")
+async def get_my_bookings(
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await _require_token_mode(conn, current_user)
+    return await BookingManager(conn).my_bookings(current_user["username"])
+
+
+@app.post("/bookings")
+async def create_booking(
+    data: BookingCreateRequest,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await _require_token_mode(conn, current_user)
+    try:
+        result = await BookingManager(conn).create_bookings(
+            current_user["username"], current_user["role"], [slot.model_dump() for slot in data.slots]
+        )
+    except BookingError as e:
+        raise _booking_error(e)
+    await broadcast_booking_update(result["dates"])
+    spent = f" (토큰 {result['spent']} 사용)" if result["spent"] else ""
+    return {"status": "success", "message": f"{result['count']}시간을 예약했어요.{spent}", **result}
+
+
+@app.post("/bookings/cancel")
+async def cancel_booking(
+    data: BookingCancelRequest,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    await _require_token_mode(conn, current_user)
+    try:
+        result = await BookingManager(conn).cancel_bookings(data.ids, username=current_user["username"])
+    except BookingError as e:
+        raise _booking_error(e)
+    await broadcast_booking_update(result["dates"])
+    refunded = f" (토큰 {result['refunded']} 환불)" if result["refunded"] else ""
+    return {"status": "success", "message": f"{result['count']}시간 예약을 취소했어요.{refunded}", **result}
+
+
+# ---------------------------------------------------------------- 토큰 예약 (관리자)
+@app.get("/admin/booking-settings")
+async def get_booking_settings(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    config = await BookingManager(conn).get_config(admin_user["username"], "admin")
+    return {
+        "reservation_mode": config["mode"],
+        "price_bands": config["price_bands"],
+        "refund_tiers": config["refund_tiers"],
+    }
+
+
+@app.put("/admin/booking-settings")
+async def update_booking_settings(
+    data: BookingSettingsRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    manager = BookingManager(conn)
+    results = []
+    if data.price_bands is not None:
+        results.append(await manager.set_price_bands([b.model_dump() for b in data.price_bands]))
+    if data.refund_tiers is not None:
+        results.append(await manager.set_refund_tiers([t.model_dump() for t in data.refund_tiers]))
+    if data.reservation_mode is not None:
+        results.append(await manager.set_mode(data.reservation_mode))
+    if not results:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="변경할 항목이 없습니다.")
+    for ok, message in results:
+        if not ok:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+    return {"status": "success", "message": "예약 설정을 저장했습니다."}
+
+
+@app.get("/admin/bookings")
+async def admin_list_bookings(
+    date_filter: Optional[str] = None,
+    username: Optional[str] = None,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    day = _parse_date(date_filter) if date_filter else None
+    return await BookingManager(conn).admin_list(day, username)
+
+
+@app.post("/admin/bookings")
+async def admin_create_booking(
+    data: AdminBookingCreateRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    """관리자 강제 예약: 범위·권한·토큰을 따지지 않고 해당 회원 이름으로 등록한다."""
+    try:
+        result = await BookingManager(conn).create_bookings(
+            data.username, "user", [slot.model_dump() for slot in data.slots], force_by=admin_user["username"]
+        )
+    except BookingError as e:
+        raise _booking_error(e)
+    await broadcast_booking_update(result["dates"])
+    return {"status": "success", "message": f"{result['count']}시간을 등록했어요.", **result}
+
+
+@app.post("/admin/bookings/{booking_id}/cancel")
+async def admin_cancel_booking(
+    booking_id: int,
+    data: AdminBookingCancelRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        result = await BookingManager(conn).cancel_bookings(
+            [booking_id], admin_username=admin_user["username"], refund_override=data.refund
+        )
+    except BookingError as e:
+        raise _booking_error(e)
+    await broadcast_booking_update(result["dates"])
+    return {"status": "success", "message": "예약을 취소했어요.", **result}
+
+
+@app.put("/admin/users/{username}/dawn")
+async def set_dawn_permission(
+    username: str,
+    data: DawnPermissionRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    async with conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
+        row = await cursor.fetchone()
+    if not row or row["role"] == "admin":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
+    await conn.execute("UPDATE users SET dawn_allowed = ? WHERE username = ?", (1 if data.allowed else 0, username))
+    await conn.commit()
+    return {"status": "success", "message": "새벽 예약 권한을 저장했습니다."}
 
 
 @app.get("/admin/roster")
@@ -1176,6 +1697,16 @@ async def read_free_index():
 
 @app.get("/register")
 async def read_register_index():
+    return _spa_index()
+
+
+@app.get("/tokens")
+async def read_tokens_index():
+    return _spa_index()
+
+
+@app.get("/book")
+async def read_book_index():
     return _spa_index()
 
 

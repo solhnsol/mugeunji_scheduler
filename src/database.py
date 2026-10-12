@@ -33,6 +33,8 @@ async def _migrate_users_table(conn: aiosqlite.Connection):
         ("must_change_password", "INTEGER NOT NULL DEFAULT 0"),
         # 비밀번호가 바뀌면 올려서 이전에 발급된 로그인 토큰을 무효화한다
         ("session_epoch", "INTEGER NOT NULL DEFAULT 0"),
+        # 새벽(0~4시) 예약 허용 여부 (토큰 예약 시스템)
+        ("dawn_allowed", "INTEGER NOT NULL DEFAULT 1"),
     ]
     for name, col_type in columns:
         if not await _column_exists(conn, table="users", column=name):
@@ -165,6 +167,77 @@ async def setup_database(conn: aiosqlite.Connection):
         );
     """)
 
+    # --- 토큰 시스템 (토큰은 최소 단위 1의 정수) ---
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS token_packs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            price_won INTEGER NOT NULL,
+            tokens INTEGER NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT
+        );
+    """)
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS token_purchases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            pack_id INTEGER,
+            pack_name TEXT NOT NULL,
+            price_won INTEGER NOT NULL,
+            tokens INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT,
+            confirmed_at TEXT,
+            confirmed_by TEXT,
+            memo TEXT,
+            FOREIGN KEY (username) REFERENCES users(username)
+        );
+    """)
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS token_ledger (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            delta INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            ref_type TEXT,
+            ref_id INTEGER,
+            memo TEXT,
+            created_at TEXT,
+            created_by TEXT,
+            FOREIGN KEY (username) REFERENCES users(username)
+        );
+    """)
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_token_ledger_user ON token_ledger(username, id)"
+    )
+    # 날짜 기반 예약 (토큰 시스템). 기존 reservations 테이블과는 완전히 분리돼 있다.
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS bookings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            booking_date TEXT NOT NULL,
+            hour INTEGER NOT NULL,
+            cost INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'active',
+            refunded INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT,
+            cancelled_at TEXT,
+            created_by TEXT,
+            FOREIGN KEY (username) REFERENCES users(username)
+        );
+    """)
+    await conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_booking_slot ON bookings(booking_date, hour) WHERE status = 'active'"
+    )
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(username, booking_date)"
+    )
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_token_purchases_status ON token_purchases(status, id)"
+    )
+
     admin_password = os.getenv("ADMIN_PASSWORD")
     if admin_password:
         hashed_admin_password = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -180,6 +253,10 @@ async def setup_database(conn: aiosqlite.Connection):
         ('current_access_period', None),
         ('last_free_reset_at', None),
         ('payment_guide', None),
+        # 토큰 충전 메뉴를 회원에게 공개할지 (전환 전에는 꺼 둔다)
+        ('token_charge_enabled', 'false'),
+        # 예약 방식 전환 스위치: legacy(기존 월/자유이용) | token(날짜 기반 토큰 예약)
+        ('reservation_mode', 'legacy'),
         *[(k, v) for k, v in AUTOMATION_SETTING_DEFAULTS.items()],
     ]
     for key, value in settings_defaults:

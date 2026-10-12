@@ -184,3 +184,113 @@ export const DAY_LABELS: Record<ValidDay, string> = {
 export const DAYS: ValidDay[] = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
 ];
+
+export interface TokenPack {
+  id: number;
+  name: string;
+  price_won: number;
+  tokens: number;
+  sort_order: number;
+  active: boolean;
+}
+
+export interface TokenLedgerEntry {
+  id: number;
+  tokens: number;
+  kind: string;
+  kind_label: string;
+  memo: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface TokenPurchase {
+  id: number;
+  username: string;
+  name?: string | null;
+  phone?: string | null;
+  pack_id: number | null;
+  pack_name: string;
+  price_won: number;
+  tokens: number;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  created_at: string;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
+  memo: string | null;
+}
+
+export interface TokenBalance {
+  username: string;
+  name?: string | null;
+  phone?: string | null;
+  balance: number;
+  last_activity: string | null;
+}
+
+export interface MyTokens {
+  balance: number;
+  ledger: TokenLedgerEntry[];
+  purchases: TokenPurchase[];
+}
+
+// ---- 날짜 기반 토큰 예약
+export interface PriceBand {
+  start: number;
+  end: number;
+  cost: number;
+}
+
+export interface RefundTier {
+  hours_before: number;
+  percent: number;
+}
+
+export interface BookingConfig {
+  mode: 'legacy' | 'token';
+  reservation_enabled: boolean;
+  price_bands: PriceBand[];
+  refund_tiers: RefundTier[];
+  bookable_from: string;
+  bookable_until: string;
+  next_month_open_at: string | null;
+  next_month_open: boolean;
+  dawn_hours: number[];
+  dawn_allowed: boolean;
+  balance: number | null;
+  is_admin: boolean;
+}
+
+export interface CalendarDay {
+  date: string;
+  bookable: boolean;
+  booked: number;
+  mine: number;
+  /** 24자: 0 빈칸, 1 예약됨, 2 내 예약 */
+  occupancy: string;
+}
+
+export type SlotStatus = 'free' | 'taken' | 'mine' | 'past' | 'closed';
+
+export interface GridSlot {
+  hour: number;
+  status: SlotStatus;
+  cost: number;
+  booking_id?: number | null;
+  paid?: number | null;
+  name?: string;
+}
+
+export interface GridDay {
+  date: string;
+  bookable: boolean;
+  slots: GridSlot[];
+}
+
+export interface MyBooking {
+  id: number;
+  date: string;
+  hour: number;
+  cost: number;
+  cancellable: boolean;
+}

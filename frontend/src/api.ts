@@ -169,6 +169,178 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
+  // ---- 날짜 기반 토큰 예약
+  async getBookingConfig(token: string) {
+    const res = await fetch('/bookings/config', { headers: authHeaders(token) });
+    return parseResponse<import('./types').BookingConfig>(res);
+  },
+
+  async getBookingCalendar(token: string, month: string) {
+    const res = await fetch(`/bookings/calendar?month=${month}`, { headers: authHeaders(token) });
+    return parseResponse<{ month: string; days: import('./types').CalendarDay[] }>(res);
+  },
+
+  async getBookingRange(token: string, start: string, days: number) {
+    const res = await fetch(`/bookings/range?start=${start}&days=${days}`, { headers: authHeaders(token) });
+    return parseResponse<{ days: import('./types').GridDay[] }>(res);
+  },
+
+  async getMyBookings(token: string) {
+    const res = await fetch('/bookings/mine', { headers: authHeaders(token) });
+    return parseResponse<import('./types').MyBooking[]>(res);
+  },
+
+  async createBookings(token: string, slots: { date: string; hour: number }[]) {
+    const res = await fetch('/bookings', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ slots }),
+    });
+    return parseResponse<{ message: string; count: number; spent: number }>(res);
+  },
+
+  async cancelBookings(token: string, ids: number[]) {
+    const res = await fetch('/bookings/cancel', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ ids }),
+    });
+    return parseResponse<{ message: string; count: number; refunded: number }>(res);
+  },
+
+  // ---- 토큰 (회원)
+  async getTokenPacks(token: string) {
+    const res = await fetch('/tokens/packs', { headers: authHeaders(token) });
+    return parseResponse<import('./types').TokenPack[]>(res);
+  },
+
+  async getMyTokens(token: string) {
+    const res = await fetch('/tokens/me', { headers: authHeaders(token) });
+    return parseResponse<import('./types').MyTokens>(res);
+  },
+
+  async requestTokenPurchase(token: string, packId: number) {
+    const res = await fetch('/tokens/purchases', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ pack_id: packId }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async cancelTokenPurchase(token: string, purchaseId: number) {
+    const res = await fetch(`/tokens/purchases/${purchaseId}/cancel`, {
+      method: 'POST',
+      headers: authHeaders(token),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  // ---- 토큰 (관리자)
+  async getTokenSettings(token: string) {
+    const res = await fetch('/admin/token-settings', { headers: authHeaders(token) });
+    return parseResponse<{ token_charge_enabled: boolean }>(res);
+  },
+
+  async updateTokenSettings(token: string, tokenChargeEnabled: boolean) {
+    const res = await fetch('/admin/token-settings', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ token_charge_enabled: tokenChargeEnabled }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminListTokenPacks(token: string) {
+    const res = await fetch('/admin/token-packs', { headers: authHeaders(token) });
+    return parseResponse<import('./types').TokenPack[]>(res);
+  },
+
+  async adminCreateTokenPack(
+    token: string,
+    body: { name: string; price_won: number; tokens: number },
+  ) {
+    const res = await fetch('/admin/token-packs', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminUpdateTokenPack(
+    token: string,
+    packId: number,
+    body: Partial<{ name: string; price_won: number; tokens: number; sort_order: number; active: boolean }>,
+  ) {
+    const res = await fetch(`/admin/token-packs/${packId}`, {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminDeleteTokenPack(token: string, packId: number) {
+    const res = await fetch(`/admin/token-packs/${packId}`, {
+      method: 'DELETE',
+      headers: authHeaders(token),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminListTokenPurchases(token: string, status?: 'pending' | 'confirmed' | 'cancelled') {
+    const qs = status ? `?status_filter=${status}` : '';
+    const res = await fetch(`/admin/token-purchases${qs}`, { headers: authHeaders(token) });
+    return parseResponse<import('./types').TokenPurchase[]>(res);
+  },
+
+  async adminConfirmTokenPurchase(token: string, purchaseId: number) {
+    const res = await fetch(`/admin/token-purchases/${purchaseId}/confirm`, {
+      method: 'POST',
+      headers: authHeaders(token),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminRejectTokenPurchase(token: string, purchaseId: number, memo?: string) {
+    const res = await fetch(`/admin/token-purchases/${purchaseId}/reject`, {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ memo: memo || null }),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminUndoTokenPurchase(token: string, purchaseId: number) {
+    const res = await fetch(`/admin/token-purchases/${purchaseId}/undo`, {
+      method: 'POST',
+      headers: authHeaders(token),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminTokenBalances(token: string) {
+    const res = await fetch('/admin/token-balances', { headers: authHeaders(token) });
+    return parseResponse<import('./types').TokenBalance[]>(res);
+  },
+
+  async adminTokenLedger(token: string, username: string) {
+    const res = await fetch(`/admin/token-ledger/${encodeURIComponent(username)}`, {
+      headers: authHeaders(token),
+    });
+    return parseResponse<{ balance: number; ledger: import('./types').TokenLedgerEntry[] }>(res);
+  },
+
+  async adminAdjustTokens(token: string, body: { username: string; tokens: number; memo: string }) {
+    const res = await fetch('/admin/tokens/adjust', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
   async getSettings() {
     const res = await fetch('/settings');
     return parseResponse<{
@@ -177,6 +349,8 @@ export const api = {
       schedule_message?: string;
       next_monthly_open_at?: string;
       payment_guide?: string | null;
+      token_charge_enabled?: boolean;
+      reservation_mode?: 'legacy' | 'token';
     }>(res);
   },
 
