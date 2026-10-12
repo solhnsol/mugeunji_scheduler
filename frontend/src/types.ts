@@ -184,3 +184,52 @@ export const DAY_LABELS: Record<ValidDay, string> = {
 export const DAYS: ValidDay[] = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
 ];
+
+export interface TokenPack {
+  id: number;
+  name: string;
+  price_won: number;
+  tokens: number;
+  sort_order: number;
+  active: boolean;
+}
+
+export interface TokenLedgerEntry {
+  id: number;
+  tokens: number;
+  kind: string;
+  kind_label: string;
+  memo: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface TokenPurchase {
+  id: number;
+  username: string;
+  name?: string | null;
+  phone?: string | null;
+  pack_id: number | null;
+  pack_name: string;
+  price_won: number;
+  tokens: number;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  created_at: string;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
+  memo: string | null;
+}
+
+export interface TokenBalance {
+  username: string;
+  name?: string | null;
+  phone?: string | null;
+  balance: number;
+  last_activity: string | null;
+}
+
+export interface MyTokens {
+  balance: number;
+  ledger: TokenLedgerEntry[];
+  purchases: TokenPurchase[];
+}

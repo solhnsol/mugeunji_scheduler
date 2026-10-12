@@ -11,6 +11,7 @@ import { AdminReservationGrid } from '../components/AdminReservationGrid';
 import { AdminFreeReservationGrid } from '../components/AdminFreeReservationGrid';
 import { AdminAutomationTab } from '../components/AdminAutomationTab';
 import { AdminRosterTab } from '../components/AdminRosterTab';
+import { AdminTokensTab } from '../components/AdminTokensTab';
 import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
 import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
@@ -21,6 +22,7 @@ import { summarizeReservations } from '../utils/reservationSummary';
 
 const TABS = [
   { id: 'roster' as const, label: '정산' },
+  { id: 'tokens' as const, label: '토큰' },
   { id: 'schedule' as const, label: '월신청' },
   { id: 'free' as const, label: '자유이용' },
   { id: 'automation' as const, label: '자동화' },
@@ -99,7 +101,7 @@ function AdminDashboard({
   toast: { message: string; type: 'success' | 'error' | '' };
 }) {
   const { confirm, dialog: confirmDialog } = useConfirm();
-  const [tab, setTab] = useState<'roster' | 'schedule' | 'free' | 'automation' | 'users'>('roster');
+  const [tab, setTab] = useState<'roster' | 'tokens' | 'schedule' | 'free' | 'automation' | 'users'>('roster');
   const [reloadKey, setReloadKey] = useState(0);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
@@ -206,6 +208,8 @@ function AdminDashboard({
         ))}
         </div>
       </div>
+
+      {tab === 'tokens' && <AdminTokensTab token={token} show={show} />}
 
       {tab === 'roster' && (
         <div className="space-y-5">

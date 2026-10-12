@@ -165,6 +165,55 @@ async def setup_database(conn: aiosqlite.Connection):
         );
     """)
 
+    # --- 토큰 시스템 (금액 단위는 '유닛' = 0.5토큰, 정수로 저장) ---
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS token_packs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            price_won INTEGER NOT NULL,
+            tokens_units INTEGER NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT
+        );
+    """)
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS token_purchases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            pack_id INTEGER,
+            pack_name TEXT NOT NULL,
+            price_won INTEGER NOT NULL,
+            tokens_units INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT,
+            confirmed_at TEXT,
+            confirmed_by TEXT,
+            memo TEXT,
+            FOREIGN KEY (username) REFERENCES users(username)
+        );
+    """)
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS token_ledger (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            delta_units INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            ref_type TEXT,
+            ref_id INTEGER,
+            memo TEXT,
+            created_at TEXT,
+            created_by TEXT,
+            FOREIGN KEY (username) REFERENCES users(username)
+        );
+    """)
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_token_ledger_user ON token_ledger(username, id)"
+    )
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_token_purchases_status ON token_purchases(status, id)"
+    )
+
     admin_password = os.getenv("ADMIN_PASSWORD")
     if admin_password:
         hashed_admin_password = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -180,6 +229,8 @@ async def setup_database(conn: aiosqlite.Connection):
         ('current_access_period', None),
         ('last_free_reset_at', None),
         ('payment_guide', None),
+        # 토큰 충전 메뉴를 회원에게 공개할지 (전환 전에는 꺼 둔다)
+        ('token_charge_enabled', 'false'),
         *[(k, v) for k, v in AUTOMATION_SETTING_DEFAULTS.items()],
     ]
     for key, value in settings_defaults:

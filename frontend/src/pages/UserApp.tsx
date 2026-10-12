@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, HeaderActions, PlanGrid, ScheduleModeNav, Toast } from '../components/ui';
 import { buildSteps, GuideCard, isFreeOnly, UsageGuideModal } from '../components/GuideCard';
@@ -15,6 +15,7 @@ import { ScheduleModal } from '../components/ScheduleModal';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { useToast } from '../hooks/useToast';
 import { MeResponse, Plan } from '../types';
+import { formatTokens } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 
 export default function UserApp({
@@ -37,6 +38,9 @@ export default function UserApp({
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
+  const [tokenChargeEnabled, setTokenChargeEnabled] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+  const navigate = useNavigate();
   const monthlyReservations = useMonthlyReservations();
   const mySummary = summarizeReservations(monthlyReservations, { username, type: 'monthly' });
   const { toast, show } = useToast();
@@ -55,6 +59,14 @@ export default function UserApp({
     setScheduleMessage(settings.schedule_message || '');
     setNextOpenAt(settings.next_monthly_open_at ?? null);
     setPaymentGuide(settings.payment_guide ?? null);
+    const tokensOpen = !!settings.token_charge_enabled;
+    setTokenChargeEnabled(tokensOpen);
+    if (tokensOpen) {
+      api
+        .getMyTokens(token)
+        .then((t) => setTokenBalance(t.balance))
+        .catch(() => setTokenBalance(null));
+    }
   }, [token]);
 
   const load = useCallback(() => {
@@ -167,6 +179,7 @@ export default function UserApp({
       onClick: () => setPlanModalOpen(true),
       hidden: !hasSubscription,
     },
+    { id: 'tokens', label: '토큰', onClick: () => navigate('/tokens'), hidden: !tokenChargeEnabled && me.role !== 'admin' },
     { id: 'guide', label: '이용 안내', onClick: () => setGuideOpen(true) },
     { id: 'logout', label: '로그아웃', onClick: onLogout },
   ];
@@ -215,6 +228,16 @@ export default function UserApp({
     const reserve = steps[steps.length - 1];
     reserve.done = steps[steps.length - 2].done;
   }
+  const tokenCard =
+    tokenChargeEnabled && tokenBalance !== null ? (
+      <Link to="/tokens" className="card p-4 flex items-center justify-between gap-3 hover:border-sage/30">
+        <div>
+          <p className="text-xs text-ink-faint">내 토큰</p>
+          <p className="text-2xl font-bold text-ink tabular-nums">{formatTokens(tokenBalance)}</p>
+        </div>
+        <span className="btn-secondary !w-auto text-sm">충전하기</span>
+      </Link>
+    ) : null;
   const guideVisible = steps.some((s) => !s.done);
   const guideCard = guideVisible ? <GuideCard steps={steps} /> : null;
   const guideModal = guideOpen && (
@@ -306,6 +329,7 @@ export default function UserApp({
             </p>
           </div>
           {guideCard}
+          {tokenCard}
           <div>
             <h3 className="text-sm font-semibold text-ink mb-3">요금제 선택</h3>
             <PlanGrid
@@ -342,6 +366,8 @@ export default function UserApp({
       <div className="space-y-4">
         {profileBanner}
         {guideCard}
+
+        {tokenCard}
 
         {me.subscription && (
           <MonthlyPlanHero

@@ -8,6 +8,7 @@ import UserApp from './pages/UserApp';
 import AdminPage from './pages/AdminPage';
 import FreeApp from './pages/FreeApp';
 import Landing from './pages/Landing';
+import TokensPage from './pages/TokensPage';
 
 function Splash() {
   return (
@@ -33,6 +34,14 @@ function LoginRoute() {
   if (session.status === 'loading') return <Splash />;
   if (session.status === 'authed') return <Navigate to="/" replace />;
   return <LoginPage onLogin={refresh} />;
+}
+
+function TokensRoute() {
+  const { session, logout } = useSession();
+
+  if (session.status === 'loading') return <Splash />;
+  if (session.status === 'anon') return <Navigate to="/login" replace />;
+  return <TokensPage onLogout={logout} />;
 }
 
 function AboutRoute() {
@@ -72,6 +81,7 @@ export default function App() {
         <Route path="/" element={<UserRoute />} />
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/about" element={<AboutRoute />} />
+        <Route path="/tokens" element={<TokensRoute />} />
         <Route path="/free" element={<FreeRoute />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/admin" element={<AdminPage />} />
