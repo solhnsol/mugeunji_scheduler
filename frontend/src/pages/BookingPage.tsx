@@ -259,7 +259,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   };
 
   const todayMonth = today ? monthOf(today) : null;
-  const barVisible = selected.size > 0 || cancelSel.size > 0;
+  const barMode: 'book' | 'cancel' | 'idle' = selected.size > 0 ? 'book' : cancelSel.size > 0 ? 'cancel' : 'idle';
   const currentDay = selectedDate && week ? week.days.find((d) => d.date === selectedDate) : undefined;
 
   // 내 예약을 날짜별로 묶어 보여준다
@@ -468,65 +468,80 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
         </div>
       )}
 
-      {config && barVisible && (
+      {/* 예약 바: 일정표 화면에서는 항상 같은 자리·같은 높이로 있고, 선택 상태에 따라 내용과 버튼 상태만 바뀐다 */}
+      {config && view === 'detail' && (
         <div className="shrink-0 -mx-4 bg-white border-t border-line/70">
-          <div className="px-4 py-2.5 space-y-1.5">
-            {selected.size > 0 ? (
-              <>
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-ink-muted min-w-0">
+          <div className="px-4 py-2 space-y-1">
+            <div className="flex items-center justify-between gap-3 text-sm h-5">
+              <span className="text-ink-muted min-w-0 truncate">
+                {barMode === 'book' ? (
+                  <>
                     선택 <b className="text-ink tabular-nums">{selected.size}시간</b>
                     <span className="text-ink-faint"> · {summarizeHours([...selected.values()].map((s) => s.hour))}</span>
-                  </span>
-                  <button type="button" className="text-sage underline underline-offset-2 text-xs shrink-0" onClick={clearSelection}>
-                    선택 해제
-                  </button>
-                </div>
-                <p className="text-xs text-ink-muted tabular-nums">
-                  필요 토큰 <b className="text-ink">{total}</b>
-                  {balance !== null && (
-                    <>
-                      {' '}· 보유 {formatTokens(balance)} → 예약 후 {formatTokens(Math.max(balance - total, 0))}
-                    </>
-                  )}
-                </p>
-                {blockReason && (
-                  <p className="text-xs text-[#b04040]" role="alert">
+                  </>
+                ) : barMode === 'cancel' ? (
+                  <>
+                    취소할 예약 <b className="text-ink tabular-nums">{cancelSel.size}시간</b>
+                  </>
+                ) : (
+                  <span className="text-ink-faint">선택한 시간이 없어요</span>
+                )}
+              </span>
+              <button
+                type="button"
+                className="text-sage underline underline-offset-2 text-xs shrink-0 disabled:opacity-30 disabled:no-underline"
+                disabled={barMode === 'idle'}
+                onClick={clearSelection}
+              >
+                선택 해제
+              </button>
+            </div>
+            <p
+              className={`text-xs tabular-nums truncate h-4 ${blockReason || (barMode === 'cancel' && refundPreview.blocked) ? 'text-[#b04040]' : 'text-ink-muted'}`}
+              role="status"
+              aria-live="polite"
+            >
+              {barMode === 'book' ? (
+                blockReason ? (
+                  <>
                     {blockReason}{' '}
                     {blockReason.includes('부족') && (
                       <Link to="/tokens" className="underline">
-                        토큰 충전하기
+                        충전하기
                       </Link>
                     )}
-                  </p>
-                )}
-                <button type="button" className="btn-primary" disabled={busy || !!blockReason} onClick={book}>
-                  {busy ? '예약 중…' : `${selected.size}시간 예약하기`}
-                </button>
-              </>
+                  </>
+                ) : (
+                  <>
+                    필요 토큰 <b className="text-ink">{total}</b>
+                    {balance !== null && <> · 보유 {formatTokens(balance)} → 예약 후 {formatTokens(Math.max(balance - total, 0))}</>}
+                  </>
+                )
+              ) : barMode === 'cancel' ? (
+                refundPreview.blocked ? (
+                  '취소할 수 없는 시간이 포함돼 있어요'
+                ) : (
+                  <>
+                    환불 예상 토큰 <b className="text-ink">{refundPreview.refund}</b>
+                  </>
+                )
+              ) : (
+                <>빈 시간을 누르거나 끌어서 선택하세요{balance !== null && <> · 보유 {formatTokens(balance)}</>}</>
+              )}
+            </p>
+            {barMode === 'cancel' ? (
+              <button
+                type="button"
+                className="w-full rounded-full bg-[#c45c5c] text-white font-semibold min-h-[48px] hover:bg-[#b04c4c] active:scale-[0.98] transition disabled:opacity-50"
+                disabled={busy || refundPreview.blocked}
+                onClick={cancel}
+              >
+                {busy ? '취소 중…' : `${cancelSel.size}시간 예약 취소하기`}
+              </button>
             ) : (
-              <>
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-ink-muted">
-                    취소할 예약 <b className="text-ink tabular-nums">{cancelSel.size}시간</b>
-                  </span>
-                  <button type="button" className="text-sage underline underline-offset-2 text-xs" onClick={clearSelection}>
-                    선택 해제
-                  </button>
-                </div>
-                <p className="text-xs text-ink-muted tabular-nums">
-                  환불 예상 토큰 <b className="text-ink">{refundPreview.refund}</b>
-                  {refundPreview.blocked && <span className="text-[#b04040]"> · 취소할 수 없는 시간이 포함돼 있어요</span>}
-                </p>
-                <button
-                  type="button"
-                  className="w-full rounded-full bg-[#c45c5c] text-white font-semibold min-h-[48px] hover:bg-[#b04c4c] active:scale-[0.98] transition disabled:opacity-50"
-                  disabled={busy || refundPreview.blocked}
-                  onClick={cancel}
-                >
-                  {busy ? '취소 중…' : `${cancelSel.size}시간 예약 취소하기`}
-                </button>
-              </>
+              <button type="button" className="btn-primary" disabled={busy || barMode === 'idle' || !!blockReason} onClick={book}>
+                {busy ? '예약 중…' : barMode === 'book' ? `${selected.size}시간 예약하기` : '예약하기'}
+              </button>
             )}
           </div>
         </div>
