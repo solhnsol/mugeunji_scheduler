@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import {
   ADDRESS,
-  BOOKING_TYPES,
   CONTACT_URL,
   EQUIPMENT,
   EQUIPMENT_FOOTNOTE,
@@ -15,9 +14,8 @@ import {
   MAP_URL,
   SITE_NAME,
   STEPS,
+  TOKEN_RULES,
 } from '../content/landing';
-import { Plan } from '../types';
-import { formatPrice } from '../utils';
 
 function ExternalLink({
   href,
@@ -73,38 +71,18 @@ function CopyAddressButton({ address }: { address: string }) {
   );
 }
 
-function PlansSection() {
-  const [plans, setPlans] = useState<Plan[] | null>(null);
-
+/** 토큰 예약이 아직 정식 시작 전이면, 가입 전에 지금 상황을 알려 혼란을 막는다 */
+function ModeNotice() {
+  const [mode, setMode] = useState<string | null>(null);
   useEffect(() => {
-    api.getPlans().then(setPlans).catch(() => setPlans([]));
+    api.getSettings().then((st) => setMode(st.reservation_mode ?? null)).catch(() => undefined);
   }, []);
-
-  if (plans === null) return <p className="text-sm text-ink-faint">불러오는 중…</p>;
-  if (plans.length === 0) {
-    return <p className="text-sm text-ink-muted">요금제는 오픈채팅으로 문의해주세요.</p>;
-  }
-
+  if (!mode || mode === 'token') return null;
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {plans.map((plan) => (
-        <div key={plan.id} className="card p-5">
-          <p className="text-sm text-ink-muted">{plan.name}</p>
-          <p className="text-3xl font-bold text-ink mt-1 tabular-nums">
-            {plan.allowed_hours}
-            <span className="text-base font-medium text-ink-muted"> 시간/주</span>
-          </p>
-          <p className="text-lg font-semibold text-sage mt-4">
-            {plan.monthly_price > 0 ? (
-              <>
-                월 {formatPrice(plan.monthly_price)}
-              </>
-            ) : (
-              <span className="text-base font-medium text-ink-muted">요금 문의</span>
-            )}
-          </p>
-        </div>
-      ))}
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 leading-relaxed">
+      아래는 12월부터 적용되는 토큰 예약 방식이에요. 지금은 정식 시작 전이라 일부 회원에게만 먼저 열려 있어요.
+      현재 이용 방법은 <Link to="/notices" className="underline underline-offset-2 font-medium">공지·이용 안내</Link>에서
+      확인하거나 오픈채팅으로 문의해주세요.
     </div>
   );
 }
@@ -143,6 +121,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-6 space-y-12 pb-16">
+        <ModeNotice />
         <div className="rounded-3xl bg-gradient-to-br from-sage via-[#345045] to-sage-light text-white p-7 sm:p-10 shadow-[0_10px_40px_rgba(58,82,72,0.22)]">
           <p className="text-sm font-medium text-white/65">{HERO.eyebrow}</p>
           <h1 className="text-3xl sm:text-5xl font-bold mt-3 leading-tight whitespace-pre-line">{HERO.title}</h1>
@@ -248,7 +227,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
           </div>
         </Section>
 
-        <Section id="how" title="이용 방식" subtitle="가입부터 예약까지 이렇게 진행돼요.">
+        <Section id="how" title="이용 방식" subtitle="가입 → 토큰 충전 → 예약, 이 순서예요.">
           <ol className="space-y-3">
             {STEPS.map((step, i) => (
               <li key={step.title} className="flex gap-3">
@@ -263,17 +242,13 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
             ))}
           </ol>
           <div className="grid gap-3 sm:grid-cols-2 mt-6">
-            {BOOKING_TYPES.map((type) => (
-              <div key={type.title} className="card p-5">
-                <p className="font-semibold text-ink">{type.title}</p>
-                <p className="text-sm text-ink-muted mt-1.5 leading-relaxed">{type.body}</p>
+            {TOKEN_RULES.map((rule) => (
+              <div key={rule.title} className="card p-5">
+                <p className="font-semibold text-ink">{rule.title}</p>
+                <p className="text-sm text-ink-muted mt-1.5 leading-relaxed">{rule.body}</p>
               </div>
             ))}
           </div>
-        </Section>
-
-        <Section id="plans" title="요금제" subtitle="신청을 확인한 뒤 연락드려 요금을 안내해요.">
-          <PlansSection />
         </Section>
 
         <Section id="faq" title="자주 묻는 질문">
@@ -292,7 +267,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
 
         <div className="rounded-3xl bg-white border border-line/80 p-7 text-center">
           <p className="text-lg font-bold text-ink">지금 시작해보세요</p>
-          <p className="text-sm text-ink-muted mt-1.5">가입 후 요금제를 신청하면 관리자가 확인하고 연락드려요.</p>
+          <p className="text-sm text-ink-muted mt-1.5">가입하고 토큰을 충전하면 바로 예약할 수 있어요.</p>
           <div className="flex flex-wrap justify-center gap-2 mt-5">
             {authed ? (
               <Link to="/" className="btn-primary !w-auto">내 예약으로</Link>
