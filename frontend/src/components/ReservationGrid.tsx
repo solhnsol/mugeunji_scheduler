@@ -151,7 +151,7 @@ export function ReservationGrid({
       </div>
 
       <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
-        <table className={`schedule-grid-table text-center text-[11px] sm:text-xs ${canInteract ? 'select-none' : ''}`}>
+        <table className={`schedule-grid-table text-center text-2xs sm:text-xs ${canInteract ? 'select-none' : ''}`}>
           <thead>
             <tr>
               <th className="schedule-grid-th-corner p-2 w-11 font-medium text-ink-faint">시</th>

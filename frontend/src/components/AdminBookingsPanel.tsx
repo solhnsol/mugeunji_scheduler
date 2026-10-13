@@ -210,7 +210,7 @@ export function AdminBookingsPanel({
             {busy ? '등록 중…' : selected.size > 0 ? `${selected.size}시간 등록` : '등록'}
           </button>
         </div>
-        <p className="text-[11px] text-ink-faint truncate">토큰이 차감되지 않고, 예약 가능 범위·새벽 권한도 따지지 않아요.</p>
+        <p className="text-2xs text-ink-faint truncate">토큰이 차감되지 않고, 예약 가능 범위·새벽 권한도 따지지 않아요.</p>
       </div>
 
       {cancelTarget && (

@@ -177,7 +177,7 @@ export function AdminNoticesTab({ token, show }: { token: string; show: (m: stri
             </button>
           </div>
         )}
-        <pre className="text-[11px] leading-relaxed bg-cream-dark/60 rounded-2xl p-3 overflow-x-auto whitespace-pre-wrap break-all">{sample}</pre>
+        <pre className="text-2xs leading-relaxed bg-cream-dark/60 rounded-2xl p-3 overflow-x-auto whitespace-pre-wrap break-all">{sample}</pre>
       </section>
 
       {editing && (

@@ -133,7 +133,7 @@ export function AdminFreeReservationGrid({
       </div>
 
       <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
-        <table className="schedule-grid-table text-center text-[11px] sm:text-xs">
+        <table className="schedule-grid-table text-center text-2xs sm:text-xs">
           <thead>
             <tr>
               <th className="schedule-grid-th-corner p-2 w-11 text-ink-faint">시</th>

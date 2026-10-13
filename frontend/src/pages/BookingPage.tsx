@@ -393,17 +393,17 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
       ) : (
         <div className="flex flex-col flex-1 min-h-0 gap-2">
           {view === 'month' && config.is_admin && (
-            <p className="shrink-0 text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 leading-snug">
+            <p className="shrink-0 text-2xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 leading-snug">
               관리자 미리보기 · 토큰이 차감되지 않고 아직 열리지 않은 날짜도 볼 수 있어요.
             </p>
           )}
           {view === 'month' && config.mode === 'beta' && (
-            <p className="shrink-0 text-[11px] text-sage bg-sage-muted/40 border border-sage/20 rounded-xl px-3 py-1.5 leading-snug">
+            <p className="shrink-0 text-2xs text-sage bg-sage-muted/40 border border-sage/20 rounded-xl px-3 py-1.5 leading-snug">
               토큰 예약 베타 · 줄무늬는 월 신청 시간이라 여기서 바꿀 수 없어요. 불편한 점은 단톡방으로 알려주세요.
             </p>
           )}
           {!connected && (
-            <p className="shrink-0 text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 leading-snug" role="status">
+            <p className="shrink-0 text-2xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 leading-snug" role="status">
               실시간 연결이 끊겼어요. 다시 연결 중이에요 · 다른 분의 예약이 늦게 보일 수 있어요.
             </p>
           )}
@@ -525,7 +525,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                             active ? 'bg-sage text-white border-sage' : 'bg-surface border-line/70 text-ink-muted'
                           } ${d.date < today ? 'opacity-50' : ''}`}
                         >
-                          <span className="block text-[10px] leading-tight">{WEEKDAYS_KO[jd.getDay()]}</span>
+                          <span className="block text-2xs leading-tight">{WEEKDAYS_KO[jd.getDay()]}</span>
                           <span className="block text-sm font-semibold tabular-nums leading-tight">{jd.getDate()}</span>
                         </button>
                       );

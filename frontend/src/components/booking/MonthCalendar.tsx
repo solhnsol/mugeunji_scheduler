@@ -38,7 +38,7 @@ export function MonthCalendar({
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-ink-faint mb-1">
+      <div className="grid grid-cols-7 gap-1 text-center text-2xs text-ink-faint mb-1">
         {WEEKDAYS_KO.map((w, i) => (
           <span key={w} className={i === 0 ? 'text-danger-ink/70' : i === 6 ? 'text-slot-pick' : ''}>
             {w}
@@ -95,13 +95,13 @@ export function MonthCalendar({
                 </span>
                 <span className="flex flex-col gap-0.5 min-w-0">
                   {mineChips.slice(0, 2).map((chip) => (
-                    <span key={chip} className="rounded bg-sage text-white text-[10px] leading-4 px-1 truncate tabular-nums text-left">
+                    <span key={chip} className="rounded bg-sage text-white text-2xs leading-4 px-1 truncate tabular-nums text-left">
                       {chip}
                     </span>
                   ))}
-                  {mineChips.length > 2 && <span className="text-[10px] leading-none text-sage text-left">+{mineChips.length - 2}</span>}
+                  {mineChips.length > 2 && <span className="text-2xs leading-none text-sage text-left">+{mineChips.length - 2}</span>}
                   {othersBooked > 0 && (
-                    <span className="text-[10px] leading-none text-ink-faint text-left tabular-nums">예약 {othersBooked}h</span>
+                    <span className="text-2xs leading-none text-ink-faint text-left tabular-nums">예약 {othersBooked}h</span>
                   )}
                 </span>
               </button>
@@ -110,7 +110,7 @@ export function MonthCalendar({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] text-ink-muted">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-2xs text-ink-muted">
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage-muted inline-block" />빈 시간</span>
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-slot-taken-bar inline-block" />예약됨</span>
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage inline-block" />내 예약</span>

@@ -67,7 +67,7 @@ export function MemberPicker({
           <option key={m.username} value={labelOf(m)} />
         ))}
       </datalist>
-      {text.trim() !== '' && !value && <p className="text-[11px] text-ink-faint mt-1">목록에서 한 명을 골라주세요</p>}
+      {text.trim() !== '' && !value && <p className="text-2xs text-ink-faint mt-1">목록에서 한 명을 골라주세요</p>}
     </div>
   );
 }

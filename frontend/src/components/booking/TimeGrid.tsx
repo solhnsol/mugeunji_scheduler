@@ -305,7 +305,7 @@ export function TimeGrid({
                   className={`py-1.5 text-center border-l border-line/50 ${onOpenDay ? 'hover:bg-sage-muted/40' : ''}`}
                   title={onOpenDay ? '이 날 자세히 보기' : undefined}
                 >
-                  <span className={`block text-[10px] ${jd.getDay() === 0 ? 'text-danger-ink/80' : jd.getDay() === 6 ? 'text-slot-pick' : 'text-ink-faint'}`}>
+                  <span className={`block text-2xs ${jd.getDay() === 0 ? 'text-danger-ink/80' : jd.getDay() === 6 ? 'text-slot-pick' : 'text-ink-faint'}`}>
                     {WEEKDAYS_KO[jd.getDay()]}
                   </span>
                   <span
@@ -329,14 +329,14 @@ export function TimeGrid({
               const bandStart = band && band.start === hour;
               return (
                 <div key={hour} className="relative border-b border-line/40 pr-1 text-right" style={{ height: H }}>
-                  <span className="text-[10px] leading-none text-ink-faint tabular-nums relative -top-[1px]">
+                  <span className="text-2xs leading-none text-ink-faint tabular-nums relative -top-[1px]">
                     {String(hour).padStart(2, '0')}
                   </span>
                   {bandStart &&
                     (single ? (
                       <button
                         type="button"
-                        className="absolute right-0.5 bottom-0.5 z-[1] rounded-full bg-sage-muted px-1.5 py-1 text-[10px] leading-none text-sage font-medium tabular-nums hover:bg-sage-muted/70 active:scale-95 transition"
+                        className="absolute right-0.5 bottom-0.5 z-[1] rounded-full bg-sage-muted px-1.5 py-1 text-2xs leading-none text-sage font-medium tabular-nums hover:bg-sage-muted/70 active:scale-95 transition"
                         title={`${String(band.start).padStart(2, '0')}~${String(band.end).padStart(2, '0')}시 전체 선택`}
                         aria-label={`${band.start}시부터 ${band.end}시까지 전체 선택 또는 해제`}
                         onClick={() => selectBand(band)}
@@ -344,7 +344,7 @@ export function TimeGrid({
                         {band.cost}t
                       </button>
                     ) : (
-                      <span className="absolute right-1 bottom-0.5 text-[9px] leading-none text-sage font-medium tabular-nums">
+                      <span className="absolute right-1 bottom-0.5 text-2xs leading-none text-sage font-medium tabular-nums">
                         {band.cost}t
                       </span>
                     ))}
@@ -395,7 +395,7 @@ export function TimeGrid({
                       }}
                     >
                       {free && (single || isSelected) && (
-                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[11px] tabular-nums ${isSelected ? 'text-white' : 'text-ink-faint'}`}>
+                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-2xs tabular-nums ${isSelected ? 'text-white' : 'text-ink-faint'}`}>
                           {isSelected ? `선택 · ${slot.cost}토큰` : `${slot.cost}토큰`}
                         </span>
                       )}
@@ -451,11 +451,11 @@ export function TimeGrid({
                       }}
                     >
                       <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight`}>
-                        <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-[10px]'}`}>
+                        <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-2xs'}`}>
                           {b.legacy ? (single ? `월 신청 · ${b.name}` : b.name || '월 신청') : mine ? (single ? '내 예약' : b.name || '내 예약') : b.name || '예약됨'}
                         </p>
                         {(single || tall >= 2) && (
-                          <p className={`opacity-80 tabular-nums ${single ? 'text-xs' : 'text-[10px]'}`}>
+                          <p className={`opacity-80 tabular-nums ${single ? 'text-xs' : 'text-2xs'}`}>
                             {String(b.start).padStart(2, '0')}:00~{String(b.end).padStart(2, '0')}:00
                             {mine && !b.legacy && single ? ` · ${b.paid.reduce<number>((s, v) => s + (v ?? 0), 0)}토큰` : ''}
                           </p>
@@ -466,7 +466,7 @@ export function TimeGrid({
                         id != null && cancelSelected.has(id) ? (
                           <div
                             key={id}
-                            className="absolute inset-x-0 bg-danger text-white flex items-center justify-center text-[11px] font-medium"
+                            className="absolute inset-x-0 bg-danger text-white flex items-center justify-center text-2xs font-medium"
                             style={{ top: i * H, height: H }}
                           >
                             취소
@@ -489,7 +489,7 @@ export function TimeGrid({
         </div>
       </div>
       {legend !== false && (
-        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 border-t border-line/60 text-[10px] text-ink-muted">
+        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 border-t border-line/60 text-2xs text-ink-muted">
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage inline-block" />내 예약</span>
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-slot-taken inline-block" />예약됨</span>
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block bg-slot-legacy" style={{ backgroundImage: STRIPES }} />월 신청</span>

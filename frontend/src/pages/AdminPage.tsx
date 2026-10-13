@@ -224,7 +224,7 @@ function AdminDashboard({
             {t.label}
             {t.id === 'tokens' && pendingTokens > 0 && tab !== 'tokens' && (
               <span
-                className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-danger text-white text-[11px] font-semibold tabular-nums align-middle"
+                className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-danger text-white text-2xs font-semibold tabular-nums align-middle"
                 aria-label={`확인 대기 ${pendingTokens}건`}
               >
                 {pendingTokens}
