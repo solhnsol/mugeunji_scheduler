@@ -618,10 +618,15 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                     )}
                   </>
                 ) : (
-                  <>
-                    필요 토큰 <b className="text-ink">{total}</b>
-                    {balance !== null && <> · 보유 {formatTokens(balance)} → 예약 후 {formatTokens(Math.max(balance - total, 0))}</>}
-                  </>
+                  <span className="inline-flex items-center gap-3 whitespace-nowrap">
+                    <span>필요 <b className="text-ink">{total}</b></span>
+                    {balance !== null && (
+                      <>
+                        <span>보유 {formatTokens(balance)}</span>
+                        <span>예약 후 <b className="text-ink">{formatTokens(Math.max(balance - total, 0))}</b></span>
+                      </>
+                    )}
+                  </span>
                 )
               ) : barMode === 'cancel' ? (
                 refundPreview.blocked ? (
