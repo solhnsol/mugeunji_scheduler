@@ -375,16 +375,17 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
       title="예약"
       fillMain
       actions={
-        <div className="flex items-center gap-1">
-          {config && config.balance !== null && (
-            <Link to="/tokens" className="btn-ghost !min-h-[40px] tabular-nums" aria-label="토큰 충전">
-              토큰 <b className="ml-1 text-ink">{formatTokens(config.balance)}</b>
-            </Link>
-          )}
-          <Link to="/" className="btn-ghost !min-h-[40px]">
-            홈
+        config && config.balance !== null ? (
+          <Link
+            to="/tokens"
+            className="inline-flex items-center gap-1.5 rounded-full bg-sage-muted px-3 min-h-[40px] text-sm text-sage tabular-nums hover:bg-sage-muted/70 transition-colors"
+            aria-label={`토큰 ${formatTokens(config.balance)}개, 충전하기`}
+          >
+            <span aria-hidden>🪙</span>
+            <b className="text-ink">{formatTokens(config.balance)}</b>
+            <span className="text-2xs">충전</span>
           </Link>
-        </div>
+        ) : undefined
       }
     >
       {error ? (

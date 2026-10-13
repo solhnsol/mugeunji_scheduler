@@ -203,6 +203,7 @@ function AdminDashboard({
   return (
     <AppShell
       title="관리자"
+      homeTo={null}
       badge={<span className="text-xs text-ink-muted">{adminUser}</span>}
       actions={
         <>

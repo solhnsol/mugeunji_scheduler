@@ -120,6 +120,7 @@ export function AppShell({
   children,
   actions,
   fillMain = false,
+  homeTo = '/',
 }: {
   title: string;
   badge?: ReactNode;
@@ -127,21 +128,32 @@ export function AppShell({
   children: ReactNode;
   actions?: ReactNode;
   fillMain?: boolean;
+  /** 로고·제목을 눌렀을 때 이동할 곳. null이면 링크 없이 표시만 한다 */
+  homeTo?: string | null;
 }) {
+  const brand = (
+    <>
+      <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-sage flex items-center justify-center text-white text-sm font-bold">
+        묵
+      </div>
+      <div className="min-w-0">
+        <h1 className="text-sm sm:text-base font-semibold text-ink truncate leading-tight">{title}</h1>
+        {badge && <div className="mt-1 hidden sm:block">{badge}</div>}
+      </div>
+    </>
+  );
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
       <header className="z-20 bg-cream border-b border-line/60 shrink-0 pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-3xl px-4 pt-3 pb-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-sage flex items-center justify-center text-white text-sm font-bold">
-                묵
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-sm sm:text-base font-semibold text-ink truncate leading-tight">{title}</h1>
-                {badge && <div className="mt-1 hidden sm:block">{badge}</div>}
-              </div>
-            </div>
+            {homeTo ? (
+              <Link to={homeTo} className="flex items-center gap-2.5 min-w-0 flex-1" aria-label="홈으로">
+                {brand}
+              </Link>
+            ) : (
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">{brand}</div>
+            )}
             {actions && <div className="shrink-0 flex items-center">{actions}</div>}
           </div>
           {nav}
