@@ -10,6 +10,7 @@ import { useSwipe } from '../hooks/useSwipe';
 import { useToast } from '../hooks/useToast';
 import { BookingConfig, CalendarDay, GridDay, MyBooking } from '../types';
 import { formatTokens, kstParts } from '../utils';
+import { downloadBookingIcs } from '../utils/ics';
 import {
   WEEKDAYS_KO,
   addDays,
@@ -352,6 +353,12 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     onLeft: () => selectedDate && setSelectedDate(addDays(selectedDate, detailStep)),
     onRight: () => selectedDate && setSelectedDate(addDays(selectedDate, -detailStep)),
   });
+  /** 오늘 기준 남은 날짜 표기: 오늘 / 내일 / D-n */
+  const dayLabel = (date: string) => {
+    if (!today) return '';
+    const diff = Math.round((dateFromISO(date).getTime() - dateFromISO(today).getTime()) / 86_400_000);
+    return diff <= 0 ? '오늘' : diff === 1 ? '내일' : `D-${diff}`;
+  };
   const todayMonth = today ? monthOf(today) : null;
   const barMode: 'book' | 'cancel' | 'idle' = selected.size > 0 ? 'book' : cancelSel.size > 0 ? 'cancel' : 'idle';
   const currentDay = selectedDate && week ? week.days.find((d) => d.date === selectedDate) : undefined;
@@ -444,17 +451,29 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                 ) : (
                   <ul className="card divide-y divide-line/60 mt-2">
                     {mineByDate.map(([date, hours]) => (
-                      <li key={date}>
+                      <li key={date} className="flex items-center">
                         <button
                           type="button"
-                          className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-cream-dark/40"
+                          className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-cream-dark/40"
                           onClick={() => {
                             setMonth(monthOf(date));
                             openDay(date);
                           }}
                         >
-                          <span className="text-sm font-medium text-ink">{formatDateKo(date)}</span>
-                          <span className="text-sm text-ink-muted tabular-nums">{summarizeHours(hours)}</span>
+                          <span className="text-sm font-medium text-ink truncate">
+                            {formatDateKo(date)}
+                            <span className="ml-2 text-2xs font-normal text-sage tabular-nums">{dayLabel(date)}</span>
+                          </span>
+                          <span className="text-sm text-ink-muted tabular-nums shrink-0">{summarizeHours(hours)}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-ghost !min-h-[44px] !px-3 text-xs shrink-0"
+                          aria-label={`${formatDateKo(date)} 예약을 캘린더에 추가`}
+                          title="캘린더에 추가 (.ics)"
+                          onClick={() => downloadBookingIcs(date, hours)}
+                        >
+                          📅
                         </button>
                       </li>
                     ))}
