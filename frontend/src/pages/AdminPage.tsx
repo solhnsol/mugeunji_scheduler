@@ -1,10 +1,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { SESSION } from '../api';
 import { AppShell, Toast } from '../components/ui';
 import { useConfirm } from '../components/ConfirmDialog';
-import { TempPasswordDialog } from '../components/TempPasswordDialog';
 import { useToast } from '../hooks/useToast';
 import { useSession } from '../hooks/useSession';
 import { AdminReservationGrid } from '../components/AdminReservationGrid';
@@ -18,8 +17,10 @@ import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { Plan, Reservation, UserInfo } from '../types';
-import { formatPhone } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
+import { MemberPicker } from '../components/MemberPicker';
+import { AdminUsersTab } from '../components/AdminUsersTab';
+import { EditAdminModal, EditUserModal, PlanPriceRow } from '../components/AdminUserModals';
 
 const TABS = [
   { id: 'roster' as const, label: '정산' },
@@ -103,8 +104,23 @@ function AdminDashboard({
   toast: { message: string; type: 'success' | 'error' | '' };
 }) {
   const { confirm, dialog: confirmDialog } = useConfirm();
-  const [tab, setTab] = useState<'roster' | 'tokens' | 'schedule' | 'free' | 'notices' | 'automation' | 'users'>('roster');
+  // 보고 있는 탭은 주소(?tab=)에 둬서 새로고침해도 같은 탭에 머문다
+  const [params, setParams] = useSearchParams();
+  const tabParam = params.get('tab');
+  const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'roster';
+  const setTab = (id: (typeof TABS)[number]['id']) => setParams({ tab: id }, { replace: true });
   const [reloadKey, setReloadKey] = useState(0);
+  // 확인 대기 중인 토큰 충전 요청 수: 다른 탭을 보고 있어도 토큰 탭에 배지로 알린다
+  const [pendingTokens, setPendingTokens] = useState(0);
+  const loadPending = useCallback(async () => {
+    const list = await api.adminListTokenPurchases(token, 'pending');
+    setPendingTokens(list.length);
+  }, [token]);
+  useEffect(() => {
+    loadPending().catch(() => undefined);
+    const id = window.setInterval(() => loadPending().catch(() => undefined), 60_000);
+    return () => window.clearInterval(id);
+  }, [loadPending, tab]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [admins, setAdmins] = useState<UserInfo[]>([]);
@@ -187,6 +203,7 @@ function AdminDashboard({
   return (
     <AppShell
       title="관리자"
+      homeTo={null}
       badge={<span className="text-xs text-ink-muted">{adminUser}</span>}
       actions={
         <>
@@ -206,6 +223,14 @@ function AdminDashboard({
             onClick={() => setTab(t.id)}
           >
             {t.label}
+            {t.id === 'tokens' && pendingTokens > 0 && tab !== 'tokens' && (
+              <span
+                className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-danger text-white text-2xs font-semibold tabular-nums align-middle"
+                aria-label={`확인 대기 ${pendingTokens}건`}
+              >
+                {pendingTokens}
+              </span>
+            )}
           </button>
         ))}
         </div>
@@ -266,24 +291,15 @@ function AdminDashboard({
         <div className="space-y-3">
           <div className="card p-4 space-y-3">
             <label className="label" htmlFor="target-username">강제 신청 대상</label>
-            <select
+            <MemberPicker
               id="target-username"
-              className="input"
+              members={[
+                ...admins.map((u) => ({ username: u.username, name: u.name, prefix: '[관리자] ', suffix: ` · 월 ${u.allowed_hours}h` })),
+                ...users.map((u) => ({ username: u.username, name: u.name, suffix: ` · 월 ${u.allowed_hours}h` })),
+              ]}
               value={targetUser}
-              onChange={(e) => setTargetUser(e.target.value)}
-            >
-              <option value="">회원 선택</option>
-              {admins.map((u) => (
-                <option key={u.username} value={u.username}>
-                  [관리자] {u.name || u.username} (@{u.username}) · 월 {u.allowed_hours}h
-                </option>
-              ))}
-              {users.map((u) => (
-                <option key={u.username} value={u.username}>
-                  {u.name || u.username} (@{u.username}) · 월 {u.allowed_hours}h
-                </option>
-              ))}
-            </select>
+              onChange={setTargetUser}
+            />
             {targetUser && (() => {
               const selected = [...admins, ...users].find((u) => u.username === targetUser);
               if (!selected) return null;
@@ -398,20 +414,13 @@ function AdminDashboard({
 
           <div className="card p-4 space-y-3">
             <label className="label" htmlFor="free-target-username">강제 신청 대상</label>
-            <select
+            <MemberPicker
               id="free-target-username"
-              className="input"
+              placeholder="자유이용 / 관리자 검색"
+              members={freeTargetUsers.map((u) => ({ username: u.username, name: u.name, prefix: u.role === 'admin' ? '[관리자] ' : '' }))}
               value={freeTargetUser}
-              onChange={(e) => setFreeTargetUser(e.target.value)}
-            >
-              <option value="">자유이용 / 관리자 선택</option>
-              {freeTargetUsers.map((u) => (
-                <option key={u.username} value={u.username}>
-                  {u.role === 'admin' ? '[관리자] ' : ''}
-                  {u.name || u.username} (@{u.username})
-                </option>
-              ))}
-            </select>
+              onChange={setFreeTargetUser}
+            />
           </div>
 
           {freeSchedule ? (
@@ -504,78 +513,7 @@ function AdminDashboard({
         />
       )}
 
-      {tab === 'users' && (
-        <div className="space-y-5">
-          <section className="card p-5 overflow-x-auto">
-            <h2 className="font-semibold text-ink mb-4">관리자</h2>
-            <table className="w-full text-sm min-w-[480px]">
-              <thead>
-                <tr className="text-left text-ink-faint border-b border-line text-xs">
-                  <th className="py-2 font-medium">이름</th>
-                  <th className="font-medium">아이디</th>
-                  <th className="font-medium">월 예약</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {admins.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-6 text-center text-ink-faint">관리자 계정 없음</td>
-                  </tr>
-                ) : admins.map((u) => (
-                  <tr key={u.username} className="border-b border-line/50">
-                    <td className="py-3 font-medium">{u.name || '-'}</td>
-                    <td className="text-ink-muted">{u.username}</td>
-                    <td>{u.allowed_hours ? `${u.allowed_hours}h` : '-'}</td>
-                    <td>
-                      <button type="button" className="text-sage text-xs font-medium min-h-[32px] px-2" onClick={() => setEditUser(u)}>
-                        시간 변경
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-
-          <section className="card p-5 overflow-x-auto">
-            <h2 className="font-semibold text-ink mb-4">회원</h2>
-            <table className="w-full text-sm min-w-[560px]">
-            <thead>
-              <tr className="text-left text-ink-faint border-b border-line text-xs">
-                <th className="py-2 font-medium">이름</th>
-                <th className="font-medium">연락처</th>
-                <th className="font-medium">아이디</th>
-                <th className="font-medium">월 예약</th>
-                <th className="font-medium">자유</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.username} className="border-b border-line/50">
-                  <td className="py-3 font-medium">{u.name || '-'}</td>
-                  <td className="text-ink-muted">{u.phone ? formatPhone(u.phone) : '-'}</td>
-                  <td className="text-ink-muted">{u.username}</td>
-                  <td>
-                    {u.allowed_hours ? `${u.allowed_hours}h` : u.subscription_status ? '자유전용' : '-'}
-                    {u.custom_allowed_hours != null && (
-                      <span className="text-xs text-amber-700 ml-1">개별</span>
-                    )}
-                  </td>
-                  <td>{u.free_access || u.role === 'free' ? '○' : '-'}</td>
-                  <td>
-                    <button type="button" className="text-sage text-xs font-medium min-h-[32px] px-2" onClick={() => setEditUser(u)}>
-                      수정
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </section>
-        </div>
-      )}
+      {tab === 'users' && <AdminUsersTab admins={admins} users={users} onEdit={setEditUser} />}
 
       {editUser && editUser.role === 'admin' ? (
         <EditAdminModal
@@ -601,389 +539,5 @@ function AdminDashboard({
       {confirmDialog}
       <Toast message={toast.message} type={toast.type} />
     </AppShell>
-  );
-}
-
-function PlanPriceRow({ plan, onSave }: { plan: Plan; onSave: (id: number, price: number) => void }) {
-  const [price, setPrice] = useState(plan.monthly_price);
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="w-20 text-sm font-medium text-ink-muted">{plan.name}</span>
-      <input
-        type="number"
-        className="input max-w-[120px] !py-2"
-        value={price}
-        min={0}
-        onChange={(e) => setPrice(Number(e.target.value))}
-      />
-      <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm" onClick={() => onSave(plan.id, price)}>
-        저장
-      </button>
-    </div>
-  );
-}
-
-function EditAdminModal({
-  user,
-  plans,
-  token,
-  onClose,
-  onSaved,
-  onError,
-}: {
-  user: UserInfo;
-  plans: Plan[];
-  token: string;
-  onClose: () => void;
-  onSaved: () => void;
-  onError: (m: string) => void;
-}) {
-  const presetHours = [...new Set(plans.map((p) => p.allowed_hours))].sort((a, b) => a - b);
-  const [allowedHours, setAllowedHours] = useState(user.allowed_hours || presetHours[0] || 4);
-  const [customInput, setCustomInput] = useState('');
-  const useCustom = !presetHours.includes(allowedHours);
-
-  const save = async () => {
-    const hours = customInput !== '' ? Number(customInput) : allowedHours;
-    if (!Number.isInteger(hours) || hours < 1 || hours > 24) {
-      onError('월 예약 시간은 1~24시간 사이 정수여야 합니다.');
-      return;
-    }
-    try {
-      await api.updateAdminHours(token, user.username, hours);
-      onSaved();
-    } catch (e) {
-      onError(e instanceof ApiError ? e.message : '저장 실패');
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h3 className="font-semibold text-lg text-ink">{user.name || user.username}</h3>
-        <p className="text-xs text-ink-faint mb-1">@{user.username}</p>
-        <p className="text-xs text-sage mb-5">관리자 · 월 예약 시간</p>
-        <div className="space-y-4">
-          <div>
-            <label className="label">월 예약 시간</label>
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              {presetHours.map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${
-                    !useCustom && allowedHours === h
-                      ? 'bg-sage text-white border-sage'
-                      : 'bg-white text-ink-muted border-line hover:border-sage/30'
-                  }`}
-                  onClick={() => { setAllowedHours(h); setCustomInput(''); }}
-                >
-                  {h}h
-                </button>
-              ))}
-            </div>
-            <label className="label" htmlFor="admin-custom-hours">직접 입력 (1~24)</label>
-            <input
-              id="admin-custom-hours"
-              className="input"
-              type="number"
-              min={1}
-              max={24}
-              placeholder={`현재 ${user.allowed_hours}h`}
-              value={customInput}
-              onChange={(e) => setCustomInput(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="flex gap-2 mt-6">
-          <button type="button" className="btn-primary flex-1" onClick={save}>저장</button>
-          <button type="button" className="btn-secondary flex-1" onClick={onClose}>취소</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EditUserModal({
-  user,
-  plans,
-  token,
-  onClose,
-  onSaved,
-  onDeleted,
-  onError,
-}: {
-  user: UserInfo;
-  plans: Plan[];
-  token: string;
-  onClose: () => void;
-  onSaved: () => void;
-  onDeleted: (message: string) => void;
-  onError: (m: string) => void;
-}) {
-  const { confirm, dialog: confirmDialog } = useConfirm();
-  const [name, setName] = useState(user.name ?? '');
-  const [phone, setPhone] = useState(user.phone ? formatPhone(user.phone) : '');
-  const [tempPassword, setTempPassword] = useState<string | null>(null);
-  const [accountBusy, setAccountBusy] = useState(false);
-
-  const hourOptions = [0, ...new Set(plans.map((p) => p.allowed_hours))].sort((a, b) => a - b);
-  const fallbackHours = hourOptions.find((h) => h > 0) ?? 4;
-
-  const initialPlanId = user.plan_id ?? plans.find((p) => p.allowed_hours === user.plan_allowed_hours)?.id ?? plans[0]?.id;
-  const usesCustomHours = user.custom_allowed_hours != null;
-
-  const [planId, setPlanId] = useState<number | undefined>(initialPlanId);
-  const [useCustomHours, setUseCustomHours] = useState(usesCustomHours);
-  const [allowedHours, setAllowedHours] = useState<number>(
-    usesCustomHours ? (user.custom_allowed_hours ?? user.allowed_hours) : (user.allowed_hours || fallbackHours),
-  );
-  const [freeAccess, setFreeAccess] = useState(user.free_access ?? user.role === 'free');
-  const [customFee, setCustomFee] = useState(
-    user.custom_monthly_fee != null ? String(user.custom_monthly_fee) : '',
-  );
-  const [useCustomFee, setUseCustomFee] = useState(user.custom_monthly_fee != null);
-
-  const selectedPlan = plans.find((p) => p.id === planId);
-
-  const resetPassword = async () => {
-    const ok = await confirm({
-      title: `${user.name || user.username}님의 비밀번호를 초기화할까요?`,
-      message:
-        '임시 비밀번호가 발급되고 기존 비밀번호는 바로 사용할 수 없게 돼요. 로그인 중인 기기도 로그아웃돼요. 회원이 임시 비밀번호로 로그인하면 새 비밀번호를 정하게 돼요.',
-      confirmLabel: '초기화',
-      danger: true,
-    });
-    if (!ok || accountBusy) return;
-    setAccountBusy(true);
-    try {
-      const res = await api.resetUserPassword(token, user.username);
-      setTempPassword(res.temp_password);
-    } catch (e) {
-      onError(e instanceof ApiError ? e.message : '초기화 실패');
-    } finally {
-      setAccountBusy(false);
-    }
-  };
-
-  const removeUser = async () => {
-    if (accountBusy) return;
-    setAccountBusy(true);
-    try {
-      const pv = await api.getUserDeletePreview(token, user.username);
-      const parts = [
-        `예약 ${pv.reservations}건`,
-        `청구 ${pv.billing}건${pv.billing_paid ? ` (입금 완료 ${pv.billing_paid}건 포함)` : ''}`,
-      ];
-      const ok = await confirm({
-        title: `${user.name || user.username}님을 삭제할까요?`,
-        message: `계정과 함께 ${parts.join(', ')}과(와) 요금제 기록이 모두 삭제되고 되돌릴 수 없어요.${
-          pv.billing_paid ? '\n이미 입금 확인된 청구도 사라져 정산 합계에서 빠져요.' : ''
-        }`,
-        confirmLabel: '삭제',
-        danger: true,
-      });
-      if (!ok) return;
-      const res = await api.deleteUser(token, user.username);
-      onDeleted(res.message);
-    } catch (e) {
-      onError(e instanceof ApiError ? e.message : '삭제 실패');
-    } finally {
-      setAccountBusy(false);
-    }
-  };
-
-  const save = async () => {
-    try {
-      if (useCustomFee && (customFee === '' || Number(customFee) < 0)) {
-        onError('커스텀 월 비용을 0원 이상으로 입력해주세요.');
-        return;
-      }
-      const profileBody: { name?: string; phone?: string } = {};
-      if (name.trim() !== (user.name ?? '')) profileBody.name = name.trim();
-      if (phone.replace(/\D/g, '') !== (user.phone ?? '').replace(/\D/g, '')) {
-        profileBody.phone = phone.replace(/\D/g, '');
-      }
-      if (Object.keys(profileBody).length) {
-        await api.updateUserProfile(token, user.username, profileBody);
-      }
-      const freeOnly = useCustomHours && allowedHours === 0;
-      const body: Record<string, unknown> = {
-        free_access: freeOnly ? true : freeAccess,
-        clear_custom_fee: !useCustomFee,
-        ...(useCustomFee && customFee !== '' ? { custom_monthly_fee: Number(customFee) } : {}),
-      };
-      if (planId) body.plan_id = planId;
-      if (useCustomHours) {
-        body.allowed_hours = allowedHours;
-        body.clear_custom_hours = false;
-      } else {
-        body.clear_custom_hours = true;
-      }
-      await api.updateUser(token, user.username, body);
-      onSaved();
-    } catch (e) {
-      onError(e instanceof ApiError ? e.message : '저장 실패');
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h3 className="font-semibold text-lg text-ink">{user.name || user.username}</h3>
-        <p className="text-xs text-ink-faint mb-5">@{user.username}</p>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label" htmlFor="edit-name">이름</label>
-              <input id="edit-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div>
-              <label className="label" htmlFor="edit-phone">전화번호</label>
-              <input
-                id="edit-phone"
-                className="input"
-                inputMode="tel"
-                value={phone}
-                onChange={(e) => setPhone(formatPhone(e.target.value))}
-                placeholder="010-1234-5678"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="label" htmlFor="edit-plan">요금제</label>
-            <select
-              id="edit-plan"
-              className="input"
-              value={planId ?? ''}
-              onChange={(e) => {
-                const nextId = Number(e.target.value);
-                setPlanId(nextId);
-                const plan = plans.find((p) => p.id === nextId);
-                if (plan && !useCustomHours) setAllowedHours(plan.allowed_hours);
-              }}
-            >
-              {plans.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} (월 {p.allowed_hours}h · {p.monthly_price.toLocaleString('ko-KR')}원)
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="flex items-center gap-2 mb-3 text-sm">
-              <input
-                type="checkbox"
-                checked={useCustomHours}
-                onChange={(e) => {
-                  setUseCustomHours(e.target.checked);
-                  if (!e.target.checked && selectedPlan) setAllowedHours(selectedPlan.allowed_hours);
-                }}
-              />
-              <span className="font-medium">월 예약 시간 개별 설정</span>
-            </label>
-            {useCustomHours ? (
-              <>
-              <div className="grid grid-cols-4 gap-2">
-                {hourOptions.map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${
-                      allowedHours === h
-                        ? 'bg-sage text-white border-sage'
-                        : 'bg-white text-ink-muted border-line hover:border-sage/30'
-                    }`}
-                    onClick={() => setAllowedHours(h)}
-                  >
-                    {h === 0 ? '없음' : `${h}h`}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs text-ink-faint">직접 입력</span>
-                <input
-                  className="input !py-2 max-w-[88px]"
-                  type="number"
-                  min={0}
-                  max={24}
-                  value={allowedHours}
-                  onChange={(e) => setAllowedHours(Math.max(0, Math.min(24, Number(e.target.value) || 0)))}
-                />
-                <span className="text-xs text-ink-faint">시간/주</span>
-              </div>
-              {allowedHours === 0 && (
-                <p className="text-xs text-amber-800 mt-2">
-                  월 예약 없이 자유이용만 사용하는 계정이에요. 자유이용 권한이 자동으로 켜집니다.
-                </p>
-              )}
-              </>
-            ) : (
-              <p className="text-sm text-ink-muted rounded-2xl border border-line px-4 py-3">
-                요금제 기본 · 주 {selectedPlan?.allowed_hours ?? user.allowed_hours}시간
-              </p>
-            )}
-          </div>
-          <label className="flex items-center gap-3 rounded-2xl border border-line p-4 cursor-pointer">
-            <input
-              type="checkbox"
-              className="w-5 h-5 accent-sage"
-              checked={freeAccess}
-              onChange={(e) => setFreeAccess(e.target.checked)}
-            />
-            <span className="font-medium text-sm">자유이용</span>
-          </label>
-          <div>
-            <label className="flex items-center gap-2 mb-2 text-sm">
-              <input type="checkbox" checked={useCustomFee} onChange={(e) => setUseCustomFee(e.target.checked)} />
-              <span className="font-medium">커스텀 월 비용</span>
-            </label>
-            {useCustomFee && (
-              <input
-                className="input"
-                type="number"
-                min={0}
-                value={customFee}
-                onChange={(e) => setCustomFee(e.target.value)}
-                placeholder="원"
-              />
-            )}
-          </div>
-        </div>
-        <div className="flex gap-2 mt-6">
-          <button type="button" className="btn-primary flex-1" onClick={save}>저장</button>
-          <button type="button" className="btn-secondary flex-1" onClick={onClose}>취소</button>
-        </div>
-        <div className="mt-6 pt-4 border-t border-line">
-          <p className="text-xs font-medium text-ink-faint mb-2">계정 관리</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="btn-secondary flex-1 !text-sm disabled:opacity-50"
-              disabled={accountBusy}
-              onClick={resetPassword}
-            >
-              비밀번호 초기화
-            </button>
-            <button
-              type="button"
-              className="flex-1 rounded-full border border-[#e8c4c4] text-[#8b4040] text-sm min-h-[48px] hover:bg-[#fdf5f5] disabled:opacity-50"
-              disabled={accountBusy}
-              onClick={removeUser}
-            >
-              회원 삭제
-            </button>
-          </div>
-        </div>
-      </div>
-      {confirmDialog}
-      {tempPassword && (
-        <TempPasswordDialog
-          user={user}
-          password={tempPassword}
-          onClose={() => setTempPassword(null)}
-        />
-      )}
-    </div>
   );
 }

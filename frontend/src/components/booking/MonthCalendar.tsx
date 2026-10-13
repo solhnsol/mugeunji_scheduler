@@ -1,5 +1,7 @@
+import { useSwipe } from '../../hooks/useSwipe';
 import { CalendarDay } from '../../types';
 import { WEEKDAYS_KO, dateFromISO, formatMonthKo, summarizeHours } from '../../utils/booking';
+import { CalendarCellsSkeleton } from '../Skeleton';
 
 /** 한 달 달력. 날짜마다 24칸 점유 막대(빈칸/예약됨/내 예약)를 간단히 보여준다. */
 export function MonthCalendar({
@@ -23,10 +25,15 @@ export function MonthCalendar({
   canPrev: boolean;
   canNext: boolean;
 }) {
+  // 좌우로 밀어서 달 이동
+  const swipe = useSwipe({
+    onLeft: () => canNext && onNext(),
+    onRight: () => canPrev && onPrev(),
+  });
   const firstWeekday = days && days.length ? dateFromISO(days[0].date).getDay() : 0;
 
   return (
-    <section className="card p-4 sm:p-5">
+    <section className="card p-4 sm:p-5" {...swipe}>
       <div className="flex items-center justify-between mb-3">
         <button type="button" className="btn-ghost !min-h-[40px] !px-3" onClick={onPrev} disabled={!canPrev} aria-label="이전 달">
           ‹
@@ -37,16 +44,16 @@ export function MonthCalendar({
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-ink-faint mb-1">
+      <div className="grid grid-cols-7 gap-1 text-center text-2xs text-ink-faint mb-1">
         {WEEKDAYS_KO.map((w, i) => (
-          <span key={w} className={i === 0 ? 'text-[#b04040]/70' : i === 6 ? 'text-slot-pick' : ''}>
+          <span key={w} className={i === 0 ? 'text-danger-ink/70' : i === 6 ? 'text-slot-pick' : ''}>
             {w}
           </span>
         ))}
       </div>
 
       {!days ? (
-        <p className="text-center text-sm text-ink-faint py-10">불러오는 중…</p>
+        <CalendarCellsSkeleton />
       ) : (
         <div className="grid grid-cols-7 gap-1">
           {Array.from({ length: firstWeekday }, (_, i) => (
@@ -60,7 +67,7 @@ export function MonthCalendar({
             const inactive = isPast || !day.bookable;
             const mineHours = day.occupancy.split('').flatMap((c, h) => (c === '2' ? [h] : []));
             const mineChips = summarizeHours(mineHours).replace(/시/g, '').split(', ').filter(Boolean);
-            const othersBooked = day.booked - day.mine;
+            const freeHours = 24 - day.booked;
             return (
               <button
                 key={day.date}
@@ -69,9 +76,9 @@ export function MonthCalendar({
                 className={`relative rounded-xl border px-1 pt-1.5 pb-1.5 min-h-[78px] sm:min-h-[96px] flex flex-col items-stretch gap-1 transition ${
                   isSelected
                     ? 'border-sage bg-sage-muted/60 ring-1 ring-sage/40'
-                    : 'border-line/70 bg-white hover:border-sage/40'
+                    : 'border-line/70 bg-surface hover:border-sage/40'
                 } ${inactive ? 'opacity-45' : ''}`}
-                aria-label={`${dayNum}일${day.mine ? `, 내 예약 ${day.mine}시간` : ''}`}
+                aria-label={`${dayNum}일${day.mine ? `, 내 예약 ${day.mine}시간` : ''}${inactive ? '' : `, 빈 시간 ${freeHours}시간`}`}
               >
                 <span
                   className={`text-xs font-semibold tabular-nums text-center ${
@@ -81,26 +88,28 @@ export function MonthCalendar({
                   {dayNum}
                 </span>
                 <span
-                  className="grid h-[5px] rounded-full overflow-hidden"
+                  className="grid h-2 rounded-full overflow-hidden"
                   style={{ gridTemplateColumns: 'repeat(24, 1fr)' }}
                   aria-hidden
                 >
                   {day.occupancy.split('').map((c, i) => (
                     <i
                       key={i}
-                      className={c === '2' ? 'bg-sage' : c === '1' ? 'bg-[#b9b3a6]' : 'bg-sage-muted'}
+                      className={c === '2' ? 'bg-sage' : c === '1' ? 'bg-slot-taken-bar' : 'bg-sage-muted'}
                     />
                   ))}
                 </span>
                 <span className="flex flex-col gap-0.5 min-w-0">
                   {mineChips.slice(0, 2).map((chip) => (
-                    <span key={chip} className="rounded bg-sage text-white text-[10px] leading-4 px-1 truncate tabular-nums text-left">
+                    <span key={chip} className="rounded bg-sage text-white text-2xs leading-4 px-1 truncate tabular-nums text-left">
                       {chip}
                     </span>
                   ))}
-                  {mineChips.length > 2 && <span className="text-[10px] leading-none text-sage text-left">+{mineChips.length - 2}</span>}
-                  {othersBooked > 0 && (
-                    <span className="text-[10px] leading-none text-ink-faint text-left tabular-nums">예약 {othersBooked}h</span>
+                  {mineChips.length > 2 && <span className="text-2xs leading-none text-sage text-left">+{mineChips.length - 2}</span>}
+                  {!inactive && (
+                    <span className={`text-2xs leading-none text-left tabular-nums ${freeHours === 0 ? 'text-ink-faint' : 'text-sage font-medium'}`}>
+                      {freeHours === 0 ? '마감' : `빈 ${freeHours}h`}
+                    </span>
                   )}
                 </span>
               </button>
@@ -109,9 +118,9 @@ export function MonthCalendar({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] text-ink-muted">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-2xs text-ink-muted">
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage-muted inline-block" />빈 시간</span>
-        <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-[#b9b3a6] inline-block" />예약됨</span>
+        <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-slot-taken-bar inline-block" />예약됨</span>
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage inline-block" />내 예약</span>
       </div>
     </section>

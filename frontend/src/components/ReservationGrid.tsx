@@ -151,7 +151,7 @@ export function ReservationGrid({
       </div>
 
       <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
-        <table className={`schedule-grid-table text-center text-[11px] sm:text-xs ${canInteract ? 'select-none' : ''}`}>
+        <table className={`schedule-grid-table text-center text-2xs sm:text-xs ${canInteract ? 'select-none' : ''}`}>
           <thead>
             <tr>
               <th className="schedule-grid-th-corner p-2 w-11 font-medium text-ink-faint">시</th>
@@ -189,12 +189,12 @@ export function ReservationGrid({
                   const last = isLastDay(day, DAYS);
 
                   let cellClass = dayCellClass(last, '');
-                  if (isCancelSelected) cellClass += ' bg-[#c45c5c] cursor-pointer';
+                  if (isCancelSelected) cellClass += ' bg-danger cursor-pointer';
                   else if (mine) cellClass += canCancel ? ' bg-slot-mine cursor-pointer hover:brightness-95' : ' bg-slot-mine cursor-default';
                   else if (taken) cellClass += ' bg-slot-taken cursor-default';
-                  else if (!canInteract) cellClass += ' bg-white';
+                  else if (!canInteract) cellClass += ' bg-surface';
                   else if (isSelected) cellClass += ' bg-slot-pick cursor-pointer';
-                  else cellClass += ' bg-white hover:bg-sage-muted/50 cursor-pointer active:bg-sage-muted';
+                  else cellClass += ' bg-surface hover:bg-sage-muted/50 cursor-pointer active:bg-sage-muted';
 
                   const interactive = canInteract && (!taken || (mine && canCancel));
                   return (
@@ -232,7 +232,7 @@ export function ReservationGrid({
           </div>
           <button
             type="button"
-            className="w-full rounded-full bg-[#c45c5c] text-white font-semibold min-h-[48px] hover:bg-[#b04c4c] active:scale-[0.98] transition disabled:opacity-50"
+            className="btn-danger"
             disabled={submitting}
             onClick={handleCancel}
           >

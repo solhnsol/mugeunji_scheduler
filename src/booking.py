@@ -300,6 +300,21 @@ class BookingManager:
                     pass
         return get_monthly_open_datetime(year, mon, config)
 
+    async def public_rules(self) -> Dict:
+        """로그인 전에도 보여줄 수 있는 토큰 규칙 (가격표, 환불 단계, 소멸 개월 수)."""
+        settings = await self._settings()
+        async with self.conn.execute("SELECT value FROM system_settings WHERE key = 'token_expiry_months'") as cursor:
+            row = await cursor.fetchone()
+        try:
+            months = int(row["value"]) if row and row["value"] else 3
+        except (TypeError, ValueError):
+            months = 3
+        return {
+            "price_bands": self._bands_from(settings),
+            "refund_tiers": self._tiers_from(settings),
+            "expiry_months": months,
+        }
+
     async def get_config(self, username: str, role: str) -> Dict:
         settings = await self._settings()
         now = now_kst()

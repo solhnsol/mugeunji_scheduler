@@ -79,7 +79,7 @@ export function AdminReservationGrid({
         <button type="button" className="btn-secondary !min-h-[40px] !text-sm" disabled={busy || !selected.size} onClick={() => run(onDelete)}>
           삭제
         </button>
-        <button type="button" className="btn-ghost text-[#c45c5c]" disabled={busy} onClick={async () => {
+        <button type="button" className="btn-ghost text-danger-ink" disabled={busy} onClick={async () => {
           if (!(await confirm({ title: '월 예약을 전체 초기화할까요?', message: '모든 월 예약이 삭제돼요. 되돌릴 수 없어요.', confirmLabel: '전체 초기화', danger: true }))) return;
           setBusy(true);
           try { await onClearAll(); setSelected(new Set()); } finally { setBusy(false); }
@@ -89,7 +89,7 @@ export function AdminReservationGrid({
       </div>
 
       <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
-        <table className="schedule-grid-table text-center text-[11px] sm:text-xs">
+        <table className="schedule-grid-table text-center text-2xs sm:text-xs">
           <thead>
             <tr>
               <th className="schedule-grid-th-corner p-2 w-11 text-ink-faint">시</th>

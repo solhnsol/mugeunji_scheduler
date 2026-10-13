@@ -170,6 +170,11 @@ export const api = {
   },
 
   // ---- 날짜 기반 토큰 예약
+  async getTokenRules() {
+    const res = await fetch('/token-rules');
+    return parseResponse<import('./types').TokenRules>(res);
+  },
+
   async getBookingConfig(token: string) {
     const res = await fetch('/bookings/config', { headers: authHeaders(token) });
     return parseResponse<import('./types').BookingConfig>(res);

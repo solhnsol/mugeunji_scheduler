@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { MyBooking } from '../types';
 import { formatTokens } from '../utils';
+import { expiryPhrase, useTokenRules } from '../hooks/useTokenRules';
 import { formatDateKo, summarizeHours } from '../utils/booking';
 
 /** 토큰 예약 방식에서 회원 홈: 토큰 잔액, 예약하기, 내 예약, 이용 방법. */
@@ -15,6 +16,7 @@ export function TokenHome({
   profileIncomplete: boolean;
   onProfile: () => void;
 }) {
+  const rules = useTokenRules();
   const byDate = new Map<string, number[]>();
   for (const b of upcoming) byDate.set(b.date, [...(byDate.get(b.date) ?? []), b.hour]);
   const rows = [...byDate.entries()].slice(0, 5);
@@ -36,7 +38,7 @@ export function TokenHome({
         <div className="flex flex-wrap gap-2 mt-5">
           <Link
             to="/book"
-            className="inline-flex items-center justify-center rounded-full bg-white text-sage font-semibold min-h-[48px] px-6 hover:bg-cream transition"
+            className="inline-flex items-center justify-center rounded-full bg-white text-[#3a5248] font-semibold min-h-[48px] px-6 hover:bg-white/90 transition"
           >
             예약하기
           </Link>
@@ -76,6 +78,7 @@ export function TokenHome({
           <li>토큰을 충전해요. 관리자가 확인한 뒤 연락처로 입금 안내를 드려요.</li>
           <li>달력에서 날짜를 고르고, 원하는 시간을 선택해 예약해요. 시간대마다 필요한 토큰이 달라요.</li>
           <li>예약을 취소하면 환불 정책에 따라 토큰을 돌려받아요.</li>
+          <li>충전한 토큰은 {expiryPhrase(rules)} 동안 쓰지 않으면 사라져요. 쓰는 동안은 계속 이어져요.</li>
         </ol>
       </section>
     </div>

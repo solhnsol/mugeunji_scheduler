@@ -263,6 +263,12 @@ export interface RefundTier {
 
 export type ReservationMode = 'legacy' | 'beta' | 'token';
 
+export interface TokenRules {
+  price_bands: PriceBand[];
+  refund_tiers: RefundTier[];
+  expiry_months: number;
+}
+
 export interface BookingConfig {
   mode: ReservationMode;
   beta_month: string;

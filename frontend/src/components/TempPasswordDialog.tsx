@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ModalOverlay } from './Modal';
 import { UserInfo } from '../types';
 
 /** 발급된 임시 비밀번호를 한 번만 보여주고, 회원에게 보낼 안내문을 복사할 수 있게 한다. */
@@ -29,12 +30,7 @@ export function TempPasswordDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[70] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="temp-pw-title"
-    >
+    <ModalOverlay onClose={onClose} className="z-[70] items-end sm:items-center p-4" labelledBy="temp-pw-title" dismissible={false}>
       <div className="card w-full max-w-sm p-6 shadow-xl">
         <h3 id="temp-pw-title" className="font-semibold text-ink">임시 비밀번호를 발급했어요</h3>
         <p className="text-sm text-ink-muted mt-1">
@@ -55,6 +51,6 @@ export function TempPasswordDialog({
           닫기
         </button>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

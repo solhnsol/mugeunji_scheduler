@@ -14,6 +14,10 @@ async def init_db(db_path: str = None):
     os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     conn = await aiosqlite.connect(db_path)
     conn.row_factory = aiosqlite.Row
+    # WAL: 쓰는 도중에도 백업·점검 도구가 읽을 수 있고, 갑작스러운 종료에도 DB가 덜 깨진다.
+    await conn.execute("PRAGMA journal_mode=WAL")
+    await conn.execute("PRAGMA synchronous=NORMAL")
+    await conn.execute("PRAGMA busy_timeout=5000")
     await setup_database(conn)
     return conn
 

@@ -1,9 +1,10 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { describeRefundPolicy } from '../utils/booking';
+import { TokenRules } from '../types';
 import {
   ADDRESS,
-  BOOKING_TYPES,
   CONTACT_URL,
   EQUIPMENT,
   EQUIPMENT_FOOTNOTE,
@@ -15,9 +16,9 @@ import {
   MAP_URL,
   SITE_NAME,
   STEPS,
+  TOKEN_RULES,
+  UPCOMING,
 } from '../content/landing';
-import { Plan } from '../types';
-import { formatPrice } from '../utils';
 
 function ExternalLink({
   href,
@@ -73,43 +74,83 @@ function CopyAddressButton({ address }: { address: string }) {
   );
 }
 
-function PlansSection() {
-  const [plans, setPlans] = useState<Plan[] | null>(null);
-
+/** 관리자 화면의 예약 방식. 불러오기 전이면 null */
+function useReservationMode() {
+  const [mode, setMode] = useState<string | null>(null);
   useEffect(() => {
-    api.getPlans().then(setPlans).catch(() => setPlans([]));
+    api.getSettings().then((st) => setMode(st.reservation_mode ?? null)).catch(() => undefined);
   }, []);
+  return mode;
+}
 
-  if (plans === null) return <p className="text-sm text-ink-faint">불러오는 중…</p>;
-  if (plans.length === 0) {
-    return <p className="text-sm text-ink-muted">요금제는 오픈채팅으로 문의해주세요.</p>;
-  }
-
+/** 토큰 예약이 아직 정식 시작 전이면, 가입 전에 지금 상황을 알려 혼란을 막는다 */
+function ModeNotice({ mode }: { mode: string | null }) {
+  if (!mode || mode === 'token') return null;
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {plans.map((plan) => (
-        <div key={plan.id} className="card p-5">
-          <p className="text-sm text-ink-muted">{plan.name}</p>
-          <p className="text-3xl font-bold text-ink mt-1 tabular-nums">
-            {plan.allowed_hours}
-            <span className="text-base font-medium text-ink-muted"> 시간/주</span>
-          </p>
-          <p className="text-lg font-semibold text-sage mt-4">
-            {plan.monthly_price > 0 ? (
-              <>
-                월 {formatPrice(plan.monthly_price)}
-              </>
-            ) : (
-              <span className="text-base font-medium text-ink-muted">요금 문의</span>
-            )}
-          </p>
-        </div>
-      ))}
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 leading-relaxed">
+      아래 토큰 예약 방식은 12월부터 적용될 예정이에요.
+      {mode === 'beta' && ' 지금은 정식 시작 전이라 일부 회원에게만 먼저 열려 있어요.'} 현재 이용 방법은{' '}
+      <Link to="/notices" className="underline underline-offset-2 font-medium">공지·이용 안내</Link>에서 확인하거나 오픈채팅으로
+      문의해주세요.
+    </div>
+  );
+}
+
+/** 관리자가 설정한 현재 토큰 규칙 (시간대별 토큰, 환불, 유효기간). 불러오지 못하면 보여주지 않는다. */
+function TokenRulesTable({ upcoming }: { upcoming: boolean }) {
+  const [rules, setRules] = useState<TokenRules | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    api.getTokenRules().then(setRules).catch(() => setFailed(true));
+  }, []);
+  if (failed) {
+    return (
+      <p className="text-sm text-ink-muted mt-3">
+        시간대별 토큰과 환불 규칙은 로그인 후 예약 화면이나 공지·이용 안내에서 확인할 수 있어요.
+      </p>
+    );
+  }
+  if (!rules) return null;
+  const bands = [...rules.price_bands].sort((a, b) => a.start - b.start);
+  const hasZero = bands.some((b) => b.cost === 0);
+  return (
+    <div className="card p-5 mt-3">
+      <p className="font-semibold text-ink">{upcoming ? UPCOMING.rulesTitle : '시간대별 필요 토큰 (1시간 기준)'}</p>
+      <ul className="mt-3 divide-y divide-line/60 text-sm">
+        {bands.map((b) => (
+          <li key={`${b.start}-${b.end}`} className="py-2 flex items-center justify-between gap-3">
+            <span className="text-ink-muted tabular-nums">
+              {String(b.start).padStart(2, '0')}~{String(b.end).padStart(2, '0')}시
+            </span>
+            <span className="font-medium text-ink tabular-nums">{b.cost}토큰</span>
+          </li>
+        ))}
+      </ul>
+      {hasZero && (
+        <p className="text-xs text-ink-faint mt-2">0토큰 시간대도 토큰이 1개 이상 있어야 예약할 수 있어요.</p>
+      )}
+      <p className="font-semibold text-ink mt-5">취소·환불</p>
+      <ul className="mt-2 text-sm text-ink-muted space-y-0.5">
+        {describeRefundPolicy(rules).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+      <p className="text-xs text-ink-faint mt-4">
+        충전한 토큰은 {rules.expiry_months}개월 동안 쓰지 않으면 사라져요. 규칙은 운영 상황에 따라 바뀔 수 있고, 바뀌면 공지로
+        알려드려요.
+      </p>
     </div>
   );
 }
 
 export default function Landing({ authed = false }: { authed?: boolean }) {
+  const mode = useReservationMode();
+  // 관리자가 "토큰 예약"으로 바꾸기 전까지는 토큰 방식 설명을 "예정"으로 보여준다
+  const upcoming = mode !== null && mode !== 'token';
+  const highlights = upcoming
+    ? HIGHLIGHTS.map((h) => (h.title === '예약' ? { ...h, body: UPCOMING.highlightBooking } : h))
+    : HIGHLIGHTS;
+  const faq = upcoming ? FAQ.map((item) => ({ ...item, a: UPCOMING.faq[item.q] ?? item.a })) : FAQ;
   return (
     <div className="min-h-dvh flex flex-col">
       <header className="sticky top-0 z-20 bg-cream/90 backdrop-blur-md border-b border-line/60">
@@ -143,15 +184,16 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-6 space-y-12 pb-16">
+        <ModeNotice mode={mode} />
         <div className="rounded-3xl bg-gradient-to-br from-sage via-[#345045] to-sage-light text-white p-7 sm:p-10 shadow-[0_10px_40px_rgba(58,82,72,0.22)]">
           <p className="text-sm font-medium text-white/65">{HERO.eyebrow}</p>
           <h1 className="text-3xl sm:text-5xl font-bold mt-3 leading-tight whitespace-pre-line">{HERO.title}</h1>
-          <p className="text-sm sm:text-base text-white/80 mt-5 leading-relaxed max-w-xl">{HERO.description}</p>
+          <p className="text-sm sm:text-base text-white/80 mt-5 leading-relaxed max-w-xl">{upcoming ? UPCOMING.heroDescription : HERO.description}</p>
           <div className="flex flex-wrap gap-2 mt-7">
             {authed ? (
               <Link
                 to="/"
-                className="inline-flex items-center justify-center rounded-full bg-white text-sage font-semibold min-h-[48px] px-6 hover:bg-cream transition"
+                className="inline-flex items-center justify-center rounded-full bg-white text-[#3a5248] font-semibold min-h-[48px] px-6 hover:bg-white/90 transition"
               >
                 내 예약으로
               </Link>
@@ -159,7 +201,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
               <>
                 <Link
                   to="/register"
-                  className="inline-flex items-center justify-center rounded-full bg-white text-sage font-semibold min-h-[48px] px-6 hover:bg-cream transition"
+                  className="inline-flex items-center justify-center rounded-full bg-white text-[#3a5248] font-semibold min-h-[48px] px-6 hover:bg-white/90 transition"
                 >
                   회원가입
                 </Link>
@@ -181,7 +223,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3 -mt-4">
-          {HIGHLIGHTS.map((item) => (
+          {highlights.map((item) => (
             <div key={item.title} className="card p-4">
               <p className="text-xs font-medium text-sage">{item.title}</p>
               <p className="text-sm text-ink mt-1 leading-relaxed">{item.body}</p>
@@ -248,7 +290,11 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
           </div>
         </Section>
 
-        <Section id="how" title="이용 방식" subtitle="가입부터 예약까지 이렇게 진행돼요.">
+        <Section
+          id="how"
+          title={upcoming ? UPCOMING.howTitle : '이용 방식'}
+          subtitle={upcoming ? UPCOMING.howSubtitle : '가입 → 토큰 충전 → 예약, 이 순서예요.'}
+        >
           <ol className="space-y-3">
             {STEPS.map((step, i) => (
               <li key={step.title} className="flex gap-3">
@@ -263,22 +309,19 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
             ))}
           </ol>
           <div className="grid gap-3 sm:grid-cols-2 mt-6">
-            {BOOKING_TYPES.map((type) => (
-              <div key={type.title} className="card p-5">
-                <p className="font-semibold text-ink">{type.title}</p>
-                <p className="text-sm text-ink-muted mt-1.5 leading-relaxed">{type.body}</p>
+            {TOKEN_RULES.map((rule) => (
+              <div key={rule.title} className="card p-5">
+                <p className="font-semibold text-ink">{rule.title}</p>
+                <p className="text-sm text-ink-muted mt-1.5 leading-relaxed">{rule.body}</p>
               </div>
             ))}
           </div>
-        </Section>
-
-        <Section id="plans" title="요금제" subtitle="신청을 확인한 뒤 연락드려 요금을 안내해요.">
-          <PlansSection />
+          <TokenRulesTable upcoming={upcoming} />
         </Section>
 
         <Section id="faq" title="자주 묻는 질문">
           <div className="space-y-2">
-            {FAQ.map((item) => (
+            {faq.map((item) => (
               <details key={item.q} className="card group px-5 py-4">
                 <summary className="cursor-pointer list-none flex items-center justify-between gap-3 font-medium text-ink">
                   {item.q}
@@ -290,9 +333,11 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
           </div>
         </Section>
 
-        <div className="rounded-3xl bg-white border border-line/80 p-7 text-center">
+        <div className="rounded-3xl bg-surface border border-line/80 p-7 text-center">
           <p className="text-lg font-bold text-ink">지금 시작해보세요</p>
-          <p className="text-sm text-ink-muted mt-1.5">가입 후 요금제를 신청하면 관리자가 확인하고 연락드려요.</p>
+          <p className="text-sm text-ink-muted mt-1.5">
+            {upcoming ? UPCOMING.ctaBody : '가입하고 토큰을 충전하면 바로 예약할 수 있어요.'}
+          </p>
           <div className="flex flex-wrap justify-center gap-2 mt-5">
             {authed ? (
               <Link to="/" className="btn-primary !w-auto">내 예약으로</Link>

@@ -87,7 +87,7 @@ export default function NoticesPage({ authed }: { authed: boolean }) {
             role="tab"
             aria-selected={filter === f.id}
             className={`rounded-full px-4 py-2 text-sm min-h-[40px] border transition ${
-              filter === f.id ? 'bg-sage text-white border-sage' : 'bg-white text-ink-muted border-line hover:border-sage/30'
+              filter === f.id ? 'bg-sage text-white border-sage' : 'bg-surface text-ink-muted border-line hover:border-sage/30'
             }`}
             onClick={() => setFilter(f.id)}
           >
