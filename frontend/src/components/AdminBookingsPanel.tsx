@@ -1,5 +1,6 @@
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
+import { MemberPicker } from './MemberPicker';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { AdminBooking, GridDay, PriceBand, TokenBalance } from '../types';
 import { GridBlock, TimeGrid, buildBlocks } from './booking/TimeGrid';
@@ -47,17 +48,7 @@ export function AdminBookingsPanel({
   const [days, setDays] = useState<GridDay[] | null>(null);
   const [bands, setBands] = useState<PriceBand[]>([]);
   const [selected, setSelected] = useState<Map<string, { date: string; hour: number }>>(new Map());
-  const [forceQuery, setForceQuery] = useState('');
-  // 입력한 글자(이름·아이디·목록에서 고른 "이름 (@아이디)")가 한 명으로 정해질 때만 그 회원으로 본다
-  const memberLabel = (m: TokenBalance) => `${m.name || m.username} (@${m.username})`;
-  const forceUser = useMemo(() => {
-    const q = forceQuery.trim().toLowerCase();
-    if (!q) return '';
-    const exact = members.filter((m) => memberLabel(m).toLowerCase() === q || m.username.toLowerCase() === q);
-    if (exact.length === 1) return exact[0].username;
-    const byName = members.filter((m) => (m.name || '').toLowerCase() === q);
-    return byName.length === 1 ? byName[0].username : '';
-  }, [forceQuery, members]);
+  const [forceUser, setForceUser] = useState('');
   const [cancelTarget, setCancelTarget] = useState<{ block: GridBlock; hour: number } | null>(null);
   const [wholeBlock, setWholeBlock] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -117,7 +108,7 @@ export function AdminBookingsPanel({
 
   const doForce = async () => {
     if (busy) return;
-    if (!forceUser) return show(forceQuery.trim() ? '일치하는 회원이 없거나 여러 명이에요. 목록에서 골라주세요.' : '회원을 선택해주세요.', 'error');
+    if (!forceUser) return show('회원을 선택해주세요. 이름을 치고 목록에서 한 명을 골라주세요.', 'error');
     if (selected.size === 0) return show('빈 시간을 선택해주세요.', 'error');
     setBusy(true);
     try {
@@ -208,21 +199,12 @@ export function AdminBookingsPanel({
         </div>
         <div className="flex gap-2">
           <div className="flex-1 min-w-0">
-            <input
-              className="input"
-              aria-label="회원"
-              placeholder="회원 이름·아이디 검색"
-              list="admin-force-members"
-              autoComplete="off"
-              value={forceQuery}
+            <MemberPicker
+              members={members.map((m) => ({ username: m.username, name: m.name }))}
+              value={forceUser}
+              onChange={setForceUser}
               disabled={selected.size === 0}
-              onChange={(e) => setForceQuery(e.target.value)}
             />
-            <datalist id="admin-force-members">
-              {members.map((m) => (
-                <option key={m.username} value={memberLabel(m)} />
-              ))}
-            </datalist>
           </div>
           <button type="button" className="btn-primary !w-auto !px-5 !min-h-[44px] shrink-0" disabled={busy || selected.size === 0} onClick={doForce}>
             {busy ? '등록 중…' : selected.size > 0 ? `${selected.size}시간 등록` : '등록'}
