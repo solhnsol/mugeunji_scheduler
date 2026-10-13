@@ -268,6 +268,7 @@ export function TimeGrid({
     }
   };
 
+  const maxCost = Math.max(0, ...bands.map((b) => b.cost));
   const cols = `${single ? 44 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
 
   return (
@@ -328,7 +329,13 @@ export function TimeGrid({
               const band = bandFor(bands, hour);
               const bandStart = band && band.start === hour;
               return (
-                <div key={hour} className="relative border-b border-line/40 pr-1 text-right" style={{ height: H }}>
+                <div key={hour} className="relative border-b border-line/40 pr-1.5 text-right" style={{ height: H }}>
+                  {/* 가격 구간 색 띠: 진할수록 시간당 토큰이 많다 */}
+                  <span
+                    aria-hidden
+                    className="absolute right-0 inset-y-0 w-[3px]"
+                    style={{ background: `color-mix(in srgb, var(--color-sage) ${Math.round(12 + (band && maxCost > 0 ? (band.cost / maxCost) * 78 : 0))}%, transparent)` }}
+                  />
                   <span className="text-2xs leading-none text-ink-faint tabular-nums relative -top-[1px]">
                     {String(hour).padStart(2, '0')}
                   </span>
@@ -336,7 +343,7 @@ export function TimeGrid({
                     (single ? (
                       <button
                         type="button"
-                        className="absolute right-0.5 bottom-0.5 z-[1] rounded-full bg-sage-muted px-1.5 py-1 text-2xs leading-none text-sage font-medium tabular-nums hover:bg-sage-muted/70 active:scale-95 transition"
+                        className="absolute right-1 bottom-0.5 z-[1] rounded-full bg-sage-muted px-1.5 py-1 text-2xs leading-none text-sage font-medium tabular-nums hover:bg-sage-muted/70 active:scale-95 transition"
                         title={`${String(band.start).padStart(2, '0')}~${String(band.end).padStart(2, '0')}시 전체 선택`}
                         aria-label={`${band.start}시부터 ${band.end}시까지 전체 선택 또는 해제`}
                         onClick={() => selectBand(band)}
