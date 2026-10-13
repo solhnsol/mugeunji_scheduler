@@ -232,7 +232,7 @@ export function ReservationGrid({
           </div>
           <button
             type="button"
-            className="w-full rounded-full bg-danger text-white font-semibold min-h-[48px] hover:bg-danger-hover active:scale-[0.98] transition disabled:opacity-50"
+            className="btn-danger"
             disabled={submitting}
             onClick={handleCancel}
           >

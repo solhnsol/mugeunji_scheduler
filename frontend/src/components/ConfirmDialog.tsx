@@ -35,7 +35,7 @@ function ConfirmDialog({
             autoFocus
             className={
               options.danger
-                ? 'flex-1 rounded-full bg-danger text-white font-semibold min-h-[48px] hover:bg-danger-hover active:scale-[0.98] transition'
+                ? 'btn-danger flex-1'
                 : 'btn-primary flex-1'
             }
             onClick={() => onResult(true)}

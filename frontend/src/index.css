@@ -106,7 +106,8 @@ body {
 
 .btn-danger {
   @apply inline-flex items-center justify-center rounded-full bg-danger text-white font-medium
-    py-3 px-6 min-h-[48px] w-full hover:bg-danger-hover active:scale-[0.98] transition-all;
+    py-3 px-6 min-h-[48px] w-full hover:bg-danger-hover active:scale-[0.98] transition-all
+    disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
 }
 
 .input {
