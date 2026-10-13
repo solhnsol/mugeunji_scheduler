@@ -373,7 +373,7 @@ export function TimeGrid({
                   if (isSelected) cls += 'bg-slot-pick/90 ';
                   else if (slot.status === 'past') cls += 'bg-cream-dark/50 ';
                   else if (slot.status === 'closed') cls += 'bg-cream-dark/70 ';
-                  else if (free) cls += `${band && band.cost === 0 ? 'bg-sage-muted/25' : 'bg-surface'} hover:bg-sage-muted/50 cursor-pointer `;
+                  else if (free) cls += `${band && band.cost === 0 ? 'bg-sage-muted/25' : 'bg-surface'} hover:bg-sage-muted/50 active:bg-slot-pick/30 cursor-pointer `;
                   else cls += 'bg-surface ';
                   return (
                     <div
@@ -381,7 +381,8 @@ export function TimeGrid({
                       className={cls}
                       style={{
                         height: H,
-                        backgroundImage: slot.status === 'past' || slot.status === 'closed' ? STRIPES : undefined,
+                        // 지난 시간은 단색으로 흐리게, 예약을 받지 않는 시간(closed)만 줄무늬로 구분한다
+                        backgroundImage: slot.status === 'closed' ? STRIPES : undefined,
                       }}
                       role={free ? 'button' : undefined}
                       tabIndex={free ? 0 : undefined}
@@ -401,7 +402,12 @@ export function TimeGrid({
                         if (free) onToggleFree(day.date, slot.hour);
                       }}
                     >
-                      {free && (single || isSelected) && (
+                      {free && isSelected && !single && (
+                        <span aria-hidden className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold">
+                          ✓
+                        </span>
+                      )}
+                      {free && single && (
                         <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-2xs tabular-nums ${isSelected ? 'text-white' : 'text-ink-faint'}`}>
                           {isSelected ? `선택 · ${slot.cost}토큰` : `${slot.cost}토큰`}
                         </span>
