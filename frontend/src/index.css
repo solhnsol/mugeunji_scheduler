@@ -15,6 +15,9 @@
   --color-slot-taken: #ddd9d0;
   --color-slot-pick: #5b7f96;
   --color-surface: #ffffff;
+  --color-danger: #c45c5c;
+  --color-danger-hover: #b34f4f;
+  --color-now: #d0463c;
   --color-danger-ink: #b04040;
   --color-danger-soft: #fdf5f5;
   --color-danger-line: #e8c4c4;
@@ -39,6 +42,7 @@
     --color-slot-taken: #3b413c;
     --color-slot-pick: #4d7690;
     --color-surface: #1a1e1b;
+    --color-now: #ef6a60;
     --color-danger-ink: #e8837f;
     --color-danger-soft: #2c1e1e;
     --color-danger-line: #5a3636;
@@ -101,8 +105,8 @@ body {
 }
 
 .btn-danger {
-  @apply inline-flex items-center justify-center rounded-full bg-[#c45c5c] text-white font-medium
-    py-3 px-6 min-h-[48px] w-full hover:bg-[#b34f4f] active:scale-[0.98] transition-all;
+  @apply inline-flex items-center justify-center rounded-full bg-danger text-white font-medium
+    py-3 px-6 min-h-[48px] w-full hover:bg-danger-hover active:scale-[0.98] transition-all;
 }
 
 .input {

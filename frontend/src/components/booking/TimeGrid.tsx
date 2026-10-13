@@ -466,7 +466,7 @@ export function TimeGrid({
                         id != null && cancelSelected.has(id) ? (
                           <div
                             key={id}
-                            className="absolute inset-x-0 bg-[#c45c5c] text-white flex items-center justify-center text-[11px] font-medium"
+                            className="absolute inset-x-0 bg-danger text-white flex items-center justify-center text-[11px] font-medium"
                             style={{ top: i * H, height: H }}
                           >
                             취소
@@ -479,8 +479,8 @@ export function TimeGrid({
 
                 {now && now.date === day.date && (
                   <div className="absolute inset-x-0 z-10 pointer-events-none" style={{ top: now.top }}>
-                    <div className="h-px bg-[#d0463c]" />
-                    <span className="absolute -left-1 -top-[3px] w-[7px] h-[7px] rounded-full bg-[#d0463c]" />
+                    <div className="h-px bg-now" />
+                    <span className="absolute -left-1 -top-[3px] w-[7px] h-[7px] rounded-full bg-now" />
                   </div>
                 )}
               </div>

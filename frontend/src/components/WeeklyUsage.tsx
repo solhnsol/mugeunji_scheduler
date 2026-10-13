@@ -12,7 +12,7 @@ function formatWeekRange(start: string, end: string) {
 function usageColor(hours: number, max: number) {
   if (max <= 0) return 'bg-sage-muted';
   const ratio = hours / max;
-  if (ratio >= 0.85) return 'bg-[#c45c5c]';
+  if (ratio >= 0.85) return 'bg-danger';
   if (ratio >= 0.6) return 'bg-amber-400';
   if (ratio >= 0.35) return 'bg-[#8fb39a]';
   return 'bg-sage';

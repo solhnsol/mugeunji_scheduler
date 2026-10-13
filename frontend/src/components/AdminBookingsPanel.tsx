@@ -232,7 +232,7 @@ export function AdminBookingsPanel({
           <div className="space-y-2">
             <button type="button" className="btn-secondary w-full" disabled={busy} onClick={() => doCancel(null)}>환불 정책대로</button>
             <button type="button" className="btn-secondary w-full" disabled={busy} onClick={() => doCancel(true)}>전액 환불</button>
-            <button type="button" className="w-full rounded-full border border-[#c45c5c]/40 text-danger-ink min-h-[48px]" disabled={busy} onClick={() => doCancel(false)}>환불 없이 취소</button>
+            <button type="button" className="w-full rounded-full border border-danger/40 text-danger-ink min-h-[48px]" disabled={busy} onClick={() => doCancel(false)}>환불 없이 취소</button>
             <button type="button" className="btn-ghost w-full" onClick={() => setCancelTarget(null)}>돌아가기</button>
           </div>
         </Modal>

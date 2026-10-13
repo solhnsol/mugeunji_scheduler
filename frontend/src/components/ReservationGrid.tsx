@@ -189,7 +189,7 @@ export function ReservationGrid({
                   const last = isLastDay(day, DAYS);
 
                   let cellClass = dayCellClass(last, '');
-                  if (isCancelSelected) cellClass += ' bg-[#c45c5c] cursor-pointer';
+                  if (isCancelSelected) cellClass += ' bg-danger cursor-pointer';
                   else if (mine) cellClass += canCancel ? ' bg-slot-mine cursor-pointer hover:brightness-95' : ' bg-slot-mine cursor-default';
                   else if (taken) cellClass += ' bg-slot-taken cursor-default';
                   else if (!canInteract) cellClass += ' bg-surface';
@@ -232,7 +232,7 @@ export function ReservationGrid({
           </div>
           <button
             type="button"
-            className="w-full rounded-full bg-[#c45c5c] text-white font-semibold min-h-[48px] hover:bg-[#b04c4c] active:scale-[0.98] transition disabled:opacity-50"
+            className="w-full rounded-full bg-danger text-white font-semibold min-h-[48px] hover:bg-danger-hover active:scale-[0.98] transition disabled:opacity-50"
             disabled={submitting}
             onClick={handleCancel}
           >
