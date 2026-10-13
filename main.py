@@ -1976,6 +1976,19 @@ async def web_manifest():
     raise HTTPException(status_code=404)
 
 
+@app.get("/sw.js")
+async def service_worker():
+    # 서비스 워커는 사이트 전체(/)를 범위로 삼아야 하고, 갱신이 바로 반영되도록 캐시하지 않는다.
+    path = "static/dist/sw.js"
+    if os.path.exists(path):
+        return FileResponse(
+            path,
+            media_type="application/javascript",
+            headers={"Cache-Control": "no-cache"},
+        )
+    raise HTTPException(status_code=404)
+
+
 @app.get("/favicon.svg")
 async def favicon_svg():
     path = "static/dist/favicon.svg"

@@ -44,7 +44,10 @@ export function buildBlocks(day: GridDay): GridBlock[] {
   return blocks;
 }
 
-const STRIPES = 'repeating-linear-gradient(135deg, rgba(0,0,0,0.05) 0 6px, transparent 6px 12px)';
+/** 터치로 끌어서 선택을 시작하기 위해 길게 누르는 시간 */
+const LONG_PRESS_MS = 350;
+
+const STRIPES = 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-ink) 7%, transparent) 0 6px, transparent 6px 12px)';
 
 /**
  * 캘린더 일정표 형태의 시간표. 세로는 0~24시, 가로는 날짜(1일 또는 7일).
@@ -64,6 +67,7 @@ export function TimeGrid({
   rowHeight = 30,
   fill = false,
   scrollToHour,
+  scrollKey,
   emptyLabel,
   legend,
 }: {
@@ -84,6 +88,8 @@ export function TimeGrid({
   fill?: boolean;
   /** 열릴 때 페이지를 이 시각 근처까지 내린다 (없으면 그대로) */
   scrollToHour?: number;
+  /** 이 값이 바뀔 때마다 scrollToHour 위치로 다시 내린다 (예: 보고 있는 날짜) */
+  scrollKey?: string;
   emptyLabel?: ReactNode;
   legend?: boolean;
 }) {
@@ -99,24 +105,38 @@ export function TimeGrid({
     colTop: number;
     pointerId: number;
   } | null>(null);
+  /** 터치로 길게 누르기를 기다리는 중인 상태 */
+  const press = useRef<{ pointerId: number; x: number; y: number; timer: number } | null>(null);
   /** 마우스 누름에서 이미 처리했으면 뒤따르는 click은 무시한다 */
   const mouseHandled = useRef(false);
   const latest = useRef({ days, selected, cancelSelected });
   latest.current = { days, selected, cancelSelected };
   const [nowTick, setNowTick] = useState(0);
 
+  // 끌어서 선택하는 동안에는 손가락 움직임이 화면 스크롤로 넘어가지 않게 막는다 (passive: false여야 막을 수 있다)
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const block = (e: TouchEvent) => {
+      if (drag.current && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchmove', block, { passive: false });
+    return () => el.removeEventListener('touchmove', block);
+  }, []);
+  useEffect(() => () => window.clearTimeout(press.current?.timer), []);
+
   useEffect(() => {
     const id = window.setInterval(() => setNowTick((n) => n + 1), 60_000);
     return () => window.clearInterval(id);
   }, []);
 
-  // 처음 열릴 때만, 자주 쓰는 시간대가 보이게 안쪽 스크롤을 내린다
+  // 처음 열릴 때와 scrollKey가 바뀔 때, 보고 싶은 시간대가 보이게 안쪽 스크롤을 내린다
   useEffect(() => {
     if (fill && scrollToHour != null && scroller.current) {
       scroller.current.scrollTop = Math.max(scrollToHour - 0.3, 0) * H;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [scrollKey]);
 
   const blocksByDate = useMemo(() => new Map(days.map((d) => [d.date, buildBlocks(d)])), [days]);
 
@@ -143,16 +163,15 @@ export function TimeGrid({
     }
   };
 
-  const onRootPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    mouseHandled.current = false;
-    if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    const col = (e.target as HTMLElement).closest<HTMLElement>('[data-col]');
-    if (!col) return;
+  /** 눌린 위치에서 끌기를 시작한다. 시작할 수 없는 칸(남의 예약·지난 시간)이면 false */
+  const startDrag = (target: HTMLElement, pointerId: number, clientY: number) => {
+    const col = target.closest<HTMLElement>('[data-col]');
+    if (!col) return false;
     const date = col.dataset.col as string;
     const colTop = col.getBoundingClientRect().top;
-    const hour = hourAt(colTop, e.clientY);
+    const hour = hourAt(colTop, clientY);
     const slot = latest.current.days.find((d) => d.date === date)?.slots[hour];
-    if (!slot) return;
+    if (!slot) return false;
     let mode: 'free' | 'mine';
     let on: boolean;
     if (slot.status === 'free') {
@@ -162,15 +181,53 @@ export function TimeGrid({
       mode = 'mine';
       on = !latest.current.cancelSelected.has(slot.booking_id);
     } else {
-      return; // 남의 예약·지난 시간은 끌기를 시작하지 않는다 (남의 예약 클릭은 블록이 따로 처리)
+      return false; // 남의 예약·지난 시간은 끌기를 시작하지 않는다 (남의 예약 클릭은 블록이 따로 처리)
     }
-    drag.current = { mode, on, date, last: hour, colTop, pointerId: e.pointerId };
+    drag.current = { mode, on, date, last: hour, colTop, pointerId };
     mouseHandled.current = true;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    scroller.current?.setPointerCapture(pointerId);
     paintHour(mode, on, date, hour);
+    return true;
+  };
+
+  const cancelPendingPress = () => {
+    if (press.current) {
+      window.clearTimeout(press.current.timer);
+      press.current = null;
+    }
+  };
+
+  const onRootPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    mouseHandled.current = false;
+    if (e.pointerType === 'mouse') {
+      if (e.button !== 0) return;
+      startDrag(e.target as HTMLElement, e.pointerId, e.clientY);
+      return;
+    }
+    // 터치·펜: 짧게 누르면 탭, 스크롤하면 스크롤. 길게(≈350ms) 누른 채로 있으면 끌어서 선택이 시작된다
+    cancelPendingPress();
+    const target = e.target as HTMLElement;
+    const { pointerId, clientX, clientY } = e;
+    press.current = {
+      pointerId,
+      x: clientX,
+      y: clientY,
+      timer: window.setTimeout(() => {
+        const pending = press.current;
+        press.current = null;
+        if (!pending) return;
+        if (startDrag(target, pointerId, pending.y)) navigator.vibrate?.(10);
+      }, LONG_PRESS_MS),
+    };
   };
 
   const onRootPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const pending = press.current;
+    if (pending && pending.pointerId === e.pointerId) {
+      pending.y = e.clientY;
+      // 길게 누르기 전에 손가락이 움직이면 스크롤로 본다
+      if (Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) cancelPendingPress();
+    }
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     // 가장자리 근처에서는 안쪽 스크롤을 따라 움직인다
@@ -190,13 +247,29 @@ export function TimeGrid({
   };
 
   const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (press.current?.pointerId === e.pointerId) cancelPendingPress();
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     drag.current = null;
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    // 터치는 손을 뗀 뒤 click이 안 올 수도 있어서, 잠시 뒤에도 플래그가 남아 다음 탭을 삼키지 않게 정리한다
+    if (e.pointerType !== 'mouse') window.setTimeout(() => (mouseHandled.current = false), 500);
   };
 
-  const cols = `${single ? 40 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
+  /** (하루 보기) 가격 구간 하나의 빈 시간을 한 번에 선택하고, 이미 모두 선택돼 있으면 모두 해제한다 */
+  const selectBand = (band: PriceBand) => {
+    const day = days[0];
+    if (!day) return;
+    const free = day.slots.filter((sl) => sl.status === 'free' && sl.hour >= band.start && sl.hour < band.end);
+    if (free.length === 0) return;
+    const allOn = free.every((sl) => selected.has(slotKey(day.date, sl.hour)));
+    for (const sl of free) {
+      if (selected.has(slotKey(day.date, sl.hour)) === allOn) onToggleFree(day.date, sl.hour);
+    }
+  };
+
+  const maxCost = Math.max(0, ...bands.map((b) => b.cost));
+  const cols = `${single ? 44 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
 
   return (
     <div className={`${fill ? 'card flex flex-col flex-1 min-h-0 overflow-hidden' : 'card'} select-none`}>
@@ -212,6 +285,11 @@ export function TimeGrid({
           if (mouseHandled.current) e.preventDefault();
         }}
         onDragStart={(e) => e.preventDefault()}
+        onContextMenu={(e) => {
+          // 길게 누를 때 뜨는 시스템 메뉴/확대경이 끌기를 방해하지 않게 한다
+          if (drag.current || press.current) e.preventDefault();
+        }}
+        style={{ WebkitTouchCallout: 'none' }}
       >
         {showHeader && (
           <div className="grid sticky top-0 z-20 bg-cream border-b border-line/70" style={{ gridTemplateColumns: cols }}>
@@ -228,7 +306,7 @@ export function TimeGrid({
                   className={`py-1.5 text-center border-l border-line/50 ${onOpenDay ? 'hover:bg-sage-muted/40' : ''}`}
                   title={onOpenDay ? '이 날 자세히 보기' : undefined}
                 >
-                  <span className={`block text-[10px] ${jd.getDay() === 0 ? 'text-[#b04040]/80' : jd.getDay() === 6 ? 'text-slot-pick' : 'text-ink-faint'}`}>
+                  <span className={`block text-2xs ${jd.getDay() === 0 ? 'text-danger-ink/80' : jd.getDay() === 6 ? 'text-slot-pick' : 'text-ink-faint'}`}>
                     {WEEKDAYS_KO[jd.getDay()]}
                   </span>
                   <span
@@ -251,15 +329,32 @@ export function TimeGrid({
               const band = bandFor(bands, hour);
               const bandStart = band && band.start === hour;
               return (
-                <div key={hour} className="relative border-b border-line/40 pr-1 text-right" style={{ height: H }}>
-                  <span className="text-[10px] leading-none text-ink-faint tabular-nums relative -top-[1px]">
+                <div key={hour} className="relative border-b border-line/40 pr-1.5 text-right" style={{ height: H }}>
+                  {/* 가격 구간 색 띠: 진할수록 시간당 토큰이 많다 */}
+                  <span
+                    aria-hidden
+                    className="absolute right-0 inset-y-0 w-[3px]"
+                    style={{ background: `color-mix(in srgb, var(--color-sage) ${Math.round(12 + (band && maxCost > 0 ? (band.cost / maxCost) * 78 : 0))}%, transparent)` }}
+                  />
+                  <span className="text-2xs leading-none text-ink-faint tabular-nums relative -top-[1px]">
                     {String(hour).padStart(2, '0')}
                   </span>
-                  {bandStart && (
-                    <span className="absolute right-1 bottom-0.5 text-[9px] leading-none text-sage font-medium tabular-nums">
-                      {band.cost}t
-                    </span>
-                  )}
+                  {bandStart &&
+                    (single ? (
+                      <button
+                        type="button"
+                        className="absolute right-1 bottom-0.5 z-[1] rounded-full bg-sage-muted px-1.5 py-1 text-2xs leading-none text-sage font-medium tabular-nums hover:bg-sage-muted/70 active:scale-95 transition"
+                        title={`${String(band.start).padStart(2, '0')}~${String(band.end).padStart(2, '0')}시 전체 선택`}
+                        aria-label={`${band.start}시부터 ${band.end}시까지 전체 선택 또는 해제`}
+                        onClick={() => selectBand(band)}
+                      >
+                        {band.cost}t
+                      </button>
+                    ) : (
+                      <span className="absolute right-1 bottom-0.5 text-2xs leading-none text-sage font-medium tabular-nums">
+                        {band.cost}t
+                      </span>
+                    ))}
                 </div>
               );
             })}
@@ -278,15 +373,16 @@ export function TimeGrid({
                   if (isSelected) cls += 'bg-slot-pick/90 ';
                   else if (slot.status === 'past') cls += 'bg-cream-dark/50 ';
                   else if (slot.status === 'closed') cls += 'bg-cream-dark/70 ';
-                  else if (free) cls += `${band && band.cost === 0 ? 'bg-sage-muted/25' : 'bg-white'} hover:bg-sage-muted/50 cursor-pointer `;
-                  else cls += 'bg-white ';
+                  else if (free) cls += `${band && band.cost === 0 ? 'bg-sage-muted/25' : 'bg-surface'} hover:bg-sage-muted/50 active:bg-slot-pick/30 cursor-pointer `;
+                  else cls += 'bg-surface ';
                   return (
                     <div
                       key={slot.hour}
                       className={cls}
                       style={{
                         height: H,
-                        backgroundImage: slot.status === 'past' || slot.status === 'closed' ? STRIPES : undefined,
+                        // 지난 시간은 단색으로 흐리게, 예약을 받지 않는 시간(closed)만 줄무늬로 구분한다
+                        backgroundImage: slot.status === 'closed' ? STRIPES : undefined,
                       }}
                       role={free ? 'button' : undefined}
                       tabIndex={free ? 0 : undefined}
@@ -306,8 +402,13 @@ export function TimeGrid({
                         if (free) onToggleFree(day.date, slot.hour);
                       }}
                     >
-                      {free && (single || isSelected) && (
-                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[11px] tabular-nums ${isSelected ? 'text-white' : 'text-ink-faint'}`}>
+                      {free && isSelected && !single && (
+                        <span aria-hidden className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold">
+                          ✓
+                        </span>
+                      )}
+                      {free && single && (
+                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-2xs tabular-nums ${isSelected ? 'text-white' : 'text-ink-faint'}`}>
                           {isSelected ? `선택 · ${slot.cost}토큰` : `${slot.cost}토큰`}
                         </span>
                       )}
@@ -322,7 +423,7 @@ export function TimeGrid({
                   const tone = b.legacy
                     ? mine
                       ? 'bg-sage/80 text-white'
-                      : 'bg-[#cfc9bb] text-ink'
+                      : 'bg-slot-legacy text-ink'
                     : mine
                       ? 'bg-sage text-white'
                       : 'bg-slot-taken text-ink';
@@ -363,11 +464,11 @@ export function TimeGrid({
                       }}
                     >
                       <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight`}>
-                        <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-[10px]'}`}>
+                        <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-2xs'}`}>
                           {b.legacy ? (single ? `월 신청 · ${b.name}` : b.name || '월 신청') : mine ? (single ? '내 예약' : b.name || '내 예약') : b.name || '예약됨'}
                         </p>
                         {(single || tall >= 2) && (
-                          <p className={`opacity-80 tabular-nums ${single ? 'text-xs' : 'text-[10px]'}`}>
+                          <p className={`opacity-80 tabular-nums ${single ? 'text-xs' : 'text-2xs'}`}>
                             {String(b.start).padStart(2, '0')}:00~{String(b.end).padStart(2, '0')}:00
                             {mine && !b.legacy && single ? ` · ${b.paid.reduce<number>((s, v) => s + (v ?? 0), 0)}토큰` : ''}
                           </p>
@@ -378,7 +479,7 @@ export function TimeGrid({
                         id != null && cancelSelected.has(id) ? (
                           <div
                             key={id}
-                            className="absolute inset-x-0 bg-[#c45c5c] text-white flex items-center justify-center text-[11px] font-medium"
+                            className="absolute inset-x-0 bg-danger text-white flex items-center justify-center text-2xs font-medium"
                             style={{ top: i * H, height: H }}
                           >
                             취소
@@ -391,8 +492,8 @@ export function TimeGrid({
 
                 {now && now.date === day.date && (
                   <div className="absolute inset-x-0 z-10 pointer-events-none" style={{ top: now.top }}>
-                    <div className="h-px bg-[#d0463c]" />
-                    <span className="absolute -left-1 -top-[3px] w-[7px] h-[7px] rounded-full bg-[#d0463c]" />
+                    <div className="h-px bg-now" />
+                    <span className="absolute -left-1 -top-[3px] w-[7px] h-[7px] rounded-full bg-now" />
                   </div>
                 )}
               </div>
@@ -401,10 +502,10 @@ export function TimeGrid({
         </div>
       </div>
       {legend !== false && (
-        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 border-t border-line/60 text-[10px] text-ink-muted">
+        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 border-t border-line/60 text-2xs text-ink-muted">
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage inline-block" />내 예약</span>
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-slot-taken inline-block" />예약됨</span>
-          <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block bg-[#cfc9bb]" style={{ backgroundImage: STRIPES }} />월 신청</span>
+          <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block bg-slot-legacy" style={{ backgroundImage: STRIPES }} />월 신청</span>
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-slot-pick inline-block" />선택</span>
           <span className="text-ink-faint">t = 시간당 토큰</span>
         </div>

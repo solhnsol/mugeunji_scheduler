@@ -97,7 +97,7 @@ export function AdminBookingSettings({
               disabled={busy || mode === null}
               onClick={() => switchMode(m.id)}
               className={`text-left rounded-2xl border p-3 transition min-h-[56px] ${
-                mode === m.id ? 'border-sage bg-sage-muted/40' : 'border-line bg-white hover:border-sage/40'
+                mode === m.id ? 'border-sage bg-sage-muted/40' : 'border-line bg-surface hover:border-sage/40'
               }`}
             >
               <p className="text-sm font-medium text-ink">
@@ -142,7 +142,7 @@ export function AdminBookingSettings({
               <span className="text-ink-faint">시</span>
               <input aria-label="시간당 토큰" className="input !py-1.5 !px-2 !w-16 text-center" type="number" min={0} value={b.cost} onChange={(e) => updateBand(i, 'cost', e.target.value)} />
               <span className="text-ink-faint">토큰</span>
-              <button type="button" className="text-xs text-[#8b4040] px-2 min-h-[36px]" onClick={() => setBands((p) => p.filter((_, idx) => idx !== i))}>삭제</button>
+              <button type="button" className="text-xs text-danger-ink px-2 min-h-[36px]" onClick={() => setBands((p) => p.filter((_, idx) => idx !== i))}>삭제</button>
             </li>
           ))}
         </ul>
@@ -163,7 +163,7 @@ export function AdminBookingSettings({
               <span className="text-ink-faint">시간 전까지</span>
               <input aria-label="환불 비율" className="input !py-1.5 !px-2 !w-16 text-center" type="number" min={0} max={100} value={t.percent} onChange={(e) => updateTier(i, 'percent', e.target.value)} />
               <span className="text-ink-faint">%</span>
-              <button type="button" className="text-xs text-[#8b4040] px-2 min-h-[36px]" onClick={() => setTiers((p) => p.filter((_, idx) => idx !== i))}>삭제</button>
+              <button type="button" className="text-xs text-danger-ink px-2 min-h-[36px]" onClick={() => setTiers((p) => p.filter((_, idx) => idx !== i))}>삭제</button>
             </li>
           ))}
         </ul>

@@ -179,7 +179,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
             {authed ? (
               <Link
                 to="/"
-                className="inline-flex items-center justify-center rounded-full bg-white text-sage font-semibold min-h-[48px] px-6 hover:bg-cream transition"
+                className="inline-flex items-center justify-center rounded-full bg-white text-[#3a5248] font-semibold min-h-[48px] px-6 hover:bg-white/90 transition"
               >
                 내 예약으로
               </Link>
@@ -187,7 +187,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
               <>
                 <Link
                   to="/register"
-                  className="inline-flex items-center justify-center rounded-full bg-white text-sage font-semibold min-h-[48px] px-6 hover:bg-cream transition"
+                  className="inline-flex items-center justify-center rounded-full bg-white text-[#3a5248] font-semibold min-h-[48px] px-6 hover:bg-white/90 transition"
                 >
                   회원가입
                 </Link>
@@ -315,7 +315,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
           </div>
         </Section>
 
-        <div className="rounded-3xl bg-white border border-line/80 p-7 text-center">
+        <div className="rounded-3xl bg-surface border border-line/80 p-7 text-center">
           <p className="text-lg font-bold text-ink">지금 시작해보세요</p>
           <p className="text-sm text-ink-muted mt-1.5">가입하고 토큰을 충전하면 바로 예약할 수 있어요.</p>
           <div className="flex flex-wrap justify-center gap-2 mt-5">

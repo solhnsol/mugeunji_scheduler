@@ -1,21 +1,50 @@
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { SESSION } from './api';
 import { AppShell } from './components/ui';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
 import { useSession } from './hooks/useSession';
-import LoginPage, { RegisterPage } from './pages/auth';
-import UserApp from './pages/UserApp';
-import AdminPage from './pages/AdminPage';
-import FreeApp from './pages/FreeApp';
-import Landing from './pages/Landing';
-import BookingPage from './pages/BookingPage';
-import TokensPage from './pages/TokensPage';
-import NoticesPage from './pages/NoticesPage';
+
+// 화면 단위로 코드를 나눠, 회원이 관리자 화면 코드까지 내려받지 않게 한다
+const LoginPage = lazy(() => import('./pages/auth'));
+const RegisterPage = lazy(() => import('./pages/auth').then((m) => ({ default: m.RegisterPage })));
+const UserApp = lazy(() => import('./pages/UserApp'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const FreeApp = lazy(() => import('./pages/FreeApp'));
+const Landing = lazy(() => import('./pages/Landing'));
+const BookingPage = lazy(() => import('./pages/BookingPage'));
+const TokensPage = lazy(() => import('./pages/TokensPage'));
+const NoticesPage = lazy(() => import('./pages/NoticesPage'));
+import { PageSkeleton } from './components/Skeleton';
+import { ErrorBoundary } from './components/ErrorBoundary';
+
+const BRAND = '묵은지 작업실';
+const DEFAULT_TITLE = document.title;
+const ROUTE_TITLES: [string, string][] = [
+  ['/book', '예약'],
+  ['/tokens', '토큰'],
+  ['/notices', '공지·이용 안내'],
+  ['/free', '자유이용'],
+  ['/login', '로그인'],
+  ['/register', '가입'],
+  ['/admin', '관리자'],
+  ['/about', '소개'],
+];
+
+/** 화면마다 탭·방문 기록에서 구분되도록 문서 제목을 바꾼다 (홈은 기본 제목) */
+function TitleManager() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const hit = ROUTE_TITLES.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+    document.title = hit ? `${hit[1]} | ${BRAND}` : DEFAULT_TITLE;
+  }, [pathname]);
+  return null;
+}
 
 function Splash() {
   return (
     <AppShell title="묵은지 작업실">
-      <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+      <PageSkeleton />
     </AppShell>
   );
 }
@@ -43,8 +72,8 @@ function ToLogin() {
 }
 
 function LoginRoute() {
-  const { session, refresh } = useSession();
   const [params] = useSearchParams();
+  const { session, refresh } = useSession();
 
   if (session.status === 'loading') return <Splash />;
   if (session.status === 'authed') return <Navigate to={safeNext(params.get('next'))} replace />;
@@ -108,6 +137,9 @@ function FreeRoute() {
 export default function App() {
   return (
     <BrowserRouter>
+      <TitleManager />
+      <ErrorBoundary>
+      <Suspense fallback={<Splash />}>
       <Routes>
         <Route path="/" element={<UserRoute />} />
         <Route path="/login" element={<LoginRoute />} />
@@ -121,6 +153,8 @@ export default function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

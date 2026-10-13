@@ -1,4 +1,5 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { TokenBalance, TokenLedgerEntry, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiresOn, formatExpiry, formatPhone, formatPrice, formatTokens } from '../utils';
@@ -7,6 +8,7 @@ import { ExpiryInput } from './ExpiryInput';
 import { AdminBookingSettings } from './AdminBookingSettings';
 import { AdminBookingsPanel } from './AdminBookingsPanel';
 import { useConfirm } from './ConfirmDialog';
+import { ModalOverlay } from './Modal';
 
 type PurchaseFilter = 'pending' | 'confirmed' | 'cancelled';
 
@@ -18,7 +20,7 @@ const FILTERS: { id: PurchaseFilter; label: string }[] = [
 
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div
         className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -27,7 +29,7 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
         {subtitle && <p className="text-xs text-ink-faint mt-0.5">{subtitle}</p>}
         <div className="mt-5">{children}</div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -39,12 +41,25 @@ export function AdminTokensTab({
   show: (m: string, t: 'success' | 'error') => void;
 }) {
   const [chargeEnabled, setChargeEnabled] = useState<boolean | null>(null);
-  const [filter, setFilter] = useState<PurchaseFilter>('pending');
+  // 요청 상태 필터와 회원 검색어는 주소에 둬서 새로고침·뒤로가기 뒤에도 유지된다 (tab 값은 그대로 보존)
+  const [params, setParams] = useSearchParams();
+  const patchParams = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) next.set(k, v);
+      else next.delete(k);
+    }
+    setParams(next, { replace: true });
+  };
+  const filterParam = params.get('pf');
+  const filter: PurchaseFilter = FILTERS.some((f) => f.id === filterParam) ? (filterParam as PurchaseFilter) : 'pending';
+  const setFilter = (f: PurchaseFilter) => patchParams({ pf: f === 'pending' ? null : f });
+  const query = params.get('tq') ?? '';
+  const setQuery = (value: string) => patchParams({ tq: value || null });
   const [purchases, setPurchases] = useState<TokenPurchase[] | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [packs, setPacks] = useState<TokenPack[]>([]);
   const [balances, setBalances] = useState<TokenBalance[]>([]);
-  const [query, setQuery] = useState('');
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [packModal, setPackModal] = useState<TokenPack | 'new' | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<TokenBalance | null>(null);
@@ -187,7 +202,7 @@ export function AdminTokensTab({
                 role="tab"
                 aria-selected={filter === f.id}
                 className={`rounded-full px-3 py-1.5 text-xs min-h-[32px] border transition ${
-                  filter === f.id ? 'bg-sage text-white border-sage' : 'bg-white text-ink-muted border-line hover:border-sage/30'
+                  filter === f.id ? 'bg-sage text-white border-sage' : 'bg-surface text-ink-muted border-line hover:border-sage/30'
                 }`}
                 onClick={() => setFilter(f.id)}
               >
@@ -242,7 +257,7 @@ export function AdminTokensTab({
                       </button>
                       <button
                         type="button"
-                        className="text-xs text-[#8b4040] min-h-[36px] px-2 disabled:opacity-40"
+                        className="text-xs text-danger-ink min-h-[36px] px-2 disabled:opacity-40"
                         disabled={busy}
                         onClick={async () => {
                           const ok = await confirm({
@@ -314,7 +329,7 @@ export function AdminTokensTab({
                   </button>
                   <button
                     type="button"
-                    className="text-xs text-[#8b4040] min-h-[36px] px-2 disabled:opacity-40"
+                    className="text-xs text-danger-ink min-h-[36px] px-2 disabled:opacity-40"
                     disabled={busy}
                     onClick={async () => {
                       const ok = await confirm({
@@ -522,7 +537,7 @@ function PackModal({
             <span className="text-sm font-medium">회원에게 판매 중</span>
           </label>
         )}
-        {error && <p className="text-xs text-[#b04040]" role="alert">{error}</p>}
+        {error && <p className="text-xs text-danger-ink" role="alert">{error}</p>}
       </div>
       <div className="flex gap-2 mt-6">
         <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>{busy ? '저장 중…' : '저장'}</button>
@@ -573,7 +588,7 @@ function AdjustModal({
           <label className="label" htmlFor="adj-memo">사유</label>
           <input id="adj-memo" className="input" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="예: 11월 이용권 환산 지급" maxLength={200} />
         </div>
-        {error && <p className="text-xs text-[#b04040]" role="alert">{error}</p>}
+        {error && <p className="text-xs text-danger-ink" role="alert">{error}</p>}
       </div>
       <div className="flex gap-2 mt-6">
         <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>{busy ? '처리 중…' : '조정'}</button>
@@ -620,7 +635,7 @@ function LedgerModal({
                   {l.tokens > 0 && l.expires_at ? ` · ${formatExpiry(l.expires_at)} 사용` : ''}
                 </p>
               </div>
-              <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-[#b04040]'}`}>
+              <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-danger-ink'}`}>
                 {l.tokens >= 0 ? '+' : ''}
                 {formatTokens(l.tokens)}
               </p>
@@ -645,6 +660,7 @@ function GrantModal({
   onSubmit: (body: { usernames: string[]; tokens: number; memo: string; expires_on?: string | null }) => Promise<void>;
 }) {
   const rules = useTokenRules();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [amount, setAmount] = useState('10');
   const [memo, setMemo] = useState('11월 베타 무료 지급');
@@ -667,6 +683,17 @@ function GrantModal({
     if (selected.size === 0) return setError('지급할 회원을 선택해주세요.');
     if (!Number.isInteger(value) || value < 1) return setError('지급 토큰은 1 이상의 정수로 입력해주세요.');
     if (!memo.trim()) return setError('지급 사유를 입력해주세요.');
+    setError('');
+    // 되돌리기 어려운 일괄 작업이라, 실행 전에 대상 수·총량·기한을 한 번 더 보여준다
+    const names = balances.filter((b) => selected.has(b.username)).map((b) => b.name || b.username);
+    const preview = names.length <= 5 ? names.join(', ') : `${names.slice(0, 5).join(', ')} 외 ${names.length - 5}명`;
+    const ok = await confirm({
+      title: `${selected.size}명에게 ${formatTokens(value)}토큰씩 지급할까요?`,
+      message: `총 ${formatTokens(value * selected.size)}토큰\n대상: ${preview}\n사유: ${memo.trim()}\n사용 기한: ${expiresOn ? formatExpiresOn(expiresOn) : '3개월 뒤 소멸(기본)'}`,
+      confirmLabel: '지급',
+      cancelLabel: '돌아가기',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await onSubmit({ usernames: Array.from(selected), tokens: value, memo: memo.trim(), ...(expiresOn ? { expires_on: expiresOn } : {}) });
@@ -705,12 +732,13 @@ function GrantModal({
           <label className="label" htmlFor="grant-memo">사유</label>
           <input id="grant-memo" className="input" value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={200} />
         </div>
-        {error && <p className="text-xs text-[#b04040]" role="alert">{error}</p>}
+        {error && <p className="text-xs text-danger-ink" role="alert">{error}</p>}
       </div>
       <div className="flex gap-2 mt-6">
         <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>{busy ? '지급 중…' : '지급'}</button>
         <button type="button" className="btn-secondary flex-1" onClick={onClose}>취소</button>
       </div>
+      {confirmDialog}
     </Modal>
   );
 }

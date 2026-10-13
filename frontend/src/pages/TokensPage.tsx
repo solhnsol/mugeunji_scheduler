@@ -7,6 +7,7 @@ import { expiryPhrase, useTokenRules } from '../hooks/useTokenRules';
 import { useToast } from '../hooks/useToast';
 import { MyTokens, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiresOn, formatExpiry, formatPrice, formatTokens } from '../utils';
+import { PageSkeleton } from '../components/Skeleton';
 
 const STATUS_LABEL: Record<TokenPurchase['status'], { text: string; cls: string }> = {
   pending: { text: '관리자 확인 대기', cls: 'text-amber-700' },
@@ -116,7 +117,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
           </div>
         </div>
       ) : !mine || !packs ? (
-        <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+        <PageSkeleton />
       ) : (
         <div className="space-y-6">
           <div className="rounded-3xl bg-gradient-to-br from-sage via-[#345045] to-sage-light text-white p-6 sm:p-8 shadow-[0_10px_40px_rgba(58,82,72,0.22)]">
@@ -202,7 +203,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                         {p.status === 'pending' && (
                           <button
                             type="button"
-                            className="text-xs text-[#8b4040] min-h-[32px] px-2 disabled:opacity-40"
+                            className="text-xs text-danger-ink min-h-[32px] px-2 disabled:opacity-40"
                             disabled={busy}
                             onClick={() => cancelRequest(p)}
                           >
@@ -233,7 +234,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                         {l.tokens > 0 && l.expires_at ? ` · ${formatExpiry(l.expires_at)} 사용` : ''}
                       </p>
                     </div>
-                    <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-[#b04040]'}`}>
+                    <p className={`text-sm font-semibold tabular-nums shrink-0 ${l.tokens >= 0 ? 'text-sage' : 'text-danger-ink'}`}>
                       {l.tokens >= 0 ? '+' : ''}
                       {formatTokens(l.tokens)}
                     </p>

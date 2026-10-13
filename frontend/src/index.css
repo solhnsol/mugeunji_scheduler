@@ -6,22 +6,77 @@
   --color-cream-dark: #ebe9e3;
   --color-ink: #141414;
   --color-ink-muted: #5c5c5c;
-  --color-ink-faint: #949494;
+  --color-ink-faint: #707070;
   --color-sage: #3a5248;
   --color-sage-light: #4a6659;
   --color-sage-muted: #e8eeeb;
   --color-line: #e3e0d8;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
   --color-slot-mine: #3a5248;
   --color-slot-taken: #ddd9d0;
   --color-slot-pick: #5b7f96;
+  --color-surface: #ffffff;
+  --color-danger: #c45c5c;
+  --color-danger-hover: #b34f4f;
+  --color-now: #d0463c;
+  --color-danger-ink: #b04040;
+  --color-danger-soft: #fdf5f5;
+  --color-danger-line: #e8c4c4;
+  --color-slot-legacy: #cfc9bb;
+  --color-slot-taken-bar: #b9b3a6;
+  --color-slot-monthly: #d4cfc4;
+}
+
+/* 다크 모드: 기기 설정을 따른다. 색은 모두 위 토큰을 거치므로 값만 바꾼다 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-cream: #111412;
+    --color-cream-dark: #1d221f;
+    --color-ink: #ecebe6;
+    --color-ink-muted: #b0b4ad;
+    --color-ink-faint: #8a8f88;
+    --color-sage: #4f7a65;
+    --color-sage-light: #5f8d76;
+    --color-sage-muted: #1f2c26;
+    --color-line: #2f3631;
+    --color-slot-taken: #3b413c;
+    --color-slot-pick: #4d7690;
+    --color-surface: #1a1e1b;
+    --color-now: #ef6a60;
+    --color-danger-ink: #e8837f;
+    --color-danger-soft: #2c1e1e;
+    --color-danger-line: #5a3636;
+    --color-slot-legacy: #4a4f49;
+    --color-slot-taken-bar: #5a5f58;
+    --color-slot-monthly: #444942;
+    --color-amber-50: #2e2819;
+    --color-amber-200: #5c4d22;
+    --color-amber-700: #e0b85a;
+    --color-amber-800: #e6c36e;
+    --color-amber-900: #ecd08a;
+  }
 }
 
 html {
+  color-scheme: light dark;
   -webkit-tap-highlight-color: transparent;
   /* 화면 밖으로 넓어진 요소가 있어도 페이지가 가로로 밀리지 않게 한다 */
   overflow-x: clip;
   /* 앱처럼: 당겨서 새로고침/끝에서 튕기는 동작이 화면 전체를 흔들지 않게 */
   overscroll-behavior-y: none;
+}
+
+/* 키보드로 이동할 때만 현재 위치를 또렷하게 보여준다 (마우스/터치 클릭에는 나타나지 않음) */
+:focus-visible {
+  outline: 2px solid var(--color-sage);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.input:focus-visible {
+  outline: none;
 }
 
 body {
@@ -30,7 +85,7 @@ body {
 }
 
 .card {
-  @apply bg-white rounded-2xl border border-line/80 shadow-[0_1px_3px_rgba(20,20,20,0.04)];
+  @apply bg-surface rounded-2xl border border-line/80 shadow-[0_1px_3px_rgba(20,20,20,0.04)];
 }
 
 .btn-primary {
@@ -41,7 +96,7 @@ body {
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center rounded-full border border-line bg-white text-ink
+  @apply inline-flex items-center justify-center rounded-full border border-line bg-surface text-ink
     font-medium py-2.5 px-4 min-h-[44px]
     hover:bg-cream active:scale-[0.98] transition-all;
 }
@@ -52,12 +107,13 @@ body {
 }
 
 .btn-danger {
-  @apply inline-flex items-center justify-center rounded-full bg-[#c45c5c] text-white font-medium
-    py-3 px-6 min-h-[48px] w-full hover:bg-[#b34f4f] active:scale-[0.98] transition-all;
+  @apply inline-flex items-center justify-center rounded-full bg-danger text-white font-medium
+    py-3 px-6 min-h-[48px] w-full hover:bg-danger-hover active:scale-[0.98] transition-all
+    disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
 }
 
 .input {
-  @apply w-full rounded-2xl border border-line bg-white px-4 py-3.5 text-ink text-base
+  @apply w-full rounded-2xl border border-line bg-surface px-4 py-3.5 text-ink text-base
     placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-sage/20 focus:border-sage/40
     transition-shadow;
 }
@@ -98,7 +154,7 @@ body {
 
 /* 시간표: 가로·세로 스크롤, 요일 헤더 고정, 일요일 열 여백 */
 .schedule-grid-scroll {
-  @apply overflow-auto bg-white;
+  @apply overflow-auto bg-surface;
   max-height: min(70dvh, 36rem);
   border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
   border-radius: 1rem;
@@ -108,7 +164,7 @@ body {
 }
 
 .schedule-grid-scroll--fill {
-  @apply flex-1 min-h-0 overflow-auto bg-white;
+  @apply flex-1 min-h-0 overflow-auto bg-surface;
   max-height: none;
   border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
   border-radius: 1rem;
@@ -151,7 +207,7 @@ body {
   top: 0;
   left: 0;
   z-index: 50;
-  background: #fff;
+  background: var(--color-surface);
   border-top-left-radius: calc(1rem - 1px);
   box-shadow:
     inset -1px 0 0 var(--color-line),
@@ -162,7 +218,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow: inset 0 -1px 0 var(--color-line);
 }
 
@@ -175,7 +231,7 @@ body {
   position: sticky;
   left: 0;
   z-index: 30;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow: inset -1px 0 0 var(--color-line);
 }
 
@@ -186,4 +242,108 @@ body {
 .schedule-grid-td-last {
   border-right: none;
   padding-right: 0.75rem;
+}
+
+/* 토스트: 위에서 살짝 내려오며 나타난다 */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: 0 -8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.toast-in {
+  animation: toast-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-in {
+    animation: none;
+  }
+}
+
+/* 모달: 배경은 페이드, 안쪽 패널은 아래에서 살짝 올라온다 */
+@keyframes modal-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-rise {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.modal-overlay {
+  animation: modal-fade 160ms ease-out;
+  overscroll-behavior: contain;
+}
+
+.modal-overlay > * {
+  animation: modal-rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay,
+  .modal-overlay > * {
+    animation: none;
+  }
+}
+
+/* 로딩 자리표시자: 천천히 깜빡이는 배경 */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.skeleton {
+  background: var(--color-cream-dark);
+  border-radius: 0.5rem;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* 화면 전환(달력 ↔ 일정표): 짧은 페이드 */
+@keyframes view-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.view-in {
+  animation: view-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-in {
+    animation: none;
+  }
 }

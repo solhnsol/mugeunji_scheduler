@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plan } from '../types';
 import { formatPrice } from '../utils';
+import { ModalOverlay } from './Modal';
 
 function periodLabel(offset: number) {
   const d = new Date();
@@ -30,10 +31,7 @@ export function PlanApplyModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center"
-      onClick={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
@@ -86,6 +84,6 @@ export function PlanApplyModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

@@ -4,15 +4,16 @@ import { Notice } from '../types';
 import { formatDateTime } from '../utils';
 import { useConfirm } from './ConfirmDialog';
 import { Markdown } from './Markdown';
+import { ModalOverlay } from './Modal';
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div className="card p-6 w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl max-h-[92dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg text-ink">{title}</h3>
         <div className="mt-5">{children}</div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -142,7 +143,7 @@ export function AdminNoticesTab({ token, show }: { token: string; show: (m: stri
                     {n.pinned ? '고정 해제' : '고정'}
                   </button>
                   <button type="button" className="text-xs text-sage font-medium min-h-[36px] px-2" onClick={() => openEditor(n)}>수정</button>
-                  <button type="button" className="text-xs text-[#8b4040] min-h-[36px] px-2" onClick={() => remove(n)}>삭제</button>
+                  <button type="button" className="text-xs text-danger-ink min-h-[36px] px-2" onClick={() => remove(n)}>삭제</button>
                 </div>
               </li>
             ))}
@@ -161,7 +162,7 @@ export function AdminNoticesTab({ token, show }: { token: string; show: (m: stri
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-ink-muted">{hasKey === null ? '…' : hasKey ? '키가 발급돼 있어요' : '발급된 키가 없어요'}</span>
           <button type="button" className="btn-secondary !w-auto !min-h-[40px] !py-2 text-sm" onClick={rotateKey}>{hasKey ? '키 재발급' : '키 발급'}</button>
-          {hasKey && <button type="button" className="text-xs text-[#8b4040] min-h-[40px] px-2" onClick={revokeKey}>폐기</button>}
+          {hasKey && <button type="button" className="text-xs text-danger-ink min-h-[40px] px-2" onClick={revokeKey}>폐기</button>}
         </div>
         {newKey && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 space-y-2">
@@ -176,7 +177,7 @@ export function AdminNoticesTab({ token, show }: { token: string; show: (m: stri
             </button>
           </div>
         )}
-        <pre className="text-[11px] leading-relaxed bg-cream-dark/60 rounded-2xl p-3 overflow-x-auto whitespace-pre-wrap break-all">{sample}</pre>
+        <pre className="text-2xs leading-relaxed bg-cream-dark/60 rounded-2xl p-3 overflow-x-auto whitespace-pre-wrap break-all">{sample}</pre>
       </section>
 
       {editing && (
@@ -260,7 +261,7 @@ function EditorModal({
             </button>
           </div>
           {preview ? (
-            <div className="rounded-2xl border border-line p-4 min-h-[200px] bg-white"><Markdown source={body} /></div>
+            <div className="rounded-2xl border border-line p-4 min-h-[200px] bg-surface"><Markdown source={body} /></div>
           ) : (
             <textarea id="notice-body" className="input !min-h-[240px] font-mono text-sm" value={body} maxLength={20000} onChange={(e) => setBody(e.target.value)} />
           )}
@@ -274,7 +275,7 @@ function EditorModal({
           <input type="checkbox" className="w-5 h-5 accent-sage" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
           <span className="text-sm"><b className="font-medium">상단 고정</b></span>
         </label>
-        {error && <p className="text-xs text-[#b04040]" role="alert">{error}</p>}
+        {error && <p className="text-xs text-danger-ink" role="alert">{error}</p>}
       </div>
       <div className="flex gap-2 mt-6">
         <button type="button" className="btn-primary flex-1" disabled={busy} onClick={submit}>{busy ? '저장 중…' : '저장'}</button>

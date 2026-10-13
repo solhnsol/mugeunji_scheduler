@@ -1,4 +1,5 @@
-import { ReactNode, useEffect } from 'react';
+import { ReactNode } from 'react';
+import { ModalOverlay } from './Modal';
 
 export function ScheduleModal({
   title,
@@ -9,22 +10,8 @@ export function ScheduleModal({
   onClose: () => void;
   children: ReactNode;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="schedule-modal-title"
-    >
+    <ModalOverlay onClose={onClose} className="z-50 items-center p-4" labelledBy="schedule-modal-title">
       <div
         className="card w-full max-w-lg flex flex-col max-h-[min(88dvh,44rem)] overflow-hidden shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -41,6 +28,6 @@ export function ScheduleModal({
           {children}
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

@@ -3,6 +3,7 @@ import { api, ApiError } from '../api';
 import { Plan, RosterCandidate, RosterMember, RosterResponse } from '../types';
 import { useConfirm } from './ConfirmDialog';
 import { formatPhone, formatPrice } from '../utils';
+import { ModalOverlay } from './Modal';
 
 function shiftPeriod(period: string, delta: number) {
   const [y, m] = period.split('-').map(Number);
@@ -190,7 +191,7 @@ export function AdminRosterTab({
           {summary.paid > 0 && (
             <button
               type="button"
-              className="text-xs border border-[#e8c4c4] text-[#8b4040] rounded-full px-3 py-1.5 min-h-[40px] hover:bg-[#fdf5f5] disabled:opacity-40"
+              className="text-xs border border-danger-line text-danger-ink rounded-full px-3 py-1.5 min-h-[40px] hover:bg-danger-soft disabled:opacity-40"
               disabled={busy}
               onClick={async () => {
                 const ok = await confirm({
@@ -241,7 +242,7 @@ export function AdminRosterTab({
               className={`rounded-full px-3 py-1.5 text-xs min-h-[32px] border transition ${
                 statusFilter === f.id
                   ? 'bg-sage text-white border-sage'
-                  : 'bg-white text-ink-muted border-line hover:border-sage/30'
+                  : 'bg-surface text-ink-muted border-line hover:border-sage/30'
               }`}
               onClick={() => setStatusFilter(f.id)}
             >
@@ -307,7 +308,7 @@ export function AdminRosterTab({
                     </button>
                     <button
                       type="button"
-                      className="text-xs text-[#8b4040] min-h-[36px] px-2 disabled:opacity-40"
+                      className="text-xs text-danger-ink min-h-[36px] px-2 disabled:opacity-40"
                       disabled={busy || m.billing_status === 'paid' || isPast}
                       title={
                         isPast
@@ -445,7 +446,7 @@ function AddMemberModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg text-ink">{candidate.name || candidate.username}</h3>
         <p className="text-xs text-ink-faint mb-5">@{candidate.username} · {period} 명단에 추가</p>
@@ -478,7 +479,7 @@ function AddMemberModal({
                     <button
                       key={h}
                       type="button"
-                      className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${hours === h ? 'bg-sage text-white border-sage' : 'bg-white text-ink-muted border-line hover:border-sage/30'}`}
+                      className={`rounded-2xl py-3 font-semibold border transition min-h-[48px] ${hours === h ? 'bg-sage text-white border-sage' : 'bg-surface text-ink-muted border-line hover:border-sage/30'}`}
                       onClick={() => setHours(h)}
                     >
                       {h === 0 ? '없음' : `${h}h`}
@@ -524,6 +525,6 @@ function AddMemberModal({
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>취소</button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

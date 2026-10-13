@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PlanGrid } from './ui';
 import { MeResponse, Plan } from '../types';
 import { formatPrice } from '../utils';
+import { ModalOverlay } from './Modal';
 
 export function PlanManageModal({
   me,
@@ -49,10 +50,7 @@ export function PlanManageModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center"
-      onClick={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         className="card w-full sm:max-w-md max-h-[88dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
         onClick={(e) => e.stopPropagation()}
@@ -74,13 +72,13 @@ export function PlanManageModal({
         )}
 
         {pendingCancel && (
-          <div className="rounded-2xl border border-[#e8c4c4] bg-[#fdf5f5] p-4 mb-5 flex items-center justify-between gap-3">
-            <p className="text-sm text-[#8b4040]">
+          <div className="rounded-2xl border border-danger-line bg-danger-soft p-4 mb-5 flex items-center justify-between gap-3">
+            <p className="text-sm text-danger-ink">
               {pendingCancel.effective_period}부터 중단
             </p>
             <button
               type="button"
-              className="text-sm font-medium text-[#8b4040] underline shrink-0"
+              className="text-sm font-medium text-danger-ink underline shrink-0"
               onClick={() => onRevokeCancellation()}
             >
               취소
@@ -135,6 +133,6 @@ export function PlanManageModal({
           <p className="text-center text-xs text-ink-faint mt-4">중단 취소 후 변경할 수 있습니다</p>
         )}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

@@ -19,6 +19,7 @@ import { TokenHome } from '../components/TokenHome';
 import { MeResponse, MyBooking, Plan, ReservationMode } from '../types';
 import { formatTokens } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
+import { PageSkeleton } from '../components/Skeleton';
 
 export default function UserApp({
   token,
@@ -163,7 +164,7 @@ export default function UserApp({
             </div>
           </div>
         ) : (
-          <p className="text-center text-ink-faint py-16">불러오는 중…</p>
+          <PageSkeleton />
         )}
         <Toast message={toast.message} type={toast.type} />
       </AppShell>

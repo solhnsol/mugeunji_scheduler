@@ -1,10 +1,12 @@
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
+import { MemberPicker } from './MemberPicker';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { AdminBooking, GridDay, PriceBand, TokenBalance } from '../types';
 import { GridBlock, TimeGrid, buildBlocks } from './booking/TimeGrid';
 import { formatTokens, kstParts } from '../utils';
 import { addDays, formatDateKo, hourLabel, slotKey, startOfWeek, summarizeHours } from '../utils/booking';
+import { ModalOverlay } from './Modal';
 
 function todayKst(): string {
   const p = kstParts(new Date().toISOString());
@@ -14,13 +16,13 @@ function todayKst(): string {
 
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div className="card p-6 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg text-ink">{title}</h3>
         {subtitle && <p className="text-xs text-ink-faint mt-0.5">{subtitle}</p>}
         <div className="mt-5">{children}</div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -106,7 +108,7 @@ export function AdminBookingsPanel({
 
   const doForce = async () => {
     if (busy) return;
-    if (!forceUser) return show('회원을 선택해주세요.', 'error');
+    if (!forceUser) return show('회원을 선택해주세요. 이름을 치고 목록에서 한 명을 골라주세요.', 'error');
     if (selected.size === 0) return show('빈 시간을 선택해주세요.', 'error');
     setBusy(true);
     try {
@@ -196,17 +198,19 @@ export function AdminBookingsPanel({
           </button>
         </div>
         <div className="flex gap-2">
-          <select className="input flex-1 min-w-0" aria-label="회원" value={forceUser} disabled={selected.size === 0} onChange={(e) => setForceUser(e.target.value)}>
-            <option value="">회원 선택</option>
-            {members.map((m) => (
-              <option key={m.username} value={m.username}>{m.name || m.username} (@{m.username})</option>
-            ))}
-          </select>
+          <div className="flex-1 min-w-0">
+            <MemberPicker
+              members={members.map((m) => ({ username: m.username, name: m.name }))}
+              value={forceUser}
+              onChange={setForceUser}
+              disabled={selected.size === 0}
+            />
+          </div>
           <button type="button" className="btn-primary !w-auto !px-5 !min-h-[44px] shrink-0" disabled={busy || selected.size === 0} onClick={doForce}>
             {busy ? '등록 중…' : selected.size > 0 ? `${selected.size}시간 등록` : '등록'}
           </button>
         </div>
-        <p className="text-[11px] text-ink-faint truncate">토큰이 차감되지 않고, 예약 가능 범위·새벽 권한도 따지지 않아요.</p>
+        <p className="text-2xs text-ink-faint truncate">토큰이 차감되지 않고, 예약 가능 범위·새벽 권한도 따지지 않아요.</p>
       </div>
 
       {cancelTarget && (
@@ -228,7 +232,7 @@ export function AdminBookingsPanel({
           <div className="space-y-2">
             <button type="button" className="btn-secondary w-full" disabled={busy} onClick={() => doCancel(null)}>환불 정책대로</button>
             <button type="button" className="btn-secondary w-full" disabled={busy} onClick={() => doCancel(true)}>전액 환불</button>
-            <button type="button" className="w-full rounded-full border border-[#c45c5c]/40 text-[#8b4040] min-h-[48px]" disabled={busy} onClick={() => doCancel(false)}>환불 없이 취소</button>
+            <button type="button" className="w-full rounded-full border border-danger/40 text-danger-ink min-h-[48px]" disabled={busy} onClick={() => doCancel(false)}>환불 없이 취소</button>
             <button type="button" className="btn-ghost w-full" onClick={() => setCancelTarget(null)}>돌아가기</button>
           </div>
         </Modal>
