@@ -61,7 +61,7 @@ export function MonthCalendar({
             const inactive = isPast || !day.bookable;
             const mineHours = day.occupancy.split('').flatMap((c, h) => (c === '2' ? [h] : []));
             const mineChips = summarizeHours(mineHours).replace(/시/g, '').split(', ').filter(Boolean);
-            const othersBooked = day.booked - day.mine;
+            const freeHours = 24 - day.booked;
             return (
               <button
                 key={day.date}
@@ -72,7 +72,7 @@ export function MonthCalendar({
                     ? 'border-sage bg-sage-muted/60 ring-1 ring-sage/40'
                     : 'border-line/70 bg-surface hover:border-sage/40'
                 } ${inactive ? 'opacity-45' : ''}`}
-                aria-label={`${dayNum}일${day.mine ? `, 내 예약 ${day.mine}시간` : ''}`}
+                aria-label={`${dayNum}일${day.mine ? `, 내 예약 ${day.mine}시간` : ''}${inactive ? '' : `, 빈 시간 ${freeHours}시간`}`}
               >
                 <span
                   className={`text-xs font-semibold tabular-nums text-center ${
@@ -82,7 +82,7 @@ export function MonthCalendar({
                   {dayNum}
                 </span>
                 <span
-                  className="grid h-[5px] rounded-full overflow-hidden"
+                  className="grid h-2 rounded-full overflow-hidden"
                   style={{ gridTemplateColumns: 'repeat(24, 1fr)' }}
                   aria-hidden
                 >
@@ -100,8 +100,10 @@ export function MonthCalendar({
                     </span>
                   ))}
                   {mineChips.length > 2 && <span className="text-2xs leading-none text-sage text-left">+{mineChips.length - 2}</span>}
-                  {othersBooked > 0 && (
-                    <span className="text-2xs leading-none text-ink-faint text-left tabular-nums">예약 {othersBooked}h</span>
+                  {!inactive && (
+                    <span className={`text-2xs leading-none text-left tabular-nums ${freeHours === 0 ? 'text-ink-faint' : 'text-sage font-medium'}`}>
+                      {freeHours === 0 ? '마감' : `빈 ${freeHours}h`}
+                    </span>
                   )}
                 </span>
               </button>
