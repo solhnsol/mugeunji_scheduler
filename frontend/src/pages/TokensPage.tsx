@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiError, SESSION } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
 import { AppShell, Toast } from '../components/ui';
+import { expiryPhrase, useTokenRules } from '../hooks/useTokenRules';
 import { useToast } from '../hooks/useToast';
 import { MyTokens, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiresOn, formatExpiry, formatPrice, formatTokens } from '../utils';
@@ -16,8 +17,10 @@ const STATUS_LABEL: Record<TokenPurchase['status'], { text: string; cls: string 
 export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
   const [packs, setPacks] = useState<TokenPack[] | null>(null);
   const [mine, setMine] = useState<MyTokens | null>(null);
+  const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const rules = useTokenRules();
   const { toast, show } = useToast();
   const { confirm, dialog } = useConfirm();
 
@@ -26,6 +29,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
       const [p, m] = await Promise.all([api.getTokenPacks(SESSION), api.getMyTokens(SESSION)]);
       setPacks(p);
       setMine(m);
+      api.getSettings().then((st) => setPaymentGuide(st.payment_guide ?? null)).catch(() => undefined);
       setError('');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '불러오지 못했어요');
@@ -38,6 +42,8 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
 
   const requestPack = async (pack: TokenPack) => {
     if (busy) return;
+    const alreadyPending =
+      !pack.auto_confirm && !!mine?.purchases.some((p) => p.status === 'pending' && p.pack_id === pack.id);
     const ok = await confirm(
       pack.auto_confirm
         ? {
@@ -47,7 +53,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
           }
         : {
             title: `${pack.name} 충전을 요청할까요?`,
-            message: `${formatPrice(pack.price_won)} → ${formatTokens(pack.tokens)}토큰\n요청하면 관리자가 확인한 뒤 등록하신 연락처로 입금 안내를 드려요. 입금이 확인되면 토큰이 지급돼요.`,
+            message: `${alreadyPending ? '같은 상품의 충전 요청이 이미 확인 대기 중이에요. 한 번 더 요청할까요?\n\n' : ''}${formatPrice(pack.price_won)} → ${formatTokens(pack.tokens)}토큰\n요청하면 관리자가 확인한 뒤 등록하신 연락처로 입금 안내를 드려요. 입금이 확인되면 토큰이 지급돼요.`,
             confirmLabel: '충전 요청',
           },
     );
@@ -137,7 +143,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
             <h2 className="text-lg font-bold text-ink">토큰 충전</h2>
             <p className="text-sm text-ink-muted mt-1 leading-relaxed">
               상품을 고르면 관리자가 확인한 뒤 연락처로 입금 안내를 드려요. 조금만 기다려 주세요. 안내받은 금액을 입금하면
-              관리자가 확인하고 토큰을 지급해요. 충전한 토큰은 3개월 동안 쓰지 않으면 사라지고, 쓰는 동안은 계속 이어져요.
+              관리자가 확인하고 토큰을 지급해요. 충전한 토큰은 {expiryPhrase(rules)} 동안 쓰지 않으면 사라지고, 쓰는 동안은 계속 이어져요.
             </p>
             {packs.length === 0 ? (
               <p className="text-sm text-ink-faint mt-4">지금 선택할 수 있는 상품이 없어요. 관리자에게 문의해주세요.</p>
@@ -171,6 +177,13 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
           {mine.purchases.length > 0 && (
             <section>
               <h2 className="text-lg font-bold text-ink">충전 요청</h2>
+              {paymentGuide && mine.purchases.some((p) => p.status === 'pending') && (
+                <div className="card p-4 mt-3 border-sage/30 bg-sage-muted/30">
+                  <p className="text-sm font-semibold text-ink">입금 안내</p>
+                  <p className="text-sm text-ink-muted mt-1 leading-relaxed whitespace-pre-line">{paymentGuide}</p>
+                  <p className="text-xs text-ink-faint mt-2">관리자가 요청을 확인하고 연락드린 뒤 입금해주세요.</p>
+                </div>
+              )}
               <ul className="card divide-y divide-line/60 mt-3">
                 {mine.purchases.map((p) => {
                   const st = STATUS_LABEL[p.status];

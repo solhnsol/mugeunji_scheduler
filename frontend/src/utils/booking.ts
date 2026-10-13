@@ -100,3 +100,12 @@ export function estimateRefund(
   if (!tier) return { percent: null, refund: 0 };
   return { percent: tier.percent, refund: Math.floor((paid * tier.percent) / 100) };
 }
+export function describeRefundPolicy(config: { refund_tiers: RefundTier[] }): string[] {
+  const tiers = [...config.refund_tiers].sort((a, b) => b.hours_before - a.hours_before);
+  const label = (h: number) => (h === 0 ? '시작 전까지' : h % 24 === 0 ? `${h / 24}일 전까지` : `${h}시간 전까지`);
+  const lines = tiers.map((t) => `${label(t.hours_before)} 취소하면 ${t.percent}% 환불`);
+  const last = tiers[tiers.length - 1];
+  if (last && last.hours_before > 0) lines.push(`그보다 늦으면 취소할 수 없어요`);
+  return lines;
+}
+

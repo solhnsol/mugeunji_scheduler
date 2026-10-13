@@ -1,6 +1,7 @@
 import time
 import asyncio
 import os
+import secrets
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
@@ -46,8 +47,12 @@ SESSION_COOKIE = "session"
 # 임시 비밀번호 상태에서도 허용하는 경로 (현재 상태 확인, 비밀번호 변경)
 MUST_CHANGE_ALLOWED_PATHS = {"/me", "/me/profile"}
 
-if SECRET_KEY == "change-me-in-production":
-    print("[WARN] SECRET_KEY가 기본값입니다. .env에 긴 임의 문자열을 설정하세요.")
+if SECRET_KEY in ("change-me-in-production", "change-me-to-a-long-random-string"):
+    # 공개된 기본 키로는 누구나 로그인 토큰(관리자 포함)을 위조할 수 있다. 임시 키를 쓰고(재시작하면 로그아웃됨) 알린다.
+    SECRET_KEY = secrets.token_urlsafe(48)
+    print("[WARN] SECRET_KEY가 기본값이라 임시 키로 실행합니다 (재시작하면 모두 로그아웃돼요). .env에 긴 임의 문자열을 설정하세요.")
+elif len(SECRET_KEY) < 32:
+    print("[WARN] SECRET_KEY가 짧습니다. 32자 이상의 임의 문자열을 권장합니다.")
 if not os.getenv("ADMIN_PASSWORD"):
     print("[WARN] ADMIN_PASSWORD가 없어 새 DB에서는 admin 계정이 생성되지 않습니다.")
 
@@ -96,6 +101,18 @@ if _cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if request.url.path.startswith("/api/") or request.url.path in ("/me", "/settings"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 
 # 단일 DB 연결을 공유하므로 쓰기 요청은 직렬화해 트랜잭션 간 commit/rollback 간섭을 막는다.
@@ -147,7 +164,7 @@ class UpdateProfileRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=2)
     phone: Optional[str] = Field(None, min_length=9)
     current_password: Optional[str] = None
-    new_password: Optional[str] = Field(None, min_length=4)
+    new_password: Optional[str] = Field(None, min_length=6)
 
 
 class PlanApplyRequest(BaseModel):
@@ -412,12 +429,8 @@ def set_session_cookie(response: Response, request: Request, token: str) -> None
     )
 
 
-async def get_current_user(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme),
-    conn: aiosqlite.Connection = Depends(get_db_conn),
-):
-    token = token or request.cookies.get(SESSION_COOKIE)
+async def _user_from_token(token: Optional[str], conn: aiosqlite.Connection, path: str = "") -> dict:
+    """로그인 토큰을 검증해 사용자를 돌려준다. 실패하면 401/403 HTTPException."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="인증이 필요합니다. 다시 로그인해주세요.",
@@ -448,9 +461,29 @@ async def get_current_user(
     if int(payload.get("ep", 0)) != int(row["session_epoch"] or 0):
         raise credentials_exception
     # 임시 비밀번호로 로그인한 상태에서는 새 비밀번호를 설정하기 전까지 다른 기능을 막는다
-    if row["must_change_password"] and request.url.path not in MUST_CHANGE_ALLOWED_PATHS:
+    if row["must_change_password"] and path not in MUST_CHANGE_ALLOWED_PATHS:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="새 비밀번호를 먼저 설정해주세요.")
     return {"username": username, "role": row["role"]}
+
+
+async def get_current_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await _user_from_token(token or request.cookies.get(SESSION_COOKIE), conn, request.url.path)
+
+
+async def get_optional_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+) -> Optional[dict]:
+    """로그인했으면 사용자, 아니면 None (로그인 전 방문자도 볼 수 있는 API용)."""
+    try:
+        return await get_current_user(request, token, conn)
+    except HTTPException:
+        return None
 
 
 async def get_current_admin_user(user: dict = Depends(get_current_user)):
@@ -472,8 +505,25 @@ async def broadcast_booking_update(dates: List[str]):
     await connection_manager.broadcast_json({"type": "BOOKING_UPDATE", "dates": dates})
 
 
+# 가입 남용 방지: 같은 접속 IP에서 1시간에 가입할 수 있는 횟수 (재시작하면 초기화)
+_REGISTER_WINDOW_SEC = 3600
+_REGISTER_MAX_PER_IP = 10
+_register_attempts: Dict[str, List[float]] = {}
+
+
 @app.post("/register")
-async def register_user(data: RegisterInfo, conn: aiosqlite.Connection = Depends(get_db_conn)):
+async def register_user(data: RegisterInfo, request: Request, conn: aiosqlite.Connection = Depends(get_db_conn)):
+    now = time.time()
+    ip = _client_ip(request)
+    recent = [t for t in _register_attempts.get(ip, []) if now - t < _REGISTER_WINDOW_SEC]
+    if len(recent) >= _REGISTER_MAX_PER_IP:
+        _register_attempts[ip] = recent
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="가입 시도가 너무 많아요. 잠시 뒤에 다시 시도하거나 오픈채팅으로 문의해주세요.",
+        )
+    recent.append(now)
+    _register_attempts[ip] = recent
     auth_manager = AuthManager(conn)
     is_success, message = await auth_manager.register(
         data.username, data.password, data.name, data.phone
@@ -598,6 +648,8 @@ async def revoke_plan_cancellation(
 _LOGIN_WINDOW_SEC = 600
 _LOGIN_MAX_PER_USER = 8
 _LOGIN_MAX_PER_IP = 30
+# 접속 IP를 바꿔가며 한 계정만 노리는 시도 (프록시 헤더 위조 등)를 막는 계정 단위 상한. 정상 사용에서는 닿지 않는 값.
+_LOGIN_MAX_PER_ACCOUNT = 40
 _login_failures: Dict[str, List[float]] = {}
 
 
@@ -621,6 +673,7 @@ def _check_login_throttle(request: Request, username: str) -> None:
     if (
         len(_recent_failures(f"u:{ip}:{username.lower()}", now)) >= _LOGIN_MAX_PER_USER
         or len(_recent_failures(f"i:{ip}", now)) >= _LOGIN_MAX_PER_IP
+        or len(_recent_failures(f"a:{username.lower()}", now)) >= _LOGIN_MAX_PER_ACCOUNT
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -631,7 +684,7 @@ def _check_login_throttle(request: Request, username: str) -> None:
 def _record_login_failure(request: Request, username: str) -> None:
     now = time.time()
     ip = _client_ip(request)
-    for key in (f"u:{ip}:{username.lower()}", f"i:{ip}"):
+    for key in (f"u:{ip}:{username.lower()}", f"i:{ip}", f"a:{username.lower()}"):
         _login_failures.setdefault(key, []).append(now)
 
 
@@ -723,9 +776,15 @@ async def logout(
 
 
 @app.get("/settings", response_model=SettingsResponse)
-async def get_public_settings(conn: aiosqlite.Connection = Depends(get_db_conn)):
+async def get_public_settings(
+    user: Optional[dict] = Depends(get_optional_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
     reserve_manager = ReservationManager(conn)
     status = await reserve_manager.get_public_schedule_status()
+    # 입금 안내(계좌 등)는 로그인한 회원에게만 보여준다
+    if user is None:
+        status["payment_guide"] = None
     if status.pop("did_clear", False):
         await broadcast_reservation_updates(conn)
     settings = await SettingsManager(conn).get_settings()
@@ -1261,6 +1320,12 @@ def _parse_date(raw: str) -> date:
         return date.fromisoformat(raw)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+
+
+@app.get("/token-rules")
+async def get_token_rules(conn: aiosqlite.Connection = Depends(get_db_conn)):
+    """토큰 가격표·환불·소멸 규칙. 랜딩·가입 안내가 관리자 설정과 어긋나지 않게 공개한다."""
+    return await BookingManager(conn).public_rules()
 
 
 @app.get("/bookings/config")
@@ -1799,6 +1864,16 @@ async def upload_users_csv(
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     conn = websocket.app.state.db_conn
+    # 예약 현황에는 회원 이름이 들어 있으므로 로그인한 회원에게만, 같은 출처의 페이지에만 연결을 허용한다.
+    origin = websocket.headers.get("origin")
+    if origin and origin.split("://", 1)[-1] != websocket.headers.get("host", "") and origin not in _cors_origins:
+        await websocket.close(code=1008)
+        return
+    try:
+        await _user_from_token(websocket.cookies.get(SESSION_COOKIE), conn, "/ws")
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
     reserve_manager = ReservationManager(conn)
     await connection_manager.connect(websocket)
     await reserve_manager.check_reservation_availability()
@@ -1833,6 +1908,14 @@ if os.path.isdir("static/dist/icons"):
 # 랜딩 페이지 사진 (frontend/public/landing/ 에 넣은 파일)
 if os.path.isdir("static/dist/landing"):
     app.mount("/landing", StaticFiles(directory="static/dist/landing"), name="landing")
+
+
+@app.get("/healthz")
+async def healthz(conn: aiosqlite.Connection = Depends(get_db_conn)):
+    """배포 상태 점검용: 앱이 떠 있고 DB가 응답하면 200."""
+    async with conn.execute("SELECT 1") as cursor:
+        await cursor.fetchone()
+    return {"status": "ok"}
 
 
 @app.get("/")
@@ -1904,18 +1987,6 @@ async def favicon_svg():
 # ---------------------------------------------------------------- 공지·이용 안내
 def _notice_error(e: NoticeError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-async def get_optional_user(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme),
-    conn: aiosqlite.Connection = Depends(get_db_conn),
-) -> Optional[dict]:
-    """로그인했으면 사용자, 아니면 None (로그인 전 방문자도 볼 수 있는 API용)."""
-    try:
-        return await get_current_user(request, token, conn)
-    except HTTPException:
-        return None
 
 
 @app.get("/api/notices")

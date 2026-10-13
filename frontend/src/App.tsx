@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { SESSION } from './api';
 import { AppShell } from './components/ui';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
@@ -30,11 +30,24 @@ function UserRoute() {
   return <UserApp token={SESSION} username={session.username} onLogout={logout} />;
 }
 
+/** 로그인 후 돌아갈 사이트 안 경로만 허용한다 (다른 사이트로 보내는 주소는 무시) */
+function safeNext(raw: string | null): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/login')) return '/';
+  return raw;
+}
+
+/** 로그인이 필요한 화면에서 로그인 페이지로 보낼 때, 끝나면 원래 화면으로 돌아오게 한다 */
+function ToLogin() {
+  const { pathname, search } = useLocation();
+  return <Navigate to={`/login?next=${encodeURIComponent(pathname + search)}`} replace />;
+}
+
 function LoginRoute() {
   const { session, refresh } = useSession();
+  const [params] = useSearchParams();
 
   if (session.status === 'loading') return <Splash />;
-  if (session.status === 'authed') return <Navigate to="/" replace />;
+  if (session.status === 'authed') return <Navigate to={safeNext(params.get('next'))} replace />;
   return <LoginPage onLogin={refresh} />;
 }
 
@@ -42,7 +55,7 @@ function TokensRoute() {
   const { session, refresh, logout } = useSession();
 
   if (session.status === 'loading') return <Splash />;
-  if (session.status === 'anon') return <Navigate to="/login" replace />;
+  if (session.status === 'anon') return <ToLogin />;
   if (session.mustChangePassword) return <ForcePasswordChange onDone={refresh} onLogout={logout} />;
   return <TokensPage onLogout={logout} />;
 }
@@ -57,7 +70,7 @@ function BookingRoute() {
   const { session, refresh, logout } = useSession();
 
   if (session.status === 'loading') return <Splash />;
-  if (session.status === 'anon') return <Navigate to="/login" replace />;
+  if (session.status === 'anon') return <ToLogin />;
   if (session.mustChangePassword) return <ForcePasswordChange onDone={refresh} onLogout={logout} />;
   return <BookingPage onLogout={logout} />;
 }

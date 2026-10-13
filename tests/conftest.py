@@ -15,6 +15,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 import main  # noqa: E402
 
+# 테스트는 한 IP에서 계정을 많이 만들므로 가입 제한을 풀어 둔다 (제한 자체는 전용 테스트에서 확인)
+main._REGISTER_MAX_PER_IP = 10_000
+
 
 @pytest.fixture(scope="session")
 def client():

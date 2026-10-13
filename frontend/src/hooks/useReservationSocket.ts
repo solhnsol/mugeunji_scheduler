@@ -22,7 +22,9 @@ export function useReservationSocket(onMessage: (message: WsMessage) => void) {
           /* ignore malformed payloads */
         }
       };
-      socket.onclose = () => {
+      socket.onclose = (event) => {
+        // 1008: 로그인이 필요하거나 만료됨 — 계속 다시 연결하지 않는다
+        if (event.code === 1008) return;
         if (!stopped) timer = setTimeout(connect, 3000);
       };
     };

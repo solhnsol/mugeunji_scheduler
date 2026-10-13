@@ -5,6 +5,7 @@
 - 충전은 [회원이 상품 선택 → 충전 요청(pending) → 관리자 입금 확인 → 장부에 지급] 순서로 진행한다.
   나중에 입금 알림으로 자동 확인할 때도 같은 confirm_purchase를 쓰고 confirmed_by만 'auto'로 남긴다.
 """
+import logging
 import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -15,6 +16,8 @@ KST = timezone(timedelta(hours=9))
 
 MAX_PENDING_PURCHASES = 3
 MAX_PACK_TOKENS = 10000
+logger = logging.getLogger(__name__)
+
 DEFAULT_EXPIRY_MONTHS = 3
 PACK_AUDIENCES = ("all", "free")
 
@@ -483,7 +486,8 @@ class TokenManager:
             await self.conn.commit()
         except Exception as e:
             await self.conn.rollback()
-            return False, f"충전 요청 실패: {e}"
+            logger.exception("token purchase request failed")
+            return False, "충전 요청에 실패했어요. 잠시 뒤 다시 시도해주세요."
         if pack["auto_confirm"]:
             ok, _ = await self.confirm_purchase(cursor.lastrowid, "auto")
             if not ok:
@@ -514,7 +518,8 @@ class TokenManager:
             return True, "충전 요청을 취소했어요."
         except Exception as e:
             await self.conn.rollback()
-            return False, f"취소 실패: {e}"
+            logger.exception("token purchase cancel failed")
+            return False, "취소하지 못했어요. 잠시 뒤 다시 시도해주세요."
 
     async def list_purchases(self, status: Optional[str] = None, limit: int = 100) -> List[Dict]:
         query = """

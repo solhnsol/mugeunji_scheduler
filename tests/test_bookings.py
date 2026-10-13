@@ -242,3 +242,73 @@ def test_settings_validation(client, admin):
     dup = [{"hours_before": 24, "percent": 50}, {"hours_before": 24, "percent": 25}]
     assert client.put("/admin/booking-settings", headers=admin, json={"refund_tiers": dup}).status_code == 400
     assert client.put("/admin/booking-settings", headers=admin, json={}).status_code == 400
+
+
+def test_websocket_requires_login(client, make_user):
+    """예약 현황(회원 이름 포함)을 로그인하지 않은 연결에 보내지 않는다."""
+    from starlette.websockets import WebSocketDisconnect
+
+    client.cookies.clear()  # 앞선 로그인으로 공유 클라이언트에 남은 세션 쿠키
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_json()
+
+    _username, headers = make_user()
+    token = headers["Authorization"].split()[1]
+    with client.websocket_connect("/ws", cookies={"session": token}) as ws:
+        assert ws.receive_json()["type"] == "RESERVATION_UPDATE"
+
+
+def test_payment_guide_hidden_from_anonymous(client, admin, make_user):
+    r = client.put("/admin/settings/payment-guide", json={"payment_guide": "은행 123-456"}, headers=admin)
+    assert r.status_code == 200, r.text
+    client.cookies.clear()
+    assert client.get("/settings").json()["payment_guide"] is None
+    _u, headers = make_user()
+    assert client.get("/settings", headers=headers).json()["payment_guide"] == "은행 123-456"
+    client.cookies.clear()
+
+
+def test_security_headers(client):
+    r = client.get("/settings")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert r.headers["referrer-policy"]
+
+
+def test_register_rate_limit(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "_REGISTER_MAX_PER_IP", 10)
+    main._register_attempts.clear()
+    codes = []
+    for i in range(12):
+        r = client.post("/register", json={"username": f"rl{i}", "password": "password1", "name": "제한", "phone": f"0102000{i:04d}"})
+        codes.append(r.status_code)
+    main._register_attempts.clear()
+    assert codes[:10] == [200] * 10
+    assert codes[10:] == [429, 429]
+
+
+def test_account_wide_login_throttle(client):
+    import main
+
+    main._login_failures.clear()
+    for i in range(40):
+        main._record_login_failure(type("R", (), {"headers": {"x-forwarded-for": f"9.9.9.{i}"}, "client": None})(), "victim")
+    r = client.post("/login", json={"username": "victim", "password": "x"}, headers={"x-forwarded-for": "1.2.3.4"})
+    main._login_failures.clear()
+    assert r.status_code == 429
+
+
+def test_healthz(client):
+    assert client.get("/healthz").json() == {"status": "ok"}
+
+
+def test_public_token_rules(client):
+    client.cookies.clear()
+    r = client.get("/token-rules")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["price_bands"] and body["refund_tiers"] and body["expiry_months"] >= 0
+    assert set(body["price_bands"][0]) == {"start", "end", "cost"}
