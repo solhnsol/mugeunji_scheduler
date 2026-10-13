@@ -18,6 +18,7 @@ import { WeeklyUsage } from '../components/WeeklyUsage';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { Plan, Reservation, UserInfo } from '../types';
 import { summarizeReservations } from '../utils/reservationSummary';
+import { MemberPicker } from '../components/MemberPicker';
 import { AdminUsersTab } from '../components/AdminUsersTab';
 import { EditAdminModal, EditUserModal, PlanPriceRow } from '../components/AdminUserModals';
 
@@ -289,24 +290,15 @@ function AdminDashboard({
         <div className="space-y-3">
           <div className="card p-4 space-y-3">
             <label className="label" htmlFor="target-username">강제 신청 대상</label>
-            <select
+            <MemberPicker
               id="target-username"
-              className="input"
+              members={[
+                ...admins.map((u) => ({ username: u.username, name: u.name, prefix: '[관리자] ', suffix: ` · 월 ${u.allowed_hours}h` })),
+                ...users.map((u) => ({ username: u.username, name: u.name, suffix: ` · 월 ${u.allowed_hours}h` })),
+              ]}
               value={targetUser}
-              onChange={(e) => setTargetUser(e.target.value)}
-            >
-              <option value="">회원 선택</option>
-              {admins.map((u) => (
-                <option key={u.username} value={u.username}>
-                  [관리자] {u.name || u.username} (@{u.username}) · 월 {u.allowed_hours}h
-                </option>
-              ))}
-              {users.map((u) => (
-                <option key={u.username} value={u.username}>
-                  {u.name || u.username} (@{u.username}) · 월 {u.allowed_hours}h
-                </option>
-              ))}
-            </select>
+              onChange={setTargetUser}
+            />
             {targetUser && (() => {
               const selected = [...admins, ...users].find((u) => u.username === targetUser);
               if (!selected) return null;
@@ -421,20 +413,13 @@ function AdminDashboard({
 
           <div className="card p-4 space-y-3">
             <label className="label" htmlFor="free-target-username">강제 신청 대상</label>
-            <select
+            <MemberPicker
               id="free-target-username"
-              className="input"
+              placeholder="자유이용 / 관리자 검색"
+              members={freeTargetUsers.map((u) => ({ username: u.username, name: u.name, prefix: u.role === 'admin' ? '[관리자] ' : '' }))}
               value={freeTargetUser}
-              onChange={(e) => setFreeTargetUser(e.target.value)}
-            >
-              <option value="">자유이용 / 관리자 선택</option>
-              {freeTargetUsers.map((u) => (
-                <option key={u.username} value={u.username}>
-                  {u.role === 'admin' ? '[관리자] ' : ''}
-                  {u.name || u.username} (@{u.username})
-                </option>
-              ))}
-            </select>
+              onChange={setFreeTargetUser}
+            />
           </div>
 
           {freeSchedule ? (
