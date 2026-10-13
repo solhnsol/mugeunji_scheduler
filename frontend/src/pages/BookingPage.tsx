@@ -6,6 +6,7 @@ import { MonthCalendar } from '../components/booking/MonthCalendar';
 import { TimeGrid } from '../components/booking/TimeGrid';
 import { AppShell, Toast } from '../components/ui';
 import { useReservationSocket } from '../hooks/useReservationSocket';
+import { useSwipe } from '../hooks/useSwipe';
 import { useToast } from '../hooks/useToast';
 import { BookingConfig, CalendarDay, GridDay, MyBooking } from '../types';
 import { formatTokens, kstParts } from '../utils';
@@ -345,6 +346,12 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     setMonth(monthOf(today));
     setSelectedDate(today);
   };
+  // 일정표에서 좌우로 빠르게 밀면 이전/다음 날(주)로 이동한다
+  const detailStep = detailMode === 'week' ? 7 : 1;
+  const swipe = useSwipe({
+    onLeft: () => selectedDate && setSelectedDate(addDays(selectedDate, detailStep)),
+    onRight: () => selectedDate && setSelectedDate(addDays(selectedDate, -detailStep)),
+  });
   const todayMonth = today ? monthOf(today) : null;
   const barMode: 'book' | 'cancel' | 'idle' = selected.size > 0 ? 'book' : cancelSel.size > 0 ? 'cancel' : 'idle';
   const currentDay = selectedDate && week ? week.days.find((d) => d.date === selectedDate) : undefined;
@@ -456,7 +463,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
               </section>
             </div>
           ) : (
-            <div key="detail" className="view-in flex flex-col flex-1 min-h-0 gap-2">
+            <div key="detail" className="view-in flex flex-col flex-1 min-h-0 gap-2" {...swipe}>
               <div className="shrink-0 flex items-center justify-between gap-1.5">
                 <button type="button" className="btn-ghost !min-h-[36px] !px-2 text-sm whitespace-nowrap shrink-0" onClick={backToMonth}>
                   ‹ 달력

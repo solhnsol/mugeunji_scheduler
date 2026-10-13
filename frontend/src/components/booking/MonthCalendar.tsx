@@ -1,3 +1,4 @@
+import { useSwipe } from '../../hooks/useSwipe';
 import { CalendarDay } from '../../types';
 import { WEEKDAYS_KO, dateFromISO, formatMonthKo, summarizeHours } from '../../utils/booking';
 import { CalendarCellsSkeleton } from '../Skeleton';
@@ -24,10 +25,15 @@ export function MonthCalendar({
   canPrev: boolean;
   canNext: boolean;
 }) {
+  // 좌우로 밀어서 달 이동
+  const swipe = useSwipe({
+    onLeft: () => canNext && onNext(),
+    onRight: () => canPrev && onPrev(),
+  });
   const firstWeekday = days && days.length ? dateFromISO(days[0].date).getDay() : 0;
 
   return (
-    <section className="card p-4 sm:p-5">
+    <section className="card p-4 sm:p-5" {...swipe}>
       <div className="flex items-center justify-between mb-3">
         <button type="button" className="btn-ghost !min-h-[40px] !px-3" onClick={onPrev} disabled={!canPrev} aria-label="이전 달">
           ‹
