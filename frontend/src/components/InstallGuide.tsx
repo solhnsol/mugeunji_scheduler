@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { installPlatform, isKakao, markInstallGuideSeen, promptInstall } from '../install';
+import { hideInstallBanner, installPlatform, isKakao, markInstallGuideSeen, promptInstall, showInstallBanner } from '../install';
 import { ModalOverlay } from './Modal';
 
 /** iOS 공유 버튼 모양 (네모 위로 화살표) */
@@ -230,5 +230,41 @@ export function InstallGuide({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </ModalOverlay>
+  );
+}
+
+/** 휴대폰 브라우저로 들어온 회원에게 홈 화면 맨 위에 띄우는 한 줄 배너. 닫으면 7일 동안 안 보인다. */
+export function InstallBanner({ onOpen }: { onOpen: () => void }) {
+  // 첫 렌더에서 바로 정해 두어, 나중에 끼어들어 화면이 밀리지 않게 한다
+  const [visible, setVisible] = useState(showInstallBanner);
+  if (!visible) return null;
+  const inApp = installPlatform()?.startsWith('inapp');
+
+  return (
+    <div className="mb-4 flex items-center gap-3 rounded-2xl border border-sage/20 bg-sage-muted/60 pl-3 pr-1 py-2">
+      <img src="/icons/icon-192.png" alt="" className="w-9 h-9 rounded-lg shrink-0" />
+      <button type="button" className="min-w-0 flex-1 text-left" onClick={onOpen}>
+        <span className="block text-sm font-semibold text-ink truncate">앱처럼 쓰면 더 편해요</span>
+        <span className="block text-xs text-ink-muted truncate">
+          {inApp ? '먼저 브라우저로 열어 주세요' : '홈 화면에 추가해 두세요'}
+        </span>
+      </button>
+      <button type="button" className="shrink-0 rounded-full bg-sage text-white text-xs font-semibold px-3 min-h-[36px]" onClick={onOpen}>
+        방법 보기
+      </button>
+      <button
+        type="button"
+        className="shrink-0 w-9 h-9 flex items-center justify-center text-ink-faint hover:text-ink"
+        aria-label="배너 닫기 (7일 동안 안 보기)"
+        onClick={() => {
+          hideInstallBanner();
+          setVisible(false);
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+          <path d="M3 3l8 8M11 3l-8 8" />
+        </svg>
+      </button>
+    </div>
   );
 }

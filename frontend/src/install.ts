@@ -26,6 +26,31 @@ export function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
 }
 
+/** 서버에 알려 줄 접속 방식: 홈 화면 웹앱 / 휴대폰 브라우저 / PC */
+export function clientKind(): 'app' | 'mobile' | 'pc' {
+  if (isStandalone()) return 'app';
+  return isIOS || isAndroid ? 'mobile' : 'pc';
+}
+
+const BANNER_KEY = 'install-banner-hidden-until';
+
+/** 상단 배너: 휴대폰 브라우저이고, 최근 7일 안에 닫지 않았으면 true */
+export function showInstallBanner(): boolean {
+  try {
+    return !!installPlatform() && Date.now() > Number(localStorage.getItem(BANNER_KEY) || 0);
+  } catch {
+    return !!installPlatform();
+  }
+}
+
+export function hideInstallBanner() {
+  try {
+    localStorage.setItem(BANNER_KEY, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  } catch {
+    // 저장 못 하면 이번 화면에서만 닫힌다
+  }
+}
+
 /** 안내가 필요한 휴대폰 브라우저면 플랫폼, 아니면(PC·이미 앱으로 실행 중) null */
 export function installPlatform(): InstallPlatform | null {
   if (isStandalone() || !(isIOS || isAndroid)) return null;

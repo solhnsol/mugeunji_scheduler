@@ -1,3 +1,4 @@
+import { clientKind } from './install';
 export class ApiError extends Error {
   constructor(message: string) {
     super(message);
@@ -94,7 +95,8 @@ export const api = {
   },
 
   async getMe(token: string) {
-    const res = await fetch('/me', { headers: authHeaders(token) });
+    // 관리자 화면에서 웹앱·휴대폰 웹·PC 접속 비율을 보려고 접속 방식을 함께 보낸다
+    const res = await fetch('/me', { headers: { ...authHeaders(token), 'X-Client': clientKind() } });
     return parseResponse<import('./types').MeResponse>(res);
   },
 

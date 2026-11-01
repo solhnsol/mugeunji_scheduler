@@ -392,6 +392,8 @@ class UserInfoResponse(BaseModel):
     plan_id: Optional[int] = None
     plan_allowed_hours: Optional[int] = None
     dawn_allowed: Optional[bool] = None
+    last_client: Optional[str] = None
+    last_client_at: Optional[str] = None
 
 
 class PlanResponse(BaseModel):
@@ -538,11 +540,37 @@ async def list_plans(conn: aiosqlite.Connection = Depends(get_db_conn)):
     return await membership.get_plans()
 
 
+CLIENT_KINDS = ("app", "mobile", "pc")
+
+
+async def record_client(conn: aiosqlite.Connection, user: Optional[dict], client: Optional[str]) -> None:
+    """화면이 보낸 접속 방식(X-Client)을 회원에 기록한다. 바뀌었거나 날짜가 넘어갔을 때만 쓴다."""
+    if not user or client not in CLIENT_KINDS:
+        return
+    today = now_kst().date().isoformat()
+    if user.get("last_client") == client and user.get("last_client_at") == today:
+        return
+    async with writing():
+        try:
+            await conn.execute(
+                "UPDATE users SET last_client = ?, last_client_at = ? WHERE username = ?",
+                (client, today, user["username"]),
+            )
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+
+
 @app.get("/me")
-async def get_me(current_user: dict = Depends(get_current_user), conn: aiosqlite.Connection = Depends(get_db_conn)):
+async def get_me(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
     membership = MembershipManager(conn)
     access = await membership.get_access_status(current_user["username"])
     user = await membership.get_user_row(current_user["username"])
+    await record_client(conn, user, request.headers.get("x-client"))
     role = current_user["role"]
     can_free = role in ("free", "admin") and (
         role == "admin" or access.get("can_access_current_month", False)
@@ -929,6 +957,8 @@ async def get_all_users_by_admin(
             "monthly_price": price,
             "custom_monthly_fee": user.get("custom_monthly_fee"),
             "dawn_allowed": bool(user.get("dawn_allowed", 1)),
+            "last_client": user.get("last_client"),
+            "last_client_at": user.get("last_client_at"),
         })
     return result
 
