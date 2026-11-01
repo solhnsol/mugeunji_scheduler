@@ -299,7 +299,8 @@ export default function UserApp({
       )}
     </div>
   ) : null;
-  const guideVisible = steps.some((s) => !s.done);
+  // 관리자 계정은 요금제 없이 쓰므로 시작 가이드가 필요 없다
+  const guideVisible = !me.admin_account && steps.some((s) => !s.done);
   const guideCard = guideVisible ? <GuideCard steps={steps} /> : null;
   const tourModal = tourOpen && (
     <OnboardingTour
@@ -317,7 +318,7 @@ export default function UserApp({
     <UsageGuideModal onClose={() => setGuideOpen(false)} paymentGuide={paymentGuide} />
   );
 
-  const profileBanner = !guideVisible && !me.profile_complete && me.role !== 'admin' && (
+  const profileBanner = !guideVisible && !me.profile_complete && me.role !== 'admin' && !me.admin_account && (
     <div className="card p-4 mb-3 flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50/80 shrink-0">
       <p className="text-sm text-amber-900">전화번호 등 내 정보를 등록해주세요.</p>
       <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm" onClick={() => setProfileOpen(true)}>

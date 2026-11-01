@@ -586,6 +586,8 @@ async def get_me(
         "name": user.get("name") if user else None,
         "phone": user.get("phone") if user else None,
         "profile_complete": profile_complete,
+        # 일반 로그인한 관리자 계정: 회원 화면이지만 요금제·내 정보 안내는 필요 없다
+        "admin_account": bool(user and user.get("role") == "admin"),
         "must_change_password": bool(user and user.get("must_change_password")),
         "can_access_free_schedule": can_free,
         **access,
