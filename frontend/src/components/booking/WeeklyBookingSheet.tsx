@@ -28,9 +28,10 @@ export function WeeklyBookingSheet({
   onClose: () => void;
   onBooked: (message: string) => void;
 }) {
-  const [weekday, setWeekday] = useState(() => new Date().getDay());
-  const [start, setStart] = useState(19);
-  const [end, setEnd] = useState(21);
+  const [weekday, setWeekday] = useState<number | null>(null);
+  // 처음엔 아무것도 고르지 않은 상태 (end - start = 0)
+  const [start, setStart] = useState(0);
+  const [end, setEnd] = useState(0);
   const [occupancy, setOccupancy] = useState<Map<string, string> | null>(null);
   const [checked, setChecked] = useState<Map<string, boolean>>(new Map());
   /** 시간표에서 시작을 누르고 끝을 기다리는 중인 시각 */
@@ -41,6 +42,7 @@ export function WeeklyBookingSheet({
 
   const blocked = config.is_admin || config.dawn_allowed ? [] : config.dawn_hours;
   const length = end - start;
+  const ready = weekday !== null && length > 0;
 
   const load = useCallback(async () => {
     const months = [monthOf(config.bookable_from)];
@@ -56,9 +58,9 @@ export function WeeklyBookingSheet({
   // 요일·시간을 바꾸면 주마다 고른 것은 처음부터
   useEffect(() => setChecked(new Map()), [weekday, start, end]);
 
-  const dates = weeklyDates(config.bookable_from, config.bookable_until, weekday);
-  const rows = occupancy ? buildRows(dates, occupancy, start, length, Date.now(), blocked) : [];
-  const freeByHour = occupancy ? freeWeeksByHour(buildRows(dates, occupancy, 0, 24, Date.now(), blocked)) : null;
+  const dates = weekday === null ? [] : weeklyDates(config.bookable_from, config.bookable_until, weekday);
+  const rows = occupancy && ready ? buildRows(dates, occupancy, start, length, Date.now(), blocked) : [];
+  const freeByHour = occupancy && weekday !== null ? freeWeeksByHour(buildRows(dates, occupancy, 0, 24, Date.now(), blocked)) : null;
 
   const costOf = (hours: number[]) => (config.is_admin ? 0 : hours.reduce((s, h) => s + (bandFor(config.price_bands, h)?.cost ?? 0), 0));
   const plan = rows.map((row) => {
@@ -154,7 +156,13 @@ export function WeeklyBookingSheet({
           <div className="space-y-2">
             <div className="flex items-baseline justify-between">
               <span className="text-base font-bold text-ink tabular-nums">
-                {start}시 ~ {end}시 <span className="text-sm font-medium text-ink-muted">{length}시간</span>
+                {length ? (
+                  <>
+                    {start}시 ~ {end}시 <span className="text-sm font-medium text-ink-muted">{length}시간</span>
+                  </>
+                ) : (
+                  <span className="text-ink-faint">시간을 골라주세요</span>
+                )}
               </span>
             </div>
             <div className="grid grid-cols-12 gap-1" role="group" aria-label="시간 고르기">
@@ -188,16 +196,18 @@ export function WeeklyBookingSheet({
 
         <div className="shrink-0 px-5 pb-2 flex items-baseline justify-between gap-3 border-t border-line/60 pt-4">
           <h4 className="text-sm font-semibold text-ink">
-            {formatDateKo(config.bookable_until).replace(/ \(.\)$/, '')}까지 {plan.length}번 있어요
+            {formatDateKo(config.bookable_until).replace(/ \(.\)$/, '')}까지 {ready ? `${plan.length}번 있어요` : '예약할 수 있어요'}
           </h4>
           {!config.next_month_open && <span className="text-2xs text-ink-faint shrink-0">다음 달은 예약이 열리면 골라요</span>}
         </div>
 
         <ul className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5">
-          {!occupancy ? (
+          {!ready ? (
+            <li className="py-10 text-center text-sm text-ink-faint">요일과 시간을 고르면 예약할 날짜가 나와요</li>
+          ) : !occupancy ? (
             <li className="py-10 text-center text-sm text-ink-faint">{error || '불러오고 있어요'}</li>
           ) : plan.length === 0 ? (
-            <li className="py-10 text-center text-sm text-ink-faint">남은 기간에 {WEEKDAYS_KO[weekday]}요일이 없어요</li>
+            <li className="py-10 text-center text-sm text-ink-faint">남은 기간에 {WEEKDAYS_KO[weekday!]}요일이 없어요</li>
           ) : (
             plan.map(({ row, on, hours, cost }) => {
               const busyHours = row.hours.filter((h) => h.state !== 'free');
@@ -257,13 +267,13 @@ export function WeeklyBookingSheet({
                 )}
               </>
             ) : balance !== null ? (
-              `예약하면 ${formatTokens(Math.max(balance - total, 0))}개 남아요`
+              slots.length ? `예약하면 ${formatTokens(Math.max(balance - total, 0))}개 남아요` : `지금 ${formatTokens(balance)}개 있어요`
             ) : (
               ''
             )}
           </p>
           <button type="button" className="btn-primary" disabled={busy || slots.length === 0 || !!blockReason} onClick={submit}>
-            {busy ? '예약하고 있어요' : slots.length ? `${count}번 예약하기` : '날짜를 골라주세요'}
+            {busy ? '예약하고 있어요' : slots.length ? `${count}번 예약하기` : ready ? '날짜를 골라주세요' : '요일과 시간을 골라주세요'}
           </button>
         </div>
       </div>
