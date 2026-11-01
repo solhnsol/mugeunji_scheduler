@@ -55,7 +55,7 @@ export function EditAdminModal({
       await api.updateAdminHours(token, user.username, hours);
       onSaved();
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : '저장 실패');
+      onError(e instanceof ApiError ? e.message : '저장하지 못했어요');
     }
   };
 
@@ -162,7 +162,7 @@ export function EditUserModal({
       const res = await api.resetUserPassword(token, user.username);
       setTempPassword(res.temp_password);
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : '초기화 실패');
+      onError(e instanceof ApiError ? e.message : '초기화하지 못했어요');
     } finally {
       setAccountBusy(false);
     }
@@ -191,7 +191,7 @@ export function EditUserModal({
       const res = await api.deleteUser(token, user.username);
       onDeleted(res.message);
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : '삭제 실패');
+      onError(e instanceof ApiError ? e.message : '삭제하지 못했어요');
     } finally {
       setAccountBusy(false);
     }
@@ -227,7 +227,7 @@ export function EditUserModal({
       await api.updateUser(token, user.username, body);
       onSaved();
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : '저장 실패');
+      onError(e instanceof ApiError ? e.message : '저장하지 못했어요');
     }
   };
 

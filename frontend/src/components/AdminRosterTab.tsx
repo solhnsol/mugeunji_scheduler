@@ -59,7 +59,7 @@ export function AdminRosterTab({
   );
 
   useEffect(() => {
-    load().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
+    load().catch((e) => show(e instanceof ApiError ? e.message : '불러오지 못했어요', 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, reloadKey]);
 
@@ -71,7 +71,7 @@ export function AdminRosterTab({
       show(res.message, 'success');
       await load();
     } catch (e) {
-      show(e instanceof ApiError ? e.message : '실패', 'error');
+      show(e instanceof ApiError ? e.message : '처리하지 못했어요', 'error');
     } finally {
       setBusyKey(null);
     }
@@ -116,7 +116,7 @@ export function AdminRosterTab({
       await navigator.clipboard.writeText(res.text);
       show('정산 안내문을 복사했어요.', 'success');
     } catch (e) {
-      show(e instanceof ApiError ? e.message : '복사 실패', 'error');
+      show(e instanceof ApiError ? e.message : '복사하지 못했어요', 'error');
     }
   };
 
@@ -390,7 +390,7 @@ export function AdminRosterTab({
               setAddTarget(null);
               await load();
             } catch (e) {
-              show(e instanceof ApiError ? e.message : '추가 실패', 'error');
+              show(e instanceof ApiError ? e.message : '추가하지 못했어요', 'error');
             }
           }}
         />

@@ -47,7 +47,7 @@ export function AdminUsersTab({
         <div className="space-y-5">
           <section className="card p-5 overflow-x-auto">
             <h2 className="font-semibold text-ink mb-4">관리자</h2>
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-ink-faint border-b border-line text-xs">
                   <th className="py-2 font-medium">이름</th>
@@ -67,7 +67,7 @@ export function AdminUsersTab({
                     <td className="text-ink-muted">{u.username}</td>
                     <td>{u.allowed_hours ? `${u.allowed_hours}h` : '-'}</td>
                     <td>
-                      <button type="button" className="text-sage text-xs font-medium min-h-[32px] px-2" onClick={() => onEdit(u)}>
+                      <button type="button" className="text-sage text-xs font-medium min-h-[44px] px-2 whitespace-nowrap" onClick={() => onEdit(u)}>
                         시간 변경
                       </button>
                     </td>
@@ -108,7 +108,7 @@ export function AdminUsersTab({
                 <th className="font-medium">월 예약</th>
                 <th className="font-medium">자유</th>
                 <th className="font-medium">마지막 접속</th>
-                <th></th>
+                <th className="sticky right-0 bg-surface"></th>
               </tr>
             </thead>
             <tbody>
@@ -132,8 +132,9 @@ export function AdminUsersTab({
                   </td>
                   <td>{u.free_access || u.role === 'free' ? '○' : '-'}</td>
                   <td className={`text-xs tabular-nums ${u.last_client === 'app' ? 'text-sage font-medium' : 'text-ink-muted'}`}>{clientCell(u)}</td>
-                  <td>
-                    <button type="button" className="text-sage text-xs font-medium min-h-[32px] px-2" onClick={() => onEdit(u)}>
+                  {/* 폰에서 표가 가로로 넘쳐도 수정 버튼은 늘 보이게 오른쪽에 고정 */}
+                  <td className="sticky right-0 bg-surface pl-3">
+                    <button type="button" className="text-sage text-xs font-medium min-h-[44px] px-2 whitespace-nowrap" onClick={() => onEdit(u)}>
                       수정
                     </button>
                   </td>

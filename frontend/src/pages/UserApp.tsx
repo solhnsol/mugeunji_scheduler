@@ -124,7 +124,7 @@ export default function UserApp({
       setApplyPlan(null);
       await refresh();
     } catch (err) {
-      show(err instanceof ApiError ? err.message : '요청 실패', 'error');
+      show(err instanceof ApiError ? err.message : '요청하지 못했어요', 'error');
       throw err;
     }
   };
@@ -135,7 +135,7 @@ export default function UserApp({
       show(res.message, 'success');
       await refresh();
     } catch (err) {
-      show(err instanceof ApiError ? err.message : '요청 실패', 'error');
+      show(err instanceof ApiError ? err.message : '요청하지 못했어요', 'error');
     }
   };
 
@@ -152,7 +152,7 @@ export default function UserApp({
       show(res.message, 'success');
       await refresh();
     } catch (err) {
-      show(err instanceof ApiError ? err.message : '요청 실패', 'error');
+      show(err instanceof ApiError ? err.message : '요청하지 못했어요', 'error');
     }
   };
 
@@ -162,7 +162,7 @@ export default function UserApp({
       show(res.message, 'success');
       await refresh();
     } catch (err) {
-      show(err instanceof ApiError ? err.message : '요청 실패', 'error');
+      show(err instanceof ApiError ? err.message : '요청하지 못했어요', 'error');
     }
   };
 
@@ -364,7 +364,7 @@ export default function UserApp({
                   const res = await api.cancelReservations(token, slots);
                   show(res.message, 'success');
                 } catch (err) {
-                  show(err instanceof ApiError ? err.message : '취소 실패', 'error');
+                  show(err instanceof ApiError ? err.message : '취소하지 못했어요', 'error');
                   throw err;
                 }
               }
@@ -378,7 +378,7 @@ export default function UserApp({
                   show(res.message, 'success');
                   setScheduleModalOpen(false);
                 } catch (err) {
-                  show(err instanceof ApiError ? err.message : '신청 실패', 'error');
+                  show(err instanceof ApiError ? err.message : '신청하지 못했어요', 'error');
                   throw err;
                 }
               }

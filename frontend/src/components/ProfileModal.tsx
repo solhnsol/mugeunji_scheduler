@@ -56,7 +56,7 @@ export function ProfileModal({
       onClose();
       onSaved(res);
     } catch (err) {
-      onError(err instanceof ApiError ? err.message : '저장 실패');
+      onError(err instanceof ApiError ? err.message : '저장하지 못했어요');
     } finally {
       setSaving(false);
     }

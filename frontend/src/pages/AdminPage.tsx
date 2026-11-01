@@ -22,14 +22,15 @@ import { MemberPicker } from '../components/MemberPicker';
 import { AdminUsersTab } from '../components/AdminUsersTab';
 import { EditAdminModal, EditUserModal, PlanPriceRow } from '../components/AdminUserModals';
 
+// 토큰 예약이 기본이라 토큰 탭을 먼저 둔다. 예전 방식(월신청) 탭은 토큰 예약 중에 흐리게 보인다
 const TABS = [
-  { id: 'roster' as const, label: '정산' },
   { id: 'tokens' as const, label: '토큰' },
-  { id: 'schedule' as const, label: '월신청' },
-  { id: 'free' as const, label: '자유이용' },
   { id: 'notices' as const, label: '공지' },
-  { id: 'automation' as const, label: '자동화' },
   { id: 'users' as const, label: '회원' },
+  { id: 'roster' as const, label: '정산', legacy: true },
+  { id: 'schedule' as const, label: '월신청', legacy: true },
+  { id: 'free' as const, label: '자유이용', legacy: true },
+  { id: 'automation' as const, label: '자동화', legacy: true },
 ];
 
 function formatFreeWindow(start: string, end: string) {
@@ -49,9 +50,9 @@ export default function AdminPage() {
     try {
       await api.adminLogin(String(fd.get('username')), String(fd.get('password')));
       await refresh();
-      show('로그인 성공', 'success');
+      show('로그인했어요', 'success');
     } catch (err) {
-      show(err instanceof ApiError ? err.message : '로그인 실패', 'error');
+      show(err instanceof ApiError ? err.message : '로그인하지 못했어요', 'error');
     }
   };
 
@@ -105,7 +106,7 @@ function AdminDashboard({
   // 보고 있는 탭은 주소(?tab=)에 둬서 새로고침해도 같은 탭에 머문다
   const [params, setParams] = useSearchParams();
   const tabParam = params.get('tab');
-  const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'roster';
+  const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'tokens';
   const setTab = (id: (typeof TABS)[number]['id']) => setParams({ tab: id }, { replace: true });
   const [reloadKey, setReloadKey] = useState(0);
   // 확인 대기 중인 토큰 충전 요청 수: 다른 탭을 보고 있어도 토큰 탭에 배지로 알린다
@@ -135,6 +136,7 @@ function AdminDashboard({
   } | null>(null);
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
   const [paymentGuide, setPaymentGuide] = useState('');
+  const [tokenOnly, setTokenOnly] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [freeScheduleModalOpen, setFreeScheduleModalOpen] = useState(false);
   const monthlyReservations = useMonthlyReservations();
@@ -159,13 +161,14 @@ function AdminDashboard({
       api.getSettings(),
     ]);
     setPaymentGuide(pub.payment_guide ?? '');
+    setTokenOnly(pub.reservation_mode === 'token');
     setPlans(p);
     setUsers(u);
     setAdmins(a);
   }, [token]);
 
   useEffect(() => {
-    load().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
+    load().catch((e) => show(e instanceof ApiError ? e.message : '불러오지 못했어요', 'error'));
   }, [load, show]);
 
   const loadFreeSchedule = useCallback(async () => {
@@ -175,7 +178,7 @@ function AdminDashboard({
 
   useEffect(() => {
     if (tab !== 'free') return;
-    loadFreeSchedule().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
+    loadFreeSchedule().catch((e) => show(e instanceof ApiError ? e.message : '불러오지 못했어요', 'error'));
   }, [tab, loadFreeSchedule, show]);
 
   const savePaymentGuide = async () => {
@@ -183,7 +186,7 @@ function AdminDashboard({
       const res = await api.updatePaymentGuide(token, paymentGuide);
       show(res.message, 'success');
     } catch (e) {
-      show(e instanceof ApiError ? e.message : '저장 실패', 'error');
+      show(e instanceof ApiError ? e.message : '저장하지 못했어요', 'error');
     }
   };
 
@@ -194,7 +197,7 @@ function AdminDashboard({
       await load();
       setReloadKey((k) => k + 1);
     } catch (e) {
-      show(e instanceof ApiError ? e.message : '저장 실패', 'error');
+      show(e instanceof ApiError ? e.message : '저장하지 못했어요', 'error');
     }
   };
 
@@ -215,7 +218,11 @@ function AdminDashboard({
             key={t.id}
             type="button"
             className={`flex-none rounded-full py-2.5 px-4 text-sm font-medium transition-colors min-h-[44px] whitespace-nowrap ${
-              tab === t.id ? 'bg-sage text-white shadow-sm' : 'text-ink-muted hover:text-ink'
+              tab === t.id
+                ? 'bg-sage text-white shadow-sm'
+                : t.legacy && tokenOnly
+                  ? 'text-ink-faint hover:text-ink-muted'
+                  : 'text-ink-muted hover:text-ink'
             }`}
             onClick={() => setTab(t.id)}
           >
@@ -366,7 +373,7 @@ function AdminDashboard({
                     const res = await api.adminForceReserve(token, targetUser.trim(), slots);
                     show(res.message, 'success');
                   } catch (e) {
-                    show(e instanceof ApiError ? e.message : '신청 실패', 'error');
+                    show(e instanceof ApiError ? e.message : '신청하지 못했어요', 'error');
                     throw e;
                   }
                 }}
@@ -376,7 +383,7 @@ function AdminDashboard({
                     const res = await api.adminDeleteReservations(token, slots);
                     show(res.message, 'success');
                   } catch (e) {
-                    show(e instanceof ApiError ? e.message : '삭제 실패', 'error');
+                    show(e instanceof ApiError ? e.message : '삭제하지 못했어요', 'error');
                     throw e;
                   }
                 }}
@@ -385,7 +392,7 @@ function AdminDashboard({
                     const res = await api.adminClearReservations(token);
                     show(res.message, 'success');
                   } catch (e) {
-                    show(e instanceof ApiError ? e.message : '초기화 실패', 'error');
+                    show(e instanceof ApiError ? e.message : '초기화하지 못했어요', 'error');
                     throw e;
                   }
                 }}
@@ -467,7 +474,7 @@ function AdminDashboard({
                         show(res.message, 'success');
                         await loadFreeSchedule();
                       } catch (e) {
-                        show(e instanceof ApiError ? e.message : '신청 실패', 'error');
+                        show(e instanceof ApiError ? e.message : '신청하지 못했어요', 'error');
                         throw e;
                       }
                     }}
@@ -478,7 +485,7 @@ function AdminDashboard({
                         show(res.message, 'success');
                         await loadFreeSchedule();
                       } catch (e) {
-                        show(e instanceof ApiError ? e.message : '삭제 실패', 'error');
+                        show(e instanceof ApiError ? e.message : '삭제하지 못했어요', 'error');
                         throw e;
                       }
                     }}
@@ -488,7 +495,7 @@ function AdminDashboard({
                         show(res.message, 'success');
                         await loadFreeSchedule();
                       } catch (e) {
-                        show(e instanceof ApiError ? e.message : '초기화 실패', 'error');
+                        show(e instanceof ApiError ? e.message : '초기화하지 못했어요', 'error');
                         throw e;
                       }
                     }}
@@ -518,7 +525,7 @@ function AdminDashboard({
           plans={plans}
           token={token}
           onClose={() => setEditUser(null)}
-          onSaved={async () => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show('저장됨', 'success'); }}
+          onSaved={async () => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show('저장했어요', 'success'); }}
           onError={(m) => show(m, 'error')}
         />
       ) : editUser && (
@@ -527,7 +534,7 @@ function AdminDashboard({
           plans={plans}
           token={token}
           onClose={() => setEditUser(null)}
-          onSaved={async () => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show('저장됨', 'success'); }}
+          onSaved={async () => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show('저장했어요', 'success'); }}
           onDeleted={async (message) => { setEditUser(null); await load(); setReloadKey((k) => k + 1); show(message, 'success'); }}
           onError={(m) => show(m, 'error')}
         />

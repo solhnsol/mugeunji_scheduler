@@ -120,7 +120,7 @@ export function AdminAutomationTab({
         setForm(data);
         setManualOpenLocal(toDatetimeLocalKst(data.reservation_opens_at));
       })
-      .catch((e) => onError(e instanceof ApiError ? e.message : '설정 로드 실패'));
+      .catch((e) => onError(e instanceof ApiError ? e.message : '설정을 불러오지 못했어요'));
   }, [token, onError]);
 
   const patch = (partial: Partial<AutomationSettings>) => {
@@ -159,7 +159,7 @@ export function AdminAutomationTab({
       setManualOpenLocal(toDatetimeLocalKst(res.reservation_opens_at));
       onSaved(res.message || '저장했어요.');
     } catch (err) {
-      onError(err instanceof ApiError ? err.message : '저장 실패');
+      onError(err instanceof ApiError ? err.message : '저장하지 못했어요');
     } finally {
       setSaving(false);
     }

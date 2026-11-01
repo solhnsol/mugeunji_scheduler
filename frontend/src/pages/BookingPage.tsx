@@ -5,7 +5,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { MonthCalendar } from '../components/booking/MonthCalendar';
 import { TimeGrid } from '../components/booking/TimeGrid';
 import { WeeklyBookingSheet } from '../components/booking/WeeklyBookingSheet';
-import { AppShell, Toast } from '../components/ui';
+import { AppShell, SiteLinks, Toast } from '../components/ui';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { useSwipe } from '../hooks/useSwipe';
 import { useToast } from '../hooks/useToast';
@@ -372,7 +372,9 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
       title="예약"
       fillMain
       actions={
-        config && config.balance !== null ? (
+        <>
+          <SiteLinks />
+          {config && config.balance !== null && (
           <Link
             to="/tokens"
             className="inline-flex items-center gap-1.5 rounded-full bg-sage-muted px-3 min-h-[40px] text-sm text-sage tabular-nums hover:bg-sage-muted/70 transition-colors"
@@ -383,7 +385,8 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
             <i className="w-px h-3 bg-sage/30" aria-hidden />
             <span className="text-xs font-medium">충전</span>
           </Link>
-        ) : undefined
+          )}
+        </>
       }
     >
       {error ? (

@@ -76,7 +76,7 @@ export default function FreeApp({
           username,
         } as MeResponse);
       } else {
-        show(err instanceof ApiError ? err.message : '로드 실패', 'error');
+        show(err instanceof ApiError ? err.message : '불러오지 못했어요', 'error');
       }
     });
   }, [load, show, username]);
@@ -172,7 +172,7 @@ export default function FreeApp({
                 setUsageRefreshKey((k) => k + 1);
                 await load();
               } catch (err) {
-                show(err instanceof ApiError ? err.message : '신청 실패', 'error');
+                show(err instanceof ApiError ? err.message : '신청하지 못했어요', 'error');
                 throw err;
               }
             }}

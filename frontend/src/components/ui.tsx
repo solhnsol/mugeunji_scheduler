@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 
 function scheduleTabClass(active: boolean) {
   return `inline-flex items-center justify-center rounded-full px-2.5 sm:px-3 py-1.5 min-h-[36px] sm:min-h-[40px] text-xs sm:text-sm font-medium transition-colors flex-1 sm:flex-none ${
@@ -36,6 +36,27 @@ export function ScheduleModeNav({
             자유이용
           </Link>
         ))}
+    </nav>
+  );
+}
+
+/** PC 헤더에서 회원 화면끼리 바로 오가는 링크. 폰은 화면이 좁아 각 화면의 "홈으로"만 둔다 */
+export function SiteLinks() {
+  const links: [string, string][] = [['/', '홈'], ['/book', '예약'], ['/tokens', '토큰'], ['/notices', '공지']];
+  return (
+    <nav className="hidden sm:flex items-center gap-0.5 mr-1" aria-label="메뉴">
+      {links.map(([to, label]) => (
+        <NavLink
+          key={to}
+          to={to}
+          end
+          className={({ isActive }) =>
+            `btn-ghost !min-h-[40px] !py-1.5 !px-2.5 ${isActive ? '!text-ink font-semibold' : ''}`
+          }
+        >
+          {label}
+        </NavLink>
+      ))}
     </nav>
   );
 }
