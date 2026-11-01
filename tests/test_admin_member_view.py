@@ -4,7 +4,8 @@
 def test_admin_normal_login_is_member(client):
     r = client.post("/login", json={"username": "admin", "password": "admin-pass-1"})
     member = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    assert client.get("/me", headers=member).json()["role"] == "user"
+    me = client.get("/me", headers=member).json()
+    assert me["role"] == "user" and me["admin_account"]
     assert client.get("/admin/users", headers=member).status_code == 403
 
 
