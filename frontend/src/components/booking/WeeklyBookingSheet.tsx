@@ -28,7 +28,7 @@ export function WeeklyBookingSheet({
   onClose: () => void;
   onBooked: (message: string) => void;
 }) {
-  const [weekday, setWeekday] = useState<number | null>(null);
+  const [weekday, setWeekday] = useState<number | null>(1); // 월요일부터 (시간은 고르지 않은 상태)
   // 처음엔 아무것도 고르지 않은 상태 (end - start = 0)
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
