@@ -439,7 +439,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                 canNext={!!todayMonth && month < addMonths(todayMonth, 1)}
               />
               <button type="button" className="btn-secondary w-full" onClick={() => setWeeklyOpen(true)}>
-                매주 같은 시간 한 번에 예약
+                일괄 예약하기
               </button>
               {nextOpenNote && (
                 <p className="text-sm text-ink-muted bg-cream-dark/60 rounded-2xl px-4 py-3">{nextOpenNote}</p>
