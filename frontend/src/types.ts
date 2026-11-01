@@ -67,6 +67,8 @@ export interface UserInfo {
   monthly_price?: number;
   custom_monthly_fee?: number | null;
   free_access?: boolean;
+  last_client?: 'app' | 'mobile' | 'pc' | null;
+  last_client_at?: string | null;
 }
 
 export const HOUR_OPTIONS = [4, 6, 8] as const;

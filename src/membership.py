@@ -956,6 +956,7 @@ class MembershipManager:
             """
             SELECT u.username, u.email, u.name, u.phone, u.role, u.allowed_hours,
                    u.custom_allowed_hours, u.custom_monthly_fee, u.dawn_allowed,
+                   u.last_client, u.last_client_at,
                    s.plan_id, s.status AS subscription_status, s.auto_renew,
                    p.name AS plan_name, p.allowed_hours AS plan_allowed_hours,
                    p.monthly_price AS plan_monthly_price

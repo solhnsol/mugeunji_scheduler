@@ -17,7 +17,7 @@ import { useToast } from '../hooks/useToast';
 import { NoticeCard } from '../components/NoticeCard';
 import { TokenHome } from '../components/TokenHome';
 import { OnboardingTour, takeOnboardingPending } from '../components/OnboardingTour';
-import { InstallGuide } from '../components/InstallGuide';
+import { InstallBanner, InstallGuide } from '../components/InstallGuide';
 import { installPlatform, needsInstallGuide } from '../install';
 import { MeResponse, MyBooking, Plan, ReservationMode } from '../types';
 import { formatTokens } from '../utils';
@@ -311,6 +311,7 @@ export default function UserApp({
       }}
     />
   );
+  const installBanner = <InstallBanner onOpen={() => setInstallOpen(true)} />;
   const installModal = installOpen && <InstallGuide onClose={() => setInstallOpen(false)} />;
   const guideModal = guideOpen && (
     <UsageGuideModal onClose={() => setGuideOpen(false)} paymentGuide={paymentGuide} />
@@ -389,6 +390,7 @@ export default function UserApp({
   if (tokenMode) {
     return (
       <AppShell title={`${displayName}님`} actions={<HeaderActions items={headerMenuItems} />}>
+        {installBanner}
         <div className="mb-4"><NoticeCard /></div>
         <TokenHome
           balance={tokenBalance}
@@ -412,6 +414,7 @@ export default function UserApp({
         nav={headerNav}
         actions={<HeaderActions items={headerMenuItems} />}
       >
+        {installBanner}
         <div className="space-y-5">
           <div>
             <h2 className="text-lg font-semibold text-ink">환영합니다 👋</h2>
@@ -458,6 +461,7 @@ export default function UserApp({
       nav={headerNav}
       actions={<HeaderActions items={headerMenuItems} />}
     >
+      {installBanner}
       <div className="space-y-4">
         {profileBanner}
         <NoticeCard />

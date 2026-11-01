@@ -40,6 +40,9 @@ async def _migrate_users_table(conn: aiosqlite.Connection):
         ("session_epoch", "INTEGER NOT NULL DEFAULT 0"),
         # 새벽(0~4시) 예약 허용 여부 (토큰 예약 시스템)
         ("dawn_allowed", "INTEGER NOT NULL DEFAULT 1"),
+        # 마지막 접속 방식(app: 홈 화면 웹앱, mobile: 휴대폰 브라우저, pc)과 그 날짜(KST, YYYY-MM-DD)
+        ("last_client", "TEXT"),
+        ("last_client_at", "TEXT"),
     ]
     for name, col_type in columns:
         if not await _column_exists(conn, table="users", column=name):

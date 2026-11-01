@@ -3,6 +3,15 @@ import { useSearchParams } from 'react-router-dom';
 import { UserInfo } from '../types';
 import { formatPhone } from '../utils';
 
+const CLIENT_LABEL = { app: '웹앱', mobile: '휴대폰 웹', pc: 'PC' } as const;
+
+/** 마지막 접속 방식과 날짜 (예: 웹앱 · 11/1) */
+function clientCell(u: UserInfo) {
+  if (!u.last_client) return '-';
+  const d = u.last_client_at ? ` ${Number(u.last_client_at.slice(5, 7))}/${Number(u.last_client_at.slice(8))}` : '';
+  return `${CLIENT_LABEL[u.last_client]}${d}`;
+}
+
 /** 관리자·회원 목록 탭 */
 export function AdminUsersTab({
   admins,
@@ -83,7 +92,14 @@ export function AdminUsersTab({
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
-            <table className="w-full text-sm min-w-[560px]">
+            <p className="text-xs text-ink-muted mb-3 tabular-nums">
+              마지막 접속:{' '}
+              {(['app', 'mobile', 'pc'] as const)
+                .map((k) => `${CLIENT_LABEL[k]} ${users.filter((u) => u.last_client === k).length}명`)
+                .join(', ')}
+              , 기록 없음 {users.filter((u) => !u.last_client).length}명
+            </p>
+            <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="text-left text-ink-faint border-b border-line text-xs">
                 <th className="py-2 font-medium">이름</th>
@@ -91,13 +107,14 @@ export function AdminUsersTab({
                 <th className="font-medium">아이디</th>
                 <th className="font-medium">월 예약</th>
                 <th className="font-medium">자유</th>
+                <th className="font-medium">마지막 접속</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-ink-faint">
+                  <td colSpan={7} className="py-6 text-center text-ink-faint">
                     {q ? '검색 결과가 없어요' : '회원이 없어요'}
                   </td>
                 </tr>
@@ -114,6 +131,7 @@ export function AdminUsersTab({
                     )}
                   </td>
                   <td>{u.free_access || u.role === 'free' ? '○' : '-'}</td>
+                  <td className={`text-xs tabular-nums ${u.last_client === 'app' ? 'text-sage font-medium' : 'text-ink-muted'}`}>{clientCell(u)}</td>
                   <td>
                     <button type="button" className="text-sage text-xs font-medium min-h-[32px] px-2" onClick={() => onEdit(u)}>
                       수정
