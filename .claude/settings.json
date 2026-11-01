@@ -1,0 +1,19 @@
+{
+  "extraKnownMarketplaces": {
+    "ponytail": {
+      "source": { "source": "github", "repo": "DietrichGebert/ponytail" }
+    },
+    "ui-ux-pro-max-skill": {
+      "source": { "source": "github", "repo": "nextlevelbuilder/ui-ux-pro-max-skill" }
+    },
+    "hallmark": {
+      "source": { "source": "github", "repo": "Nutlope/hallmark" }
+    }
+  },
+  "enabledPlugins": {
+    "ponytail@ponytail": true,
+    "frontend-design@claude-plugins-official": true,
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
+    "hallmark@hallmark": true
+  }
+}

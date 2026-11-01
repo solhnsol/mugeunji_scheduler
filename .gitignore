@@ -7,3 +7,5 @@ frontend/node_modules/
 
 debug.py
 frontend/tsconfig.tsbuildinfo
+
+graphify-out/
