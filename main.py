@@ -36,7 +36,7 @@ from src.reservation import ReservationManager
 from src.settings import SettingsManager
 from src.notices import NoticeError, NoticeManager
 from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
-from src.tokens import TokenManager, is_expired
+from src.tokens import TokenManager, admin_pack, is_expired
 from src.write_lock import writing
 
 load_dotenv()
@@ -1120,6 +1120,10 @@ async def list_token_packs(
 ):
     await _require_token_charge_open(conn, current_user)
     packs = await TokenManager(conn).list_packs(active_only=True)
+    async with conn.execute("SELECT role FROM users WHERE username = ?", (current_user["username"],)) as cursor:
+        is_admin_account = (await cursor.fetchone())["role"] == "admin"
+    if is_admin_account:
+        return [admin_pack(p) for p in packs if not is_expired(p["expires_on"])]
     is_free_member = current_user["role"] in ("free", "admin")
     return [
         p for p in packs
