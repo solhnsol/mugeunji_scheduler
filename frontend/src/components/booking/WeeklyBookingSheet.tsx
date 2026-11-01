@@ -156,7 +156,6 @@ export function WeeklyBookingSheet({
               <span className="text-base font-bold text-ink tabular-nums">
                 {start}시 ~ {end}시 <span className="text-sm font-medium text-ink-muted">{length}시간</span>
               </span>
-              <span className="text-xs text-ink-faint">{anchor !== null ? '끝나는 시간을 눌러요' : '시작 시간을 눌러요'}</span>
             </div>
             <div className="grid grid-cols-12 gap-1" role="group" aria-label="시간 고르기">
               {Array.from({ length: 24 }, (_, h) => {
