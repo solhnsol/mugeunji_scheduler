@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
 import { AutomationSettings, WEEKDAY_OPTIONS } from '../types';
+import { formatDateTime } from '../utils';
 
 function formatKst(iso: string | null | undefined): string {
   if (!iso) return '-';
-  return new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+  // 회원 화면과 같은 "11/30 21:00" 형식
+  return formatDateTime(iso) || '-';
 }
 
 function formatMonthlyOpenTime(hour: number, minute: number): string {
@@ -118,7 +120,7 @@ export function AdminAutomationTab({
         setForm(data);
         setManualOpenLocal(toDatetimeLocalKst(data.reservation_opens_at));
       })
-      .catch((e) => onError(e instanceof ApiError ? e.message : '설정 로드 실패'));
+      .catch((e) => onError(e instanceof ApiError ? e.message : '설정을 불러오지 못했어요'));
   }, [token, onError]);
 
   const patch = (partial: Partial<AutomationSettings>) => {
@@ -155,9 +157,9 @@ export function AdminAutomationTab({
       });
       setForm(res);
       setManualOpenLocal(toDatetimeLocalKst(res.reservation_opens_at));
-      onSaved(res.message || '저장되었습니다.');
+      onSaved(res.message || '저장했어요.');
     } catch (err) {
-      onError(err instanceof ApiError ? err.message : '저장 실패');
+      onError(err instanceof ApiError ? err.message : '저장하지 못했어요');
     } finally {
       setSaving(false);
     }
@@ -171,7 +173,7 @@ export function AdminAutomationTab({
     <form onSubmit={handleSubmit} className="space-y-5">
       <section className="card p-5">
         <h2 className="font-semibold text-ink mb-1">현재 상태</h2>
-        <p className="text-xs text-ink-faint mb-4">저장 시 자동 처리(초기화·오픈)가 즉시 점검됩니다</p>
+        <p className="text-xs text-ink-faint mb-4">저장하면 초기화·오픈 일정을 바로 다시 확인해요</p>
         <dl className="grid gap-2 text-sm">
           <div className="flex justify-between gap-4">
             <dt className="text-ink-muted">월간 예약</dt>
@@ -214,13 +216,13 @@ export function AdminAutomationTab({
         <h2 className="font-semibold text-ink">월간 예약</h2>
         <Toggle
           label="월간 예약 접수"
-          hint="끄면 스케줄과 관계없이 사용자가 월간 시간표를 신청할 수 없습니다"
+          hint="끄면 일정과 상관없이 월간 신청을 받지 않아요"
           checked={form.reservation_enabled}
           onChange={(v) => patch({ reservation_enabled: v })}
         />
         <Toggle
           label="매달 말일 정기 오픈"
-          hint="끄면 아래 수동 예약 일정을 사용합니다"
+          hint="끄면 아래에서 직접 정한 일정을 써요"
           checked={form.auto_monthly_open_enabled}
           onChange={(v) => patch({ auto_monthly_open_enabled: v })}
         />
@@ -260,15 +262,15 @@ export function AdminAutomationTab({
               onChange={(e) => setManualOpenLocal(e.target.value)}
             />
             <p className="text-xs text-ink-faint mt-2">
-              지정 시각에 월간 시간표가 초기화되고, 그 시점부터 신규 신청이 열립니다.
-              그 이전에는 신청이 막힙니다.
+              정한 시각에 월간 시간표를 비우고, 그때부터 새 신청을 받아요.
+              그 전에는 신청할 수 없어요.
             </p>
           </div>
         )}
         {form.auto_monthly_open_enabled && (
           <Toggle
             label="월간 시간표 자동 초기화"
-            hint="오픈 N분 전에 월간 예약을 자동으로 비웁니다"
+            hint="오픈 N분 전에 월간 예약을 자동으로 비워요"
             checked={form.auto_monthly_clear_enabled}
             onChange={(v) => patch({ auto_monthly_clear_enabled: v })}
           />
@@ -276,7 +278,7 @@ export function AdminAutomationTab({
         {!form.auto_monthly_open_enabled && (
           <Toggle
             label="오픈 시 월간 시간표 초기화"
-            hint="수동 오픈 시각에 기존 월간 예약을 비웁니다"
+            hint="직접 정한 오픈 시각에 기존 월간 예약을 비워요"
             checked={form.auto_monthly_clear_enabled}
             onChange={(v) => patch({ auto_monthly_clear_enabled: v })}
           />
@@ -287,7 +289,7 @@ export function AdminAutomationTab({
         <h2 className="font-semibold text-ink">자유이용</h2>
         <Toggle
           label="자유이용 예약 자동 초기화"
-          hint="매주 지정 시각에 자유이용 예약만 삭제합니다 (월간 유지)"
+          hint="매주 정한 시각에 자유이용 예약만 지워요. 월간 예약은 남아요"
           checked={form.auto_free_reset_enabled}
           onChange={(v) => patch({ auto_free_reset_enabled: v })}
         />

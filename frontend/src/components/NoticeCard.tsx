@@ -27,7 +27,7 @@ export function NoticeCard() {
           <li key={n.id}>
             <Link to={`/notices/${n.id}`} className="flex items-center justify-between gap-3 py-2.5 min-h-[44px]">
               <span className="text-sm text-ink truncate">
-                {n.pinned && '📌 '}
+                {n.pinned && <span className="text-sage font-medium mr-1.5">고정</span>}
                 {n.title}
               </span>
               <span className="text-xs text-ink-faint shrink-0">{formatDateTime(n.published_at ?? n.created_at).split(' ')[0]}</span>

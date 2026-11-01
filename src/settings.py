@@ -25,7 +25,7 @@ class SettingsManager:
                     (key, value),
                 )
             await self.conn.commit()
-            return True, "설정을 성공적으로 업데이트했습니다."
+            return True, "설정을 저장했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"설정 업데이트 중 오류 발생: {str(e)}"

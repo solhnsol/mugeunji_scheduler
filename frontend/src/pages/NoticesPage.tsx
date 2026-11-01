@@ -63,7 +63,7 @@ export default function NoticesPage({ authed }: { authed: boolean }) {
         ) : (
           <article className="card p-5 sm:p-7">
             <p className="text-xs text-sage font-medium">
-              {detail.pinned && '📌 '}
+              {detail.pinned && '고정 · '}
               {detail.category_label}
             </p>
             <h2 className="text-xl font-bold text-ink mt-1 leading-snug">{detail.title}</h2>
@@ -107,7 +107,7 @@ export default function NoticesPage({ authed }: { authed: boolean }) {
             <li key={n.id}>
               <Link to={`/notices/${n.id}`} className="card p-4 block hover:border-sage/30 transition">
                 <p className="text-xs text-sage font-medium">
-                  {n.pinned && '📌 '}
+                  {n.pinned && '고정 · '}
                   {n.category_label}
                   {n.visibility === 'members' && <span className="text-ink-faint font-normal"> · 회원 전용</span>}
                 </p>

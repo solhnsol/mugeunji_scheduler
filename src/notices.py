@@ -61,9 +61,9 @@ def _validate(title: str, body: str, category: str, visibility: str) -> Tuple[st
     if len(body) > MAX_BODY:
         raise NoticeError(f"본문은 {MAX_BODY}자 이하로 입력해주세요.")
     if category not in CATEGORIES:
-        raise NoticeError("분류는 notice(공지) 또는 guide(이용 안내)여야 합니다.")
+        raise NoticeError("분류는 notice(공지) 또는 guide(이용 안내)여야 해요.")
     if visibility not in VISIBILITIES:
-        raise NoticeError("공개 범위는 public 또는 members여야 합니다.")
+        raise NoticeError("공개 범위는 public 또는 members여야 해요.")
     return title, body
 
 
@@ -126,7 +126,7 @@ class NoticeManager:
     async def update(self, notice_id: int, fields: Dict) -> Dict:
         current = await self.get(notice_id, include_drafts=True, members=True)
         if not current:
-            raise NoticeError("공지를 찾을 수 없습니다.")
+            raise NoticeError("공지를 찾을 수 없어요.")
         merged = {**current, **{k: v for k, v in fields.items() if v is not None}}
         title, body = _validate(merged["title"], merged["body"], merged["category"], merged["visibility"])
         published_at = current["published_at"]
@@ -145,7 +145,7 @@ class NoticeManager:
         cursor = await self.conn.execute("DELETE FROM notices WHERE id = ?", (notice_id,))
         await self.conn.commit()
         if cursor.rowcount == 0:
-            raise NoticeError("공지를 찾을 수 없습니다.")
+            raise NoticeError("공지를 찾을 수 없어요.")
 
     # ---------- 에이전트 API 키 ----------
     async def key_status(self) -> Dict:

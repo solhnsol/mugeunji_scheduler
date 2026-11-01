@@ -49,14 +49,14 @@ export function ProfileModal({
         body.new_password = newPassword;
       }
       if (Object.keys(body).length === 0) {
-        onError('변경할 항목이 없습니다.');
+        onError('바뀐 내용이 없어요.');
         return;
       }
       const res = await api.updateProfile(token, body);
       onClose();
       onSaved(res);
     } catch (err) {
-      onError(err instanceof ApiError ? err.message : '저장 실패');
+      onError(err instanceof ApiError ? err.message : '저장하지 못했어요');
     } finally {
       setSaving(false);
     }
@@ -80,7 +80,7 @@ export function ProfileModal({
           <div>
             <label className="label">아이디</label>
             <input className="input bg-cream-dark/50" value={me.username} disabled />
-            <p className="text-xs text-ink-faint mt-1">아이디는 변경할 수 없습니다</p>
+            <p className="text-xs text-ink-faint mt-1">아이디는 바꿀 수 없어요</p>
           </div>
           <div>
             <label className="label" htmlFor="profile-name">이름</label>

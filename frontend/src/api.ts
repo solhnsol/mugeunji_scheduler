@@ -20,7 +20,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const message = Array.isArray(detail)
       ? detail.map((item) => item.msg || JSON.stringify(item)).join(', ')
       : detail;
-    throw new ApiError(message || '요청 처리 중 오류가 발생했습니다.');
+    throw new ApiError(message || '요청을 처리하지 못했어요. 잠시 후 다시 해주세요.');
   }
   return data as T;
 }

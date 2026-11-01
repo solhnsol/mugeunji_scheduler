@@ -36,14 +36,14 @@ def resolve_auto_monthly_schedule(
     last_cycle_key = monthly_open_cycle_key(last_open)
 
     if now < last_open:
-        return False, f"예약은 {format_monthly_open_label(last_open)}부터 가능합니다.", None, False
+        return False, f"예약은 {format_monthly_open_label(last_open)}부터 가능해요.", None, False
 
     if config.auto_monthly_clear_enabled and clear_before_next <= now < next_open:
         should_clear = last_cleared_for != next_cycle_key
         msg = (
-            f"예약자 명단이 초기화되었습니다. 예약은 {format_monthly_open_label(next_open)}부터 가능합니다."
+            f"예약자 명단이 초기화됐어요. 예약은 {format_monthly_open_label(next_open)}부터 가능해요."
             if should_clear
-            else f"예약은 {format_monthly_open_label(next_open)}부터 가능합니다."
+            else f"예약은 {format_monthly_open_label(next_open)}부터 가능해요."
         )
         return False, msg, next_cycle_key if should_clear else None, should_clear
 
@@ -66,7 +66,7 @@ def resolve_manual_monthly_schedule(
     clear_enabled: bool,
 ) -> Tuple[bool, str, Optional[str], bool]:
     if now < opens_at:
-        return False, f"예약은 {format_monthly_open_label(opens_at)}부터 가능합니다.", None, False
+        return False, f"예약은 {format_monthly_open_label(opens_at)}부터 가능해요.", None, False
 
     if clear_enabled and last_cleared_for != opens_at_raw:
         return True, "예약 가능", opens_at_raw, True

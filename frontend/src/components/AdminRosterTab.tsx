@@ -59,7 +59,7 @@ export function AdminRosterTab({
   );
 
   useEffect(() => {
-    load().catch((e) => show(e instanceof ApiError ? e.message : '로드 실패', 'error'));
+    load().catch((e) => show(e instanceof ApiError ? e.message : '불러오지 못했어요', 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, reloadKey]);
 
@@ -71,7 +71,7 @@ export function AdminRosterTab({
       show(res.message, 'success');
       await load();
     } catch (e) {
-      show(e instanceof ApiError ? e.message : '실패', 'error');
+      show(e instanceof ApiError ? e.message : '처리하지 못했어요', 'error');
     } finally {
       setBusyKey(null);
     }
@@ -116,7 +116,7 @@ export function AdminRosterTab({
       await navigator.clipboard.writeText(res.text);
       show('정산 안내문을 복사했어요.', 'success');
     } catch (e) {
-      show(e instanceof ApiError ? e.message : '복사 실패', 'error');
+      show(e instanceof ApiError ? e.message : '복사하지 못했어요', 'error');
     }
   };
 
@@ -172,8 +172,8 @@ export function AdminRosterTab({
           </p>
         )}
         <ol className="mt-4 text-xs text-ink-muted space-y-1 list-decimal pl-4">
-          <li>아래 <b>명단</b>을 확인합니다. (제외할 사람은 제외, 빠진 사람은 아래 &quot;미신청 회원&quot;에서 추가)</li>
-          <li><b>청구 생성</b>으로 명단 전원에게 금액을 확정하고, <b>안내문 복사</b>로 정산 안내를 보냅니다.</li>
+          <li>아래 <b>명단</b>을 확인해요. 빠진 사람은 아래 &quot;미신청 회원&quot;에서 추가해요.</li>
+          <li><b>청구 생성</b>으로 명단 전원에게 금액을 확정하고, <b>안내문 복사</b>로 정산 안내를 보내요.</li>
           <li>입금이 확인되는 대로 행의 <b>입금 확인</b>을 누르면 바로 이용할 수 있어요. (마감 없음)</li>
         </ol>
         <div className="flex flex-wrap gap-2 mt-4">
@@ -225,7 +225,8 @@ export function AdminRosterTab({
             )}
             <input
               className="input !py-2 max-w-[180px]"
-              placeholder="이름·아이디·전화 검색"
+              placeholder="검색"
+              aria-label="이름·아이디·전화로 검색"
               value={memberQuery}
               onChange={(e) => setMemberQuery(e.target.value)}
             />
@@ -342,7 +343,8 @@ export function AdminRosterTab({
           <h2 className="font-semibold text-ink">미신청 회원 <span className="text-ink-faint font-normal text-sm">({roster.candidates.length})</span></h2>
           <input
             className="input !py-2 max-w-[200px]"
-            placeholder="이름·아이디·전화 검색"
+            placeholder="검색"
+            aria-label="이름·아이디·전화로 검색"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -388,7 +390,7 @@ export function AdminRosterTab({
               setAddTarget(null);
               await load();
             } catch (e) {
-              show(e instanceof ApiError ? e.message : '추가 실패', 'error');
+              show(e instanceof ApiError ? e.message : '추가하지 못했어요', 'error');
             }
           }}
         />
@@ -487,7 +489,7 @@ function AddMemberModal({
                   ))}
                 </div>
                 {hours === 0 && (
-                  <p className="text-xs text-amber-800 mt-2">월 예약 없이 자유이용만 쓰는 계정이에요. 자유이용 권한이 자동으로 켜집니다.</p>
+                  <p className="text-xs text-amber-800 mt-2">월 예약 없이 자유이용만 쓰는 계정이에요. 자유이용 권한은 자동으로 켜져요.</p>
                 )}
               </>
             )}

@@ -48,14 +48,14 @@ export function EditAdminModal({
   const save = async () => {
     const hours = customInput !== '' ? Number(customInput) : allowedHours;
     if (!Number.isInteger(hours) || hours < 1 || hours > 24) {
-      onError('월 예약 시간은 1~24시간 사이 정수여야 합니다.');
+      onError('월 예약 시간은 1~24 사이 숫자로 적어주세요.');
       return;
     }
     try {
       await api.updateAdminHours(token, user.username, hours);
       onSaved();
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : '저장 실패');
+      onError(e instanceof ApiError ? e.message : '저장하지 못했어요');
     }
   };
 
@@ -162,7 +162,7 @@ export function EditUserModal({
       const res = await api.resetUserPassword(token, user.username);
       setTempPassword(res.temp_password);
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : '초기화 실패');
+      onError(e instanceof ApiError ? e.message : '초기화하지 못했어요');
     } finally {
       setAccountBusy(false);
     }
@@ -191,7 +191,7 @@ export function EditUserModal({
       const res = await api.deleteUser(token, user.username);
       onDeleted(res.message);
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : '삭제 실패');
+      onError(e instanceof ApiError ? e.message : '삭제하지 못했어요');
     } finally {
       setAccountBusy(false);
     }
@@ -227,7 +227,7 @@ export function EditUserModal({
       await api.updateUser(token, user.username, body);
       onSaved();
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : '저장 실패');
+      onError(e instanceof ApiError ? e.message : '저장하지 못했어요');
     }
   };
 
@@ -318,7 +318,7 @@ export function EditUserModal({
               </div>
               {allowedHours === 0 && (
                 <p className="text-xs text-amber-800 mt-2">
-                  월 예약 없이 자유이용만 사용하는 계정이에요. 자유이용 권한이 자동으로 켜집니다.
+                  월 예약 없이 자유이용만 사용하는 계정이에요. 자유이용 권한은 자동으로 켜져요.
                 </p>
               )}
               </>

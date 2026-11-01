@@ -90,7 +90,7 @@ export default function LoginPage({
       await api.login(String(fd.get('username')), String(fd.get('password')));
       await onLogin();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : '로그인 실패', 'error');
+      showToast(err instanceof ApiError ? err.message : '로그인하지 못했어요', 'error');
     } finally {
       setBusy(false);
     }
@@ -161,7 +161,7 @@ export function RegisterPage() {
       showToast(data.message, 'success');
       setTimeout(() => { window.location.href = '/login'; }, 1200);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : '가입 실패', 'error');
+      showToast(err instanceof ApiError ? err.message : '가입하지 못했어요', 'error');
       setBusy(false);
     }
   };

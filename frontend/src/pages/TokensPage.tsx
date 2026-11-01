@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, SESSION } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
-import { AppShell, Toast } from '../components/ui';
+import { AppShell, SiteLinks, Toast } from '../components/ui';
 import { expiryPhrase, useTokenRules } from '../hooks/useTokenRules';
 import { useToast } from '../hooks/useToast';
 import { MyTokens, TokenPack, TokenPurchase } from '../types';
@@ -100,9 +100,14 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
     <AppShell
       title="토큰"
       actions={
-        <Link to="/" className="btn-ghost !min-h-[40px]">
-          홈으로
-        </Link>
+        <>
+          <SiteLinks />
+          <span className="sm:hidden">
+            <Link to="/" className="btn-ghost !min-h-[40px]">
+              홈으로
+            </Link>
+          </span>
+        </>
       }
     >
       {error ? (

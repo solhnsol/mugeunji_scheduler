@@ -52,7 +52,7 @@ def parse_expires_on(value: Optional[str]) -> Optional[str]:
             return datetime.fromisoformat(value).replace(tzinfo=None, second=0, microsecond=0).isoformat(timespec="minutes")
         return date.fromisoformat(value).isoformat()
     except ValueError:
-        raise ValueError("사용 기한은 YYYY-MM-DD 또는 YYYY-MM-DDTHH:MM 형식이어야 합니다.")
+        raise ValueError("사용 기한은 YYYY-MM-DD 또는 YYYY-MM-DDTHH:MM 형식이어야 해요.")
 
 
 def expiry_moment(value: str) -> datetime:
@@ -155,11 +155,11 @@ class TokenManager:
         if not name or len(name) > 30:
             return "상품 이름은 1~30자로 입력해주세요."
         if price_won < (0 if auto_confirm else 1):
-            return "결제 금액은 1원 이상이어야 합니다. (무료 상품은 '바로 지급'을 켜야 0원으로 만들 수 있어요)"
+            return "결제 금액은 1원 이상이어야 해요. (무료 상품은 '바로 지급'을 켜야 0원으로 만들 수 있어요)"
         if audience not in PACK_AUDIENCES:
-            return "대상은 전체 또는 자유이용 회원이어야 합니다."
+            return "대상은 전체 또는 자유이용 회원이어야 해요."
         if tokens < 1 or tokens > MAX_PACK_TOKENS:
-            return f"토큰은 1 이상 {MAX_PACK_TOKENS} 이하의 정수여야 합니다."
+            return f"토큰은 1 이상 {MAX_PACK_TOKENS} 이하의 정수여야 해요."
         return None
 
     async def create_pack(
@@ -190,7 +190,7 @@ class TokenManager:
                 (name.strip(), price_won, tokens, sort_order, _now(), int(auto_confirm), expires_on, audience),
             )
             await self.conn.commit()
-            return True, "상품을 추가했습니다."
+            return True, "상품을 추가했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"상품 추가 실패: {e}"
@@ -211,7 +211,7 @@ class TokenManager:
     ) -> Tuple[bool, str]:
         pack = await self.get_pack(pack_id)
         if not pack:
-            return False, "상품을 찾을 수 없습니다."
+            return False, "상품을 찾을 수 없어요."
         new_name = pack["name"] if name is None else name
         new_price = pack["price_won"] if price_won is None else price_won
         new_tokens = pack["tokens"] if tokens is None else tokens
@@ -243,7 +243,7 @@ class TokenManager:
                 ),
             )
             await self.conn.commit()
-            return True, "상품을 수정했습니다."
+            return True, "상품을 수정했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"상품 수정 실패: {e}"
@@ -251,11 +251,11 @@ class TokenManager:
     async def delete_pack(self, pack_id: int) -> Tuple[bool, str]:
         """충전 요청에는 상품 이름·금액·토큰이 그대로 기록돼 있어 상품을 지워도 내역은 유지된다."""
         if not await self.get_pack(pack_id):
-            return False, "상품을 찾을 수 없습니다."
+            return False, "상품을 찾을 수 없어요."
         try:
             await self.conn.execute("DELETE FROM token_packs WHERE id = ?", (pack_id,))
             await self.conn.commit()
-            return True, "상품을 삭제했습니다."
+            return True, "상품을 삭제했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"상품 삭제 실패: {e}"
@@ -384,12 +384,12 @@ class TokenManager:
         async with self.conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
             row = await cursor.fetchone()
         if not row:
-            return False, "사용자를 찾을 수 없습니다."
+            return False, "사용자를 찾을 수 없어요."
         if row["role"] == "admin":
-            return False, "관리자 계정에는 토큰을 조정할 수 없습니다."
+            return False, "관리자 계정에는 토큰을 조정할 수 없어요."
         balance = await self.get_balance(username)
         if balance + tokens < 0:
-            return False, f"잔액({balance}토큰)보다 많이 차감할 수 없습니다."
+            return False, f"잔액({balance}토큰)보다 많이 차감할 수 없어요."
         try:
             expires_at = await self.default_expiry_at(parse_expires_on(expires_on)) if tokens > 0 else None
         except ValueError as e:
@@ -401,7 +401,7 @@ class TokenManager:
                 username, tokens, "adjust", memo=memo, created_by=admin_username, expires_at=expires_at
             )
             sign = "+" if tokens > 0 else ""
-            return True, f"{username}님의 토큰을 {sign}{tokens} 조정했습니다."
+            return True, f"{username}님의 토큰을 {sign}{tokens} 조정했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"조정 실패: {e}"
@@ -414,7 +414,7 @@ class TokenManager:
         if not usernames:
             return False, "지급할 회원을 선택해주세요."
         if tokens < 1 or tokens > MAX_PACK_TOKENS:
-            return False, f"지급 토큰은 1 이상 {MAX_PACK_TOKENS} 이하의 정수여야 합니다."
+            return False, f"지급 토큰은 1 이상 {MAX_PACK_TOKENS} 이하의 정수여야 해요."
         memo = (memo or "").strip()
         if not memo:
             return False, "지급 사유를 입력해주세요."
@@ -439,7 +439,7 @@ class TokenManager:
                     expires_at=expires_at, commit=False,
                 )
             await self.conn.commit()
-            return True, f"{len(usernames)}명에게 {tokens}토큰씩 지급했습니다."
+            return True, f"{len(usernames)}명에게 {tokens}토큰씩 지급했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"지급 실패: {e}"
@@ -467,13 +467,13 @@ class TokenManager:
     async def request_purchase(self, username: str, pack_id: int) -> Tuple[bool, str]:
         pack = await self.get_pack(pack_id)
         if not pack or not pack["active"]:
-            return False, "선택할 수 없는 상품입니다."
+            return False, "선택할 수 없는 상품이에요."
         if is_expired(pack["expires_on"]):
-            return False, "이미 종료된 상품입니다."
+            return False, "이미 종료된 상품이에요."
         async with self.conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
             user = await cursor.fetchone()
         if pack["audience"] == "free" and (not user or user["role"] not in ("free", "admin")):
-            return False, "자유이용 회원만 받을 수 있는 상품입니다."
+            return False, "자유이용 회원만 받을 수 있는 상품이에요."
         if user and user["role"] == "admin":
             pack = admin_pack(pack)
         if not pack["auto_confirm"]:
@@ -513,7 +513,7 @@ class TokenManager:
         ) as cursor:
             row = await cursor.fetchone()
         if not row:
-            return False, "충전 요청을 찾을 수 없습니다."
+            return False, "충전 요청을 찾을 수 없어요."
         if row["status"] != "pending":
             return False, "이미 처리된 요청은 취소할 수 없어요."
         try:
@@ -545,9 +545,9 @@ class TokenManager:
         async with self.conn.execute("SELECT * FROM token_purchases WHERE id = ?", (purchase_id,)) as cursor:
             row = await cursor.fetchone()
         if not row:
-            return False, "충전 요청을 찾을 수 없습니다."
+            return False, "충전 요청을 찾을 수 없어요."
         if row["status"] != "pending":
-            return False, "확인 대기 중인 요청이 아닙니다."
+            return False, "확인 대기 중인 요청이 아니에요."
         try:
             expires_at = await self.default_expiry_at(row["expires_on"])
             await self.add_ledger(
@@ -561,7 +561,7 @@ class TokenManager:
                 (_now(), confirmed_by, purchase_id),
             )
             await self.conn.commit()
-            return True, f"{row['username']}님께 {row['tokens']}토큰을 지급했습니다."
+            return True, f"{row['username']}님께 {row['tokens']}토큰을 지급했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"확인 실패: {e}"
@@ -570,16 +570,16 @@ class TokenManager:
         async with self.conn.execute("SELECT status FROM token_purchases WHERE id = ?", (purchase_id,)) as cursor:
             row = await cursor.fetchone()
         if not row:
-            return False, "충전 요청을 찾을 수 없습니다."
+            return False, "충전 요청을 찾을 수 없어요."
         if row["status"] != "pending":
-            return False, "확인 대기 중인 요청이 아닙니다."
+            return False, "확인 대기 중인 요청이 아니에요."
         try:
             await self.conn.execute(
                 "UPDATE token_purchases SET status = 'cancelled', memo = ? WHERE id = ?",
                 ((memo or "").strip() or "관리자가 반려", purchase_id),
             )
             await self.conn.commit()
-            return True, "충전 요청을 반려했습니다."
+            return True, "충전 요청을 반려했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"반려 실패: {e}"
@@ -589,9 +589,9 @@ class TokenManager:
         async with self.conn.execute("SELECT * FROM token_purchases WHERE id = ?", (purchase_id,)) as cursor:
             row = await cursor.fetchone()
         if not row:
-            return False, "충전 요청을 찾을 수 없습니다."
+            return False, "충전 요청을 찾을 수 없어요."
         if row["status"] != "confirmed":
-            return False, "확인된 충전이 아닙니다."
+            return False, "확인된 충전이 아니에요."
         if await self.get_balance(row["username"]) < row["tokens"]:
             return False, "지급한 토큰을 이미 사용해 되돌릴 수 없어요. 필요하면 토큰 조정으로 처리해주세요."
         try:
@@ -605,7 +605,7 @@ class TokenManager:
                 (purchase_id,),
             )
             await self.conn.commit()
-            return True, "충전 확인을 취소했습니다. 요청은 다시 확인 대기 상태가 됩니다."
+            return True, "충전 확인을 취소했어요. 요청은 다시 확인 대기 상태가 돼요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"취소 실패: {e}"

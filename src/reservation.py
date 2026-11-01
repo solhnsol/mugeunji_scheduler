@@ -99,14 +99,14 @@ class ReservationManager:
         did_clear = False
 
         if settings.get("reservation_enabled") != "true":
-            return False, "현재 예약이 불가능합니다. 관리자에게 문의하세요.", False
+            return False, "현재 예약이 불가능해요. 관리자에게 문의해주세요.", False
 
         manual_at_raw = settings.get("reservation_opens_at")
         manual_at = parse_opens_at(manual_at_raw)
 
         if not config.auto_monthly_open_enabled:
             if not manual_at:
-                return False, "관리자가 예약 오픈 일정을 설정하지 않았습니다.", False
+                return False, "관리자가 예약 오픈 일정을 설정하지 않았어요.", False
             is_open, message, cycle_key, should_clear = resolve_manual_monthly_schedule(
                 now_kst_dt,
                 manual_at,
@@ -159,7 +159,7 @@ class ReservationManager:
         window_start, _ = get_free_booking_window(now, config)
         if now < window_start:
             opens_local = window_start.strftime('%m월 %d일 %H:%M')
-            return False, f"자유이용 예약은 {opens_local}부터 가능합니다."
+            return False, f"자유이용 예약은 {opens_local}부터 가능해요."
         return True, "자유이용 예약 가능"
 
     async def _user_can_access_free(self, username: str) -> Tuple[bool, str]:
@@ -168,14 +168,14 @@ class ReservationManager:
         )
         user_data = await cursor.fetchone()
         if user_data is None:
-            return False, "사용자 정보를 찾을 수 없습니다."
+            return False, "사용자 정보를 찾을 수 없어요."
         if user_data['role'] not in ('free', 'admin'):
-            return False, "자유이용 권한이 없습니다."
+            return False, "자유이용 권한이 없어요."
         if user_data['role'] == 'admin':
             return True, ""
         access = await self.membership.get_access_status(username)
         if not access.get("can_access_current_month"):
-            return False, "이번 달 이용 요금 입금 확인 후 자유이용이 가능합니다."
+            return False, "이번 달 이용 요금 입금 확인 후 자유이용이 가능해요."
         return True, ""
 
     async def create_reservation(self, username: str, reserve_times: List[Dict]) -> Tuple[bool, str]:
@@ -194,7 +194,7 @@ class ReservationManager:
             user_data = await cursor.fetchone()
 
             if user_data is None:
-                return False, "사용자 정보를 찾을 수 없습니다."
+                return False, "사용자 정보를 찾을 수 없어요."
             user_allowed_hours = await self.membership.get_monthly_allowed_hours(username)
             user_role = user_data['role']
 
@@ -217,20 +217,20 @@ class ReservationManager:
                 if group_to_check.isdisjoint(day_indices):
                     continue
                 if user_role != 'admin' and user_role != 'free':
-                    return False, "새벽 예약은 자유이용권 사용자만 신청할 수 있습니다."
+                    return False, "새벽 예약은 자유이용권 사용자만 신청할 수 있어요."
                 if not group_to_check.issubset(day_indices):
-                    return False, "새벽 예약은 같은 날 0~3시를 한꺼번에만 신청할 수 있습니다."
+                    return False, "새벽 예약은 같은 날 0~3시를 한꺼번에만 신청할 수 있어요."
 
             if user_allowed_hours <= 0:
-                return False, "이 계정은 월 예약 없이 자유이용으로만 이용할 수 있습니다."
+                return False, "이 계정은 월 예약 없이 자유이용으로만 이용할 수 있어요."
 
             if existing_reservations_count + len(reserve_times) > user_allowed_hours:
-                return False, f"예약 가능 시간({user_allowed_hours}시간)을 초과합니다."
+                return False, f"예약 가능 시간({user_allowed_hours}시간)을 초과해요."
 
             for time_slot in reserve_times:
                 taken = await self._slot_taken(time_slot['day'], time_slot['time_index'])
                 if taken:
-                    return False, "이미 예약된 시간이 포함되어 있습니다."
+                    return False, "이미 예약된 시간이 포함되어 있어요."
 
             for time_slot in reserve_times:
                 await self.conn.execute(
@@ -240,14 +240,14 @@ class ReservationManager:
                 )
 
             await self.conn.commit()
-            return True, "이용 신청에 성공했습니다."
+            return True, "이용 신청에 성공했어요."
 
         except aiosqlite.IntegrityError:
             await self.conn.rollback()
-            return False, "신청 실패: 이미 예약되었거나 중복된 시간이 포함되어 있습니다."
+            return False, "신청 실패: 이미 예약되었거나 중복된 시간이 포함되어 있어요."
         except Exception as e:
             await self.conn.rollback()
-            return False, f"처리 중 오류가 발생했습니다: {str(e)}"
+            return False, f"처리 중 오류가 발생했어요: {str(e)}"
 
     async def create_free_reservation(self, username: str, reserve_times: List[Dict]) -> Tuple[bool, str]:
         can_access, msg = await self._user_can_access_free(username)
@@ -268,13 +268,13 @@ class ReservationManager:
         for time_slot in reserve_times:
             key = slot_key(time_slot['day'], time_slot['time_index'])
             if key not in window_slots:
-                return False, "현재 예약 창에 포함되지 않는 시간입니다. (매일 21:00~익일 20:00)"
+                return False, "현재 예약 창에 포함되지 않는 시간이에요. (매일 21:00~익일 20:00)"
 
         try:
             for time_slot in reserve_times:
                 taken = await self._slot_taken(time_slot['day'], time_slot['time_index'])
                 if taken:
-                    return False, "이미 예약된 시간이 포함되어 있습니다."
+                    return False, "이미 예약된 시간이 포함되어 있어요."
 
             for time_slot in reserve_times:
                 await self.conn.execute(
@@ -284,14 +284,14 @@ class ReservationManager:
                 )
 
             await self.conn.commit()
-            return True, "자유이용 신청에 성공했습니다."
+            return True, "자유이용 신청에 성공했어요."
 
         except aiosqlite.IntegrityError:
             await self.conn.rollback()
-            return False, "신청 실패: 이미 예약된 시간입니다."
+            return False, "신청 실패: 이미 예약된 시간이에요."
         except Exception as e:
             await self.conn.rollback()
-            return False, f"처리 중 오류가 발생했습니다: {str(e)}"
+            return False, f"처리 중 오류가 발생했어요: {str(e)}"
 
     async def _slot_taken(self, day: str, time_index: int) -> bool:
         cursor = await self.conn.execute(
@@ -319,7 +319,7 @@ class ReservationManager:
                 (RESERVATION_FREE,),
             )
             await self.conn.commit()
-            return True, "자유이용 예약이 초기화되었습니다."
+            return True, "자유이용 예약이 초기화됐어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"실패: {str(e)}"
@@ -333,7 +333,7 @@ class ReservationManager:
         """본인의 월 예약만 취소. 예약 가능 기간에만 허용 (닫힌 뒤 취소로 빈 시간이 생기는 것을 막는다)."""
         is_available, message, _ = await self.check_reservation_availability()
         if not is_available:
-            return False, f"예약 가능 기간에만 취소할 수 있습니다. ({message})"
+            return False, f"예약 가능 기간에만 취소할 수 있어요. ({message})"
 
         slots = {(t['day'], int(t['time_index'])) for t in reserve_times}
         # 새벽(0~3시)은 4시간 묶음으로만 신청되므로 취소도 같은 날 묶음 전체를 대상으로 한다.
@@ -352,9 +352,9 @@ class ReservationManager:
                 deleted += cursor.rowcount
             if deleted == 0:
                 await self.conn.rollback()
-                return False, "취소할 내 예약이 없습니다."
+                return False, "취소할 내 예약이 없어요."
             await self.conn.commit()
-            return True, f"{deleted}시간 예약을 취소했습니다."
+            return True, f"{deleted}시간 예약을 취소했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"취소 중 오류 발생: {str(e)}"
@@ -367,7 +367,7 @@ class ReservationManager:
                     (time_slot['day'], time_slot['time_index'])
                 )
             await self.conn.commit()
-            return True, f"{len(reserve_times)}개의 예약을 삭제했습니다."
+            return True, f"{len(reserve_times)}개의 예약을 삭제했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"삭제 중 오류 발생: {str(e)}"
@@ -382,7 +382,7 @@ class ReservationManager:
             "SELECT 1 FROM users WHERE username = ?", (target_username,)
         )
         if await cursor.fetchone() is None:
-            return False, f"'{target_username}' 사용자를 찾을 수 없습니다."
+            return False, f"'{target_username}' 사용자를 찾을 수 없어요."
         try:
             for time_slot in reserve_times:
                 await self.conn.execute(
@@ -395,7 +395,7 @@ class ReservationManager:
                     (target_username, time_slot['day'], time_slot['time_index'], reservation_type),
                 )
             await self.conn.commit()
-            return True, f"'{target_username}'의 이름으로 {len(reserve_times)}개의 예약을 강제 등록했습니다."
+            return True, f"'{target_username}'의 이름으로 {len(reserve_times)}개의 예약을 강제 등록했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"강제 등록 중 오류 발생: {str(e)}"
