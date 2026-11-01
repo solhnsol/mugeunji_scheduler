@@ -4,6 +4,7 @@ import { api, ApiError, SESSION } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
 import { MonthCalendar } from '../components/booking/MonthCalendar';
 import { TimeGrid } from '../components/booking/TimeGrid';
+import { WeeklyBookingSheet } from '../components/booking/WeeklyBookingSheet';
 import { AppShell, Toast } from '../components/ui';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { useSwipe } from '../hooks/useSwipe';
@@ -55,6 +56,9 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   const [cancelSel, setCancelSel] = useState<Map<number, CancelSlot>>(new Map());
   const [mine, setMine] = useState<MyBooking[]>([]);
   const [busy, setBusy] = useState(false);
+  const [weeklyOpen, setWeeklyOpen] = useState(false);
+  /** 실시간 변경 등으로 새로 불러올 때마다 올라간다 (매주 예약 미리보기도 따라 새로 받게) */
+  const [rev, setRev] = useState(0);
   const { toast, show } = useToast();
   const { confirm, dialog } = useConfirm();
 
@@ -103,6 +107,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   const refresh = useCallback(async () => {
     const { month: m, selectedDate: d } = stateRef.current;
     weekCache.current.clear();
+    setRev((r) => r + 1);
     await Promise.all([
       loadConfig(),
       m ? loadCalendar(m) : Promise.resolve(),
@@ -433,6 +438,9 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                 canPrev={!!todayMonth && month > todayMonth}
                 canNext={!!todayMonth && month < addMonths(todayMonth, 1)}
               />
+              <button type="button" className="btn-secondary w-full" onClick={() => setWeeklyOpen(true)}>
+                매주 같은 시간 한 번에 예약
+              </button>
               {nextOpenNote && (
                 <p className="text-sm text-ink-muted bg-cream-dark/60 rounded-2xl px-4 py-3">{nextOpenNote}</p>
               )}
@@ -675,6 +683,18 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
             )}
           </div>
         </div>
+      )}
+      {weeklyOpen && config && (
+        <WeeklyBookingSheet
+          config={config}
+          rev={rev}
+          onClose={() => setWeeklyOpen(false)}
+          onBooked={(message) => {
+            setWeeklyOpen(false);
+            show(message, 'success');
+            void refresh().catch(() => undefined);
+          }}
+        />
       )}
       {dialog}
       <Toast message={toast.message} type={toast.type} />
