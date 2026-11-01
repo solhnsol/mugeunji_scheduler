@@ -205,20 +205,26 @@ class AuthManager:
             ("reservations", "SELECT COUNT(*) FROM reservations WHERE username = ?"),
             ("billing", "SELECT COUNT(*) FROM billing_cycles WHERE username = ?"),
             ("billing_paid", "SELECT COUNT(*) FROM billing_cycles WHERE username = ? AND status = 'paid'"),
+            ("bookings", "SELECT COUNT(*) FROM bookings WHERE username = ? AND status = 'active'"),
+            ("token_records", "SELECT COUNT(*) FROM token_ledger WHERE username = ?"),
         ):
             async with self.conn.execute(sql, (username,)) as cursor:
                 counts[key] = (await cursor.fetchone())[0]
         return {"username": username, "name": user.get("name"), **counts}
 
     async def delete_user(self, username: str) -> Tuple[bool, str]:
-        """회원과 그 예약·청구·구독 기록을 모두 삭제한다 (관리자 계정은 불가)."""
+        """회원과 그 예약·청구·구독·토큰 기록을 모두 삭제한다 (관리자 계정은 불가)."""
         user = await self.get_user_row(username)
         if not user:
             return False, "사용자를 찾을 수 없습니다."
         if user["role"] == "admin":
             return False, "관리자 계정은 삭제할 수 없습니다."
         try:
-            for table in ("reservations", "billing_cycles", "plan_change_requests", "subscriptions"):
+            # 토큰 기록을 남기면 잡아 둔 칸이 계속 막히고, 같은 아이디로 재가입하면 잔액·예약을 물려받는다
+            for table in (
+                "reservations", "billing_cycles", "plan_change_requests", "subscriptions",
+                "bookings", "token_ledger", "token_purchases",
+            ):
                 await self.conn.execute(f"DELETE FROM {table} WHERE username = ?", (username,))
             await self.conn.execute("DELETE FROM users WHERE username = ?", (username,))
             await self.conn.commit()

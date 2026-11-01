@@ -693,6 +693,8 @@ export const api = {
       reservations: number;
       billing: number;
       billing_paid: number;
+      bookings: number;
+      token_records: number;
     }>(res);
   },
 

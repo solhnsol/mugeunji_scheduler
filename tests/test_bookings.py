@@ -249,9 +249,10 @@ def test_websocket_requires_login(client, make_user):
     from starlette.websockets import WebSocketDisconnect
 
     client.cookies.clear()  # 앞선 로그인으로 공유 클라이언트에 남은 세션 쿠키
-    with pytest.raises(WebSocketDisconnect):
+    with pytest.raises(WebSocketDisconnect) as denied:
         with client.websocket_connect("/ws") as ws:
             ws.receive_json()
+    assert denied.value.code == 1008  # 화면이 재접속을 멈추는 코드
 
     _username, headers = make_user()
     token = headers["Authorization"].split()[1]
@@ -312,3 +313,22 @@ def test_public_token_rules(client):
     body = r.json()
     assert body["price_bands"] and body["refund_tiers"] and body["expiry_months"] >= 0
     assert set(body["price_bands"][0]) == {"start", "end", "cost"}
+
+
+def test_delete_user_clears_token_records(client, admin, make_user, token_mode):
+    """삭제한 회원의 예약 칸은 비워지고, 같은 아이디로 다시 가입해도 잔액·예약을 물려받지 않는다."""
+    username, member = make_user()
+    _give(client, admin, username, 10)
+    assert _book(client, member, ("2026-12-28", 16)).status_code == 200
+    preview = client.get(f"/admin/users/{username}/delete-preview", headers=admin).json()
+    assert preview["bookings"] == 1 and preview["token_records"] >= 2
+    assert client.delete(f"/admin/users/{username}", headers=admin).status_code == 200
+
+    other_name, other = make_user()
+    _give(client, admin, other_name, 10)
+    assert _book(client, other, ("2026-12-28", 16)).status_code == 200  # 칸이 비었다
+
+    r = client.post("/register", json={"username": username, "password": "password1", "name": "새회원", "phone": "01099990000"})
+    assert r.status_code == 200, r.text
+    again = client.post("/login", json={"username": username, "password": "password1"}).json()
+    assert _balance(client, {"Authorization": f"Bearer {again['access_token']}"}) == 0

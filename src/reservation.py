@@ -3,6 +3,7 @@ from typing import List, Dict, Tuple, Optional
 from datetime import datetime, timezone, timedelta
 
 from src.membership import MembershipManager
+from src.write_lock import writing
 from src.schedule_utils import (
     parse_opens_at,
     resolve_auto_monthly_schedule,
@@ -46,6 +47,11 @@ class ReservationManager:
         return ScheduleConfig.from_settings(settings)
 
     async def maybe_reset_free_reservations(self) -> bool:
+        # 조회(GET·웹소켓)에서도 불려 지우고 commit하므로, 다른 요청의 트랜잭션 도중에 끼어들지 않게 쓰기 락 안에서 판단·실행한다
+        async with writing():
+            return await self._maybe_reset_free_reservations()
+
+    async def _maybe_reset_free_reservations(self) -> bool:
         config = await self.get_schedule_config()
         if not config.auto_free_reset_enabled:
             return False
@@ -82,7 +88,11 @@ class ReservationManager:
 
     async def check_reservation_availability(self) -> Tuple[bool, str, bool]:
         """Returns (is_open, message, did_clear)."""
-        await self.maybe_reset_free_reservations()
+        async with writing():  # 월 예약 비우기도 조회 중에 일어난다 (위 maybe_reset 주석 참고)
+            return await self._check_reservation_availability()
+
+    async def _check_reservation_availability(self) -> Tuple[bool, str, bool]:
+        await self._maybe_reset_free_reservations()
         config = await self.get_schedule_config()
         settings = await self.get_system_settings()
         now_kst_dt = now_kst()

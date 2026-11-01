@@ -176,6 +176,8 @@ export function EditUserModal({
       const parts = [
         `예약 ${pv.reservations}건`,
         `청구 ${pv.billing}건${pv.billing_paid ? ` (입금 완료 ${pv.billing_paid}건 포함)` : ''}`,
+        `토큰 예약 ${pv.bookings}건`,
+        `토큰 내역 ${pv.token_records}건`,
       ];
       const ok = await confirm({
         title: `${user.name || user.username}님을 삭제할까요?`,
