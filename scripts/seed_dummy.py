@@ -5,7 +5,7 @@
     python scripts/seed_dummy.py path/to/x.db
 
 실행 후 서버는 DB 경로를 바꿔 띄운다:  DB_PATH=data/dev.db uvicorn main:app --reload
-모든 계정 비밀번호는 1234, 관리자는 admin / admin1234.
+모든 계정 비밀번호는 123456, 관리자는 admin / admin1234.
 """
 import argparse
 import asyncio
@@ -22,7 +22,7 @@ from src.membership import MembershipManager, usage_period  # noqa: E402
 from src.reservation import ReservationManager  # noqa: E402
 from src.automation_config import RESERVATION_FREE, RESERVATION_MONTHLY  # noqa: E402
 
-PASSWORD = "1234"
+PASSWORD = "123456"
 
 USERS = [
     # username, name, phone
@@ -80,7 +80,7 @@ async def main(db_path: str) -> None:
 
     await conn.close()
     print(f"완료: {db_path}")
-    print("  admin / admin1234, 나머지 계정 비밀번호 1234:", ", ".join(u[0] for u in USERS))
+    print("  admin / admin1234, 나머지 계정 비밀번호 123456:", ", ".join(u[0] for u in USERS))
 
 
 if __name__ == "__main__":

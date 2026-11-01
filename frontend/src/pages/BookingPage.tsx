@@ -378,9 +378,10 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
             className="inline-flex items-center gap-1.5 rounded-full bg-sage-muted px-3 min-h-[40px] text-sm text-sage tabular-nums hover:bg-sage-muted/70 transition-colors"
             aria-label={`토큰 ${formatTokens(config.balance)}개, 충전하기`}
           >
-            <span aria-hidden>🪙</span>
+            <span className="text-xs text-ink-muted">토큰</span>
             <b className="text-ink">{formatTokens(config.balance)}</b>
-            <span className="text-2xs">충전</span>
+            <i className="w-px h-3 bg-sage/30" aria-hidden />
+            <span className="text-xs font-medium">충전</span>
           </Link>
         ) : undefined
       }
@@ -474,7 +475,10 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                           title="캘린더에 추가 (.ics)"
                           onClick={() => downloadBookingIcs(date, hours)}
                         >
-                          📅
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+                            <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+                            <path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5" />
+                          </svg>
                         </button>
                       </li>
                     ))}

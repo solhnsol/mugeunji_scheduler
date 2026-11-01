@@ -101,12 +101,15 @@ export function MonthCalendar({
                 </span>
                 <span className="flex flex-col gap-0.5 min-w-0">
                   {mineChips.slice(0, 2).map((chip) => (
-                    <span key={chip} className="rounded bg-sage text-white text-2xs leading-4 px-1 truncate tabular-nums text-left">
-                      {chip}
+                    <span key={chip} className="rounded bg-sage text-white text-2xs leading-4 px-0.5 tracking-tight truncate tabular-nums text-center">
+                      {/* 폰 칸은 좁아 시작 시각만, 넓은 화면은 구간 전체 */}
+                      <span className="sm:hidden">{chip.split('~')[0]}시</span>
+                      <span className="hidden sm:inline">{chip}</span>
                     </span>
                   ))}
                   {mineChips.length > 2 && <span className="text-2xs leading-none text-sage text-left">+{mineChips.length - 2}</span>}
-                  {!inactive && (
+                  {/* 다 비어 있는 날은 막대로 충분하다: 숫자는 차이가 있을 때만 보여준다 */}
+                  {!inactive && freeHours < 24 && (
                     <span className={`text-2xs leading-none text-left tabular-nums ${freeHours === 0 ? 'text-ink-faint' : 'text-sage font-medium'}`}>
                       {freeHours === 0 ? '마감' : `빈 ${freeHours}h`}
                     </span>

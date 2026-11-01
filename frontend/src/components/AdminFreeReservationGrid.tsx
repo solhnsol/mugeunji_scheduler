@@ -179,7 +179,7 @@ export function AdminFreeReservationGrid({
             </tbody>
           </table>
       </div>
-      <p className="text-xs text-ink-faint shrink-0 pt-2">{selected.size}칸 선택 · 월간 예약 칸은 선택할 수 없습니다</p>
+      <p className="text-xs text-ink-faint shrink-0 pt-2">{selected.size}칸 선택 · 월간 예약 칸은 고를 수 없어요</p>
       {confirmDialog}
     </div>
   );

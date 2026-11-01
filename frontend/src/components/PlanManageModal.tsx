@@ -36,7 +36,7 @@ export function PlanManageModal({
     selectedPlanId == null
       ? '변경할 요금제를 선택해주세요'
       : selectedPlanId === sub?.plan_id
-        ? '현재 이용 중인 요금제입니다'
+        ? '지금 쓰고 있는 요금제예요'
         : null;
 
   const handleConfirm = async () => {
@@ -130,7 +130,7 @@ export function PlanManageModal({
         )}
 
         {pendingCancel && (
-          <p className="text-center text-xs text-ink-faint mt-4">중단 취소 후 변경할 수 있습니다</p>
+          <p className="text-center text-xs text-ink-faint mt-4">중단을 취소하면 바꿀 수 있어요</p>
         )}
       </div>
     </ModalOverlay>

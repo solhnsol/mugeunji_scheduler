@@ -100,7 +100,7 @@ export default function FreeApp({
     return (
       <AppShell title="자유이용" actions={<button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>}>
         <div className="card p-8 max-w-sm mx-auto text-center">
-          <p className="text-sm text-ink-muted">{me.message || '자유이용 권한이 없습니다.'}</p>
+          <p className="text-sm text-ink-muted">{me.message || '자유이용 권한이 없어요.'}</p>
           {isAdminSession || me.role === 'admin' ? (
             <Link to="/admin" className="btn-secondary mt-4 inline-flex">관리자로</Link>
           ) : (

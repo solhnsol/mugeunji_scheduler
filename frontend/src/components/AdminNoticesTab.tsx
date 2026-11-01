@@ -124,7 +124,7 @@ export function AdminNoticesTab({ token, show }: { token: string; show: (m: stri
               <li key={n.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0 flex-1 basis-48">
                   <p className="text-sm font-medium text-ink truncate">
-                    {n.pinned && '📌 '}
+                    {n.pinned && <span className="text-sage font-medium mr-1.5">고정</span>}
                     {n.title}
                   </p>
                   <p className="text-xs text-ink-faint mt-0.5">

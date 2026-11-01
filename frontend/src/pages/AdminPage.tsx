@@ -86,19 +86,17 @@ export default function AdminPage() {
   }
 
   return (
-    <AdminDashboard token={SESSION} adminUser={session.username} onLogout={logout} show={show} toast={toast} />
+    <AdminDashboard token={SESSION} onLogout={logout} show={show} toast={toast} />
   );
 }
 
 function AdminDashboard({
   token,
-  adminUser,
   onLogout,
   show,
   toast,
 }: {
   token: string;
-  adminUser: string;
   onLogout: () => void;
   show: (m: string, t: 'success' | 'error') => void;
   toast: { message: string; type: 'success' | 'error' | '' };
@@ -204,7 +202,6 @@ function AdminDashboard({
     <AppShell
       title="관리자"
       homeTo={null}
-      badge={<span className="text-xs text-ink-muted">{adminUser}</span>}
       actions={
         <>
           <button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>
@@ -260,7 +257,7 @@ function AdminDashboard({
           <section className="card p-5">
             <h2 className="font-semibold text-ink mb-1">입금 안내 문구</h2>
             <p className="text-xs text-ink-faint mb-3">
-              회원의 시작 가이드·입금 대기 화면·이용 안내에 표시됩니다. (계좌, 입금자명 규칙 등)
+              계좌, 입금자명 규칙 등을 적어요. 회원의 시작 가이드·입금 대기 화면·이용 안내에 보여요.
             </p>
             <textarea
               className="input min-h-[88px]"
@@ -341,7 +338,7 @@ function AdminDashboard({
             />
           ) : (
             <div className="card p-4 text-center space-y-1">
-              <p className="text-sm text-ink-muted">회원을 선택하면 예약 현황이 표시됩니다.</p>
+              <p className="text-sm text-ink-muted">회원을 고르면 예약 현황이 보여요.</p>
               <p className="text-xs text-ink-faint">
                 전체 {summarizeReservations(monthlyReservations, { type: 'monthly' }).totalHours}칸 예약됨
               </p>
@@ -434,7 +431,7 @@ function AdminDashboard({
                 />
               ) : (
                 <div className="card p-4 text-center space-y-1">
-                  <p className="text-sm text-ink-muted">회원을 선택하면 예약 현황이 표시됩니다.</p>
+                  <p className="text-sm text-ink-muted">회원을 고르면 예약 현황이 보여요.</p>
                   <p className="text-xs text-ink-faint">
                     전체 {summarizeReservations(freeSchedule.free_reservations, { type: 'free' }).totalHours}칸 예약됨
                   </p>

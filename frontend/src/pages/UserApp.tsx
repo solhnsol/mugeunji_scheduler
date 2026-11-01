@@ -236,7 +236,7 @@ export default function UserApp({
       token={token}
       onClose={() => setProfileOpen(false)}
       onSaved={async (updated) => {
-        show('저장되었습니다.', 'success');
+        show('저장했어요.', 'success');
         if (updated?.profile_complete !== undefined) {
           setMe((prev) =>
             prev
@@ -418,7 +418,7 @@ export default function UserApp({
         {installBanner}
         <div className="space-y-5">
           <div>
-            <h2 className="text-lg font-semibold text-ink">환영합니다 👋</h2>
+            <h2 className="text-lg font-semibold text-ink">환영해요</h2>
             <p className="text-sm text-ink-muted mt-1">
               아래 순서대로 진행하면 시간표를 이용할 수 있어요. 막히면 상단 메뉴의 &quot;이용 안내&quot;를 확인해보세요.
             </p>

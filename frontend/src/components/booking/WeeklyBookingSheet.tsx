@@ -248,7 +248,7 @@ export function WeeklyBookingSheet({
         <div className="shrink-0 px-5 pt-3 border-t border-line/60 space-y-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="flex items-baseline justify-between gap-3 h-6">
             <span className="text-sm text-ink-muted tabular-nums">
-              {count}번 · {slots.length}시간
+              {slots.length ? `${count}번 · ${slots.length}시간` : '아직 고르지 않았어요'}
             </span>
             <span className="text-lg font-bold text-ink tabular-nums">토큰 {total}개</span>
           </div>
