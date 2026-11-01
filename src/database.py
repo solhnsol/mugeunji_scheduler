@@ -327,6 +327,17 @@ async def setup_database(conn: aiosqlite.Connection):
             (FIX_V2_OLD, FIX_V2_NEW, NOV_2026_TITLE),
         )
         await conn.execute("INSERT INTO system_settings (key, value) VALUES (?, 'done')", (FIX_V2_KEY,))
+
+    from src.seed_notices import FIX_V3_KEY, FIX_V3_REPLACEMENTS
+    async with conn.execute("SELECT 1 FROM system_settings WHERE key = ?", (FIX_V3_KEY,)) as cursor:
+        fixed = await cursor.fetchone()
+    if not fixed:
+        for old_text, new_text in FIX_V3_REPLACEMENTS:
+            await conn.execute(
+                "UPDATE notices SET body = replace(body, ?, ?) WHERE created_by = 'system' AND title = ?",
+                (old_text, new_text, NOV_2026_TITLE),
+            )
+        await conn.execute("INSERT INTO system_settings (key, value) VALUES (?, 'done')", (FIX_V3_KEY,))
     async with conn.execute("SELECT COUNT(*) FROM plans") as cursor:
         plan_count = (await cursor.fetchone())[0]
     if plan_count == 0:

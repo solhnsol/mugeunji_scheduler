@@ -41,6 +41,9 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
     void load();
   }, [load]);
 
+  const hasInstantPacks = !!packs?.some((p) => p.auto_confirm);
+  const hasPaidPacks = !!packs?.some((p) => !p.auto_confirm);
+
   const requestPack = async (pack: TokenPack) => {
     if (busy) return;
     const alreadyPending =
@@ -49,7 +52,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
       pack.auto_confirm
         ? {
             title: `${pack.name} 토큰을 받을까요?`,
-            message: `${formatTokens(pack.tokens)}토큰이 바로 지급돼요.${pack.expires_on ? `\n${formatExpiresOn(pack.expires_on)} 쓰지 않으면 사라져요.` : ''}`,
+            message: `${formatTokens(pack.tokens)}토큰이 바로 들어와요. 필요하면 언제든 다시 받을 수 있어요.${pack.expires_on ? `\n${formatExpiresOn(pack.expires_on)} 쓰지 않으면 사라져요.` : ''}`,
             confirmLabel: '받기',
           }
         : {
@@ -124,7 +127,8 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
             <p className="text-sm font-medium text-white/60">보유 토큰</p>
             <p className="text-6xl sm:text-7xl font-bold tabular-nums mt-2 leading-none">{formatTokens(mine.balance)}</p>
             <p className="text-sm text-white/70 mt-4 leading-relaxed">
-              토큰으로 원하는 날짜와 시간에 예약해요. 충전은 언제든 요청할 수 있어요.
+              토큰으로 원하는 날짜와 시간에 예약해요.{' '}
+              {hasPaidPacks ? '충전은 언제든 요청할 수 있어요.' : hasInstantPacks ? '아래에서 토큰을 바로 받을 수 있어요.' : ''}
             </p>
             {mine.lots.some((lot) => lot.expires_at) && (
               <ul className="mt-3 space-y-0.5 text-xs text-white/75 tabular-nums">
@@ -142,10 +146,19 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
 
           <section>
             <h2 className="text-lg font-bold text-ink">토큰 충전</h2>
-            <p className="text-sm text-ink-muted mt-1 leading-relaxed">
-              상품을 고르면 관리자가 확인한 뒤 연락처로 입금 안내를 드려요. 조금만 기다려 주세요. 안내받은 금액을 입금하면
-              관리자가 확인하고 토큰을 지급해요. 충전한 토큰은 {expiryPhrase(rules)} 동안 쓰지 않으면 사라지고, 쓰는 동안은 계속 이어져요.
-            </p>
+            {hasInstantPacks && (
+              <p className="text-sm text-ink-muted mt-1 leading-relaxed">
+                <span className="font-medium text-ink">바로 받기</span> 상품은 누르면 토큰이 바로 들어와요. 입금이나 관리자 확인은
+                필요 없고, 필요할 때마다 다시 받을 수 있어요. 받은 토큰은 상품에 적힌 기한까지만 쓸 수 있어요.
+              </p>
+            )}
+            {hasPaidPacks && (
+              <p className="text-sm text-ink-muted mt-1 leading-relaxed">
+                {hasInstantPacks ? '유료 상품은 ' : '상품을 '}고르면 관리자가 확인한 뒤 연락처로 입금 안내를 드려요. 안내받은 금액을
+                입금하면 관리자가 확인하고 토큰을 지급해요. 충전한 토큰은 {expiryPhrase(rules)} 동안 쓰지 않으면 사라지고, 쓰는 동안은
+                계속 이어져요.
+              </p>
+            )}
             {packs.length === 0 ? (
               <p className="text-sm text-ink-faint mt-4">지금 선택할 수 있는 상품이 없어요. 관리자에게 문의해주세요.</p>
             ) : (
@@ -169,6 +182,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                     {pack.expires_on && (
                       <p className="text-xs text-ink-faint mt-1">{formatExpiresOn(pack.expires_on)} 사용</p>
                     )}
+                    <p className="text-xs font-medium text-sage mt-2">{pack.auto_confirm ? '누르면 바로 받기' : '충전 요청하기'}</p>
                   </button>
                 ))}
               </div>
@@ -177,7 +191,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
 
           {mine.purchases.length > 0 && (
             <section>
-              <h2 className="text-lg font-bold text-ink">충전 요청</h2>
+              <h2 className="text-lg font-bold text-ink">충전 기록</h2>
               {paymentGuide && mine.purchases.some((p) => p.status === 'pending') && (
                 <div className="card p-4 mt-3 border-sage/30 bg-sage-muted/30">
                   <p className="text-sm font-semibold text-ink">입금 안내</p>
