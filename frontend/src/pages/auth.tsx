@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, Toast } from '../components/ui';
 import { useToast } from '../hooks/useToast';
+import { markOnboardingPending } from '../components/OnboardingTour';
 import { formatPhone } from '../utils';
 
 function ForgotPassword() {
@@ -156,6 +157,7 @@ export function RegisterPage() {
         name: String(fd.get('name')),
         phone: phone.replace(/\D/g, ''),
       });
+      markOnboardingPending(String(fd.get('username')));
       showToast(data.message, 'success');
       setTimeout(() => { window.location.href = '/login'; }, 1200);
     } catch (err) {
