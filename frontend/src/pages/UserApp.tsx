@@ -16,6 +16,7 @@ import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { useToast } from '../hooks/useToast';
 import { NoticeCard } from '../components/NoticeCard';
 import { TokenHome } from '../components/TokenHome';
+import { OnboardingTour, takeOnboardingPending } from '../components/OnboardingTour';
 import { MeResponse, MyBooking, Plan, ReservationMode } from '../types';
 import { formatTokens } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
@@ -40,6 +41,7 @@ export default function UserApp({
   const [applyPlan, setApplyPlan] = useState<Plan | null>(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
   const [tokenChargeEnabled, setTokenChargeEnabled] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
@@ -94,6 +96,12 @@ export default function UserApp({
   useEffect(() => {
     load();
   }, [load]);
+
+  // 가입 직후 첫 로그인이면 둘러보기를 한 번 띄운다
+  const meLoaded = !!me;
+  useEffect(() => {
+    if (meLoaded && me?.role !== 'admin' && takeOnboardingPending(username)) setTourOpen(true);
+  }, [meLoaded, username]);
 
   useEffect(() => {
     if (!scheduleModalOpen) return;
@@ -201,6 +209,7 @@ export default function UserApp({
     { id: 'book', label: '예약', onClick: () => navigate('/book'), hidden: !tokenMode && !betaMode && me.role !== 'admin' },
     { id: 'tokens', label: '토큰', onClick: () => navigate('/tokens'), hidden: !tokenChargeEnabled && me.role !== 'admin' },
     { id: 'notices', label: '공지·이용 안내', onClick: () => navigate('/notices') },
+    { id: 'tour', label: '둘러보기', onClick: () => setTourOpen(true) },
     { id: 'guide', label: '시작 가이드', onClick: () => setGuideOpen(true), hidden: tokenMode },
     { id: 'logout', label: '로그아웃', onClick: onLogout },
   ];
@@ -285,6 +294,9 @@ export default function UserApp({
   ) : null;
   const guideVisible = steps.some((s) => !s.done);
   const guideCard = guideVisible ? <GuideCard steps={steps} /> : null;
+  const tourModal = tourOpen && (
+    <OnboardingTour name={displayName} mode={reservationMode} onClose={() => setTourOpen(false)} />
+  );
   const guideModal = guideOpen && (
     <UsageGuideModal onClose={() => setGuideOpen(false)} paymentGuide={paymentGuide} />
   );
@@ -370,7 +382,8 @@ export default function UserApp({
           onProfile={() => setProfileOpen(true)}
         />
         {profileModal}
-        {confirmDialog}
+        {tourModal}
+      {confirmDialog}
         <Toast message={toast.message} type={toast.type} />
       </AppShell>
     );
@@ -415,7 +428,8 @@ export default function UserApp({
         {planModal}
         {profileModal}
         {guideModal}
-        {confirmDialog}
+        {tourModal}
+      {confirmDialog}
         <Toast message={toast.message} type={toast.type} />
       </AppShell>
     );
@@ -487,6 +501,7 @@ export default function UserApp({
       {profileModal}
       {guideModal}
       {scheduleModal}
+      {tourModal}
       {confirmDialog}
       <Toast message={toast.message} type={toast.type} />
     </AppShell>
