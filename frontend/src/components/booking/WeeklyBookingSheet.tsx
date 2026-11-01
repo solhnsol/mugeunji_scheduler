@@ -203,7 +203,7 @@ export function WeeklyBookingSheet({
 
         <ul className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5">
           {!ready ? (
-            <li className="py-10 text-center text-sm text-ink-faint">요일과 시간을 고르면 예약할 날짜가 나와요</li>
+            <li className="py-10 text-center text-sm text-ink-faint">시간을 고르면 예약할 날짜가 나와요</li>
           ) : !occupancy ? (
             <li className="py-10 text-center text-sm text-ink-faint">{error || '불러오고 있어요'}</li>
           ) : plan.length === 0 ? (
@@ -273,7 +273,7 @@ export function WeeklyBookingSheet({
             )}
           </p>
           <button type="button" className="btn-primary" disabled={busy || slots.length === 0 || !!blockReason} onClick={submit}>
-            {busy ? '예약하고 있어요' : slots.length ? `${count}번 예약하기` : ready ? '날짜를 골라주세요' : '요일과 시간을 골라주세요'}
+            {busy ? '예약하고 있어요' : slots.length ? `${count}번 예약하기` : ready ? '날짜를 골라주세요' : '시간을 골라주세요'}
           </button>
         </div>
       </div>
