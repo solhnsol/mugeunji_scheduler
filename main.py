@@ -37,6 +37,7 @@ from src.settings import SettingsManager
 from src.notices import NoticeError, NoticeManager
 from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
 from src.tokens import TokenManager, is_expired
+from src.write_lock import writing
 
 load_dotenv()
 
@@ -115,9 +116,7 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-# 단일 DB 연결을 공유하므로 쓰기 요청은 직렬화해 트랜잭션 간 commit/rollback 간섭을 막는다.
-# 이 락은 프로세스 단위이므로 uvicorn 워커는 반드시 1개로 실행해야 한다 (Dockerfile 참고).
-_write_lock = asyncio.Lock()
+# 쓰기 요청은 src/write_lock.writing()으로 직렬화해 트랜잭션 간 commit/rollback 간섭을 막는다 (Dockerfile 참고).
 _LOCK_EXEMPT = {"/login", "/admin/login", "/logout"}
 
 
@@ -133,7 +132,7 @@ async def serialize_writes(request: Request, call_next):
             return JSONResponse(status_code=403, content={"detail": "허용되지 않은 요청 출처입니다."})
     if request.url.path in _LOCK_EXEMPT:
         return await call_next(request)
-    async with _write_lock:
+    async with writing():
         return await call_next(request)
 
 
@@ -759,7 +758,7 @@ async def logout(
             payload = None
         if payload and payload.get("jti") and payload.get("exp"):
             expires_at = datetime.utcfromtimestamp(payload["exp"]).isoformat()
-            async with _write_lock:
+            async with writing():
                 try:
                     # 만료된 항목은 함께 정리
                     await conn.execute(
@@ -1052,9 +1051,15 @@ async def delete_user(
     admin_user: dict = Depends(get_current_admin_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
+    async with conn.execute(
+        "SELECT DISTINCT booking_date FROM bookings WHERE username = ? AND status = 'active'", (username,)
+    ) as cursor:
+        freed_dates = [row[0] for row in await cursor.fetchall()]
     is_success, message = await AuthManager(conn).delete_user(username)
     if is_success:
         await broadcast_reservation_updates(conn)
+        if freed_dates:
+            await broadcast_booking_update(freed_dates)
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
@@ -1872,12 +1877,14 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         await _user_from_token(websocket.cookies.get(SESSION_COOKIE), conn, "/ws")
     except HTTPException:
+        # accept 전에 닫으면 브라우저는 1006으로 받아 계속 재접속한다. 1008을 받아야 화면이 재시도를 멈춘다
+        await websocket.accept()
         await websocket.close(code=1008)
         return
     reserve_manager = ReservationManager(conn)
     await connection_manager.connect(websocket)
-    await reserve_manager.check_reservation_availability()
     try:
+        await reserve_manager.check_reservation_availability()
         monthly = await reserve_manager.get_reservations(RESERVATION_MONTHLY)
         free = await reserve_manager.get_reservations(RESERVATION_FREE)
         await websocket.send_json({"type": "RESERVATION_UPDATE", "data": monthly})
@@ -1885,6 +1892,8 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
         connection_manager.disconnect(websocket)
 
 
