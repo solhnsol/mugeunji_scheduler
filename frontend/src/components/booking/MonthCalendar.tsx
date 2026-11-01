@@ -108,11 +108,9 @@ export function MonthCalendar({
                     </span>
                   ))}
                   {mineChips.length > 2 && <span className="text-2xs leading-none text-sage text-left">+{mineChips.length - 2}</span>}
-                  {/* 다 비어 있는 날은 막대로 충분하다: 숫자는 차이가 있을 때만 보여준다 */}
-                  {!inactive && freeHours < 24 && (
-                    <span className={`text-2xs leading-none text-left tabular-nums ${freeHours === 0 ? 'text-ink-faint' : 'text-sage font-medium'}`}>
-                      {freeHours === 0 ? '마감' : `빈 ${freeHours}h`}
-                    </span>
+                  {/* 빈 시간은 막대가 보여주므로, 다 찬 날만 글로 알린다 */}
+                  {!inactive && freeHours === 0 && (
+                    <span className="text-2xs leading-none text-left text-ink-faint">마감</span>
                   )}
                 </span>
               </button>
