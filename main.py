@@ -36,7 +36,7 @@ from src.reservation import ReservationManager
 from src.settings import SettingsManager
 from src.notices import NoticeError, NoticeManager
 from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
-from src.tokens import TokenManager, is_expired
+from src.tokens import TokenManager, admin_pack, is_expired
 from src.write_lock import writing
 
 load_dotenv()
@@ -464,7 +464,11 @@ async def _user_from_token(token: Optional[str], conn: aiosqlite.Connection, pat
     # 임시 비밀번호로 로그인한 상태에서는 새 비밀번호를 설정하기 전까지 다른 기능을 막는다
     if row["must_change_password"] and path not in MUST_CHANGE_ALLOWED_PATHS:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="새 비밀번호를 먼저 설정해주세요.")
-    return {"username": username, "role": row["role"]}
+    role = row["role"]
+    # 관리자 권한은 관리자 로그인(/admin/login)으로 받은 토큰에만 준다. 일반 로그인은 회원 화면을 본다
+    if role == "admin" and payload.get("role") != "admin":
+        role = "user"
+    return {"username": username, "role": role}
 
 
 async def get_current_user(
@@ -609,7 +613,7 @@ async def update_my_profile(
         if data.new_password and user:
             # 비밀번호가 바뀌면 이전 토큰은 무효가 되므로, 지금 기기에는 새 세션을 발급한다
             token = create_access_token(
-                data={"sub": user["username"], "role": user["role"], "ep": user.get("session_epoch", 0)}
+                data={"sub": user["username"], "role": current_user["role"], "ep": user.get("session_epoch", 0)}
             )
             set_session_cookie(response, request, token)
         return {
@@ -734,7 +738,9 @@ async def login_user(
         _record_login_failure(request, username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
     _clear_login_failures(request, username)
-    access_token_data = {"sub": user_data["username"], "role": user_data["role"], "ep": user_data.get("session_epoch", 0)}
+    # 일반 로그인은 관리자 계정이어도 회원 권한 토큰을 준다
+    role = "user" if user_data["role"] == "admin" else user_data["role"]
+    access_token_data = {"sub": user_data["username"], "role": role, "ep": user_data.get("session_epoch", 0)}
     access_token = create_access_token(data=access_token_data)
     set_session_cookie(response, request, access_token)
     membership = MembershipManager(conn)
@@ -1114,6 +1120,10 @@ async def list_token_packs(
 ):
     await _require_token_charge_open(conn, current_user)
     packs = await TokenManager(conn).list_packs(active_only=True)
+    async with conn.execute("SELECT role FROM users WHERE username = ?", (current_user["username"],)) as cursor:
+        is_admin_account = (await cursor.fetchone())["role"] == "admin"
+    if is_admin_account:
+        return [admin_pack(p) for p in packs if not is_expired(p["expires_on"])]
     is_free_member = current_user["role"] in ("free", "admin")
     return [
         p for p in packs

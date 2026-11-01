@@ -110,6 +110,11 @@ def replay_lots(rows, now: datetime) -> Tuple[List[Dict], Dict]:
     return remaining, spend_expiry
 
 
+def admin_pack(pack: Dict) -> Dict:
+    """관리자 계정(일반 로그인)은 모든 상품을 무료로 바로 받는다."""
+    return {**pack, "price_won": 0, "auto_confirm": True}
+
+
 class TokenManager:
     def __init__(self, conn: aiosqlite.Connection):
         self.conn = conn
@@ -465,11 +470,12 @@ class TokenManager:
             return False, "선택할 수 없는 상품입니다."
         if is_expired(pack["expires_on"]):
             return False, "이미 종료된 상품입니다."
-        if pack["audience"] == "free":
-            async with self.conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
-                user = await cursor.fetchone()
-            if not user or user["role"] not in ("free", "admin"):
-                return False, "자유이용 회원만 받을 수 있는 상품입니다."
+        async with self.conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
+            user = await cursor.fetchone()
+        if pack["audience"] == "free" and (not user or user["role"] not in ("free", "admin")):
+            return False, "자유이용 회원만 받을 수 있는 상품입니다."
+        if user and user["role"] == "admin":
+            pack = admin_pack(pack)
         if not pack["auto_confirm"]:
             async with self.conn.execute(
                 "SELECT COUNT(*) FROM token_purchases WHERE username = ? AND status = 'pending'", (username,)
