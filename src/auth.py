@@ -66,23 +66,23 @@ class AuthManager:
         phone = normalize_phone(phone)
 
         if len(username) < 2:
-            return False, "아이디는 2자 이상이어야 합니다."
+            return False, "아이디는 2자 이상이어야 해요."
         if len(name) < 2:
-            return False, "이름은 2자 이상이어야 합니다."
+            return False, "이름은 2자 이상이어야 해요."
         if len(password) < 6:
-            return False, "비밀번호는 6자 이상이어야 합니다."
+            return False, "비밀번호는 6자 이상이어야 해요."
         if not PHONE_PATTERN.match(phone):
-            return False, "올바른 휴대폰 번호 형식이 아닙니다. (예: 010-1234-5678)"
+            return False, "올바른 휴대폰 번호 형식이 아니에요. (예: 010-1234-5678)"
         if username == "admin":
-            return False, "사용할 수 없는 아이디입니다."
+            return False, "사용할 수 없는 아이디예요."
 
         async with self.conn.execute("SELECT username FROM users WHERE username = ?", (username,)) as cursor:
             if await cursor.fetchone():
-                return False, "이미 사용 중인 아이디입니다."
+                return False, "이미 사용 중인 아이디예요."
 
         async with self.conn.execute("SELECT username FROM users WHERE phone = ?", (phone,)) as cursor:
             if await cursor.fetchone():
-                return False, "이미 등록된 전화번호입니다."
+                return False, "이미 등록된 전화번호예요."
 
         try:
             pw_hash_bytes = await self._run_sync(
@@ -97,7 +97,7 @@ class AuthManager:
                 (username, pw_hash_bytes.decode("utf-8"), name, phone, now),
             )
             await self.conn.commit()
-            return True, "회원가입이 완료되었습니다."
+            return True, "회원가입이 완료됐어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"회원가입 실패: {str(e)}"
@@ -113,7 +113,7 @@ class AuthManager:
     ) -> Tuple[bool, str]:
         user = await self.get_user_row(username)
         if not user:
-            return False, "사용자를 찾을 수 없습니다."
+            return False, "사용자를 찾을 수 없어요."
 
         updates: List[str] = []
         params: List[object] = []
@@ -121,20 +121,20 @@ class AuthManager:
         if name is not None:
             name = name.strip()
             if len(name) < 2:
-                return False, "이름은 2자 이상이어야 합니다."
+                return False, "이름은 2자 이상이어야 해요."
             updates.append("name = ?")
             params.append(name)
 
         if phone is not None:
             phone = normalize_phone(phone)
             if not PHONE_PATTERN.match(phone):
-                return False, "올바른 휴대폰 번호 형식이 아닙니다."
+                return False, "올바른 휴대폰 번호 형식이 아니에요."
             async with self.conn.execute(
                 "SELECT username FROM users WHERE phone = ? AND username != ?",
                 (phone, username),
             ) as cursor:
                 if await cursor.fetchone():
-                    return False, "이미 등록된 전화번호입니다."
+                    return False, "이미 등록된 전화번호예요."
             updates.append("phone = ?")
             params.append(phone)
 
@@ -142,14 +142,14 @@ class AuthManager:
             if not current_password:
                 return False, "현재 비밀번호를 입력해주세요."
             if len(new_password) < 6:
-                return False, "새 비밀번호는 6자 이상이어야 합니다."
+                return False, "새 비밀번호는 6자 이상이어야 해요."
             valid = await self._run_sync(
                 bcrypt.checkpw,
                 current_password.encode("utf-8"),
                 user["password"].encode("utf-8"),
             )
             if not valid:
-                return False, "현재 비밀번호가 올바르지 않습니다."
+                return False, "현재 비밀번호가 올바르지 않아요."
             pw_hash = await self._run_sync(
                 bcrypt.hashpw, new_password.encode("utf-8"), bcrypt.gensalt()
             )
@@ -160,7 +160,7 @@ class AuthManager:
             updates.append("session_epoch = session_epoch + 1")
 
         if not updates:
-            return False, "변경할 항목이 없습니다."
+            return False, "변경할 항목이 없어요."
 
         params.append(username)
         try:
@@ -169,7 +169,7 @@ class AuthManager:
                 params,
             )
             await self.conn.commit()
-            return True, "정보가 저장되었습니다."
+            return True, "정보가 저장됐어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"저장 실패: {str(e)}"
@@ -178,9 +178,9 @@ class AuthManager:
         """임시 비밀번호를 발급한다. 성공하면 두 번째 값이 임시 비밀번호(한 번만 보여줄 것)."""
         user = await self.get_user_row(username)
         if not user:
-            return False, "사용자를 찾을 수 없습니다."
+            return False, "사용자를 찾을 수 없어요."
         if user["role"] == "admin":
-            return False, "관리자 계정의 비밀번호는 초기화할 수 없습니다."
+            return False, "관리자 계정의 비밀번호는 초기화할 수 없어요."
         temp = "".join(secrets.choice(TEMP_PASSWORD_ALPHABET) for _ in range(8))
         pw_hash = await self._run_sync(bcrypt.hashpw, temp.encode("utf-8"), bcrypt.gensalt())
         try:
@@ -216,9 +216,9 @@ class AuthManager:
         """회원과 그 예약·청구·구독·토큰 기록을 모두 삭제한다 (관리자 계정은 불가)."""
         user = await self.get_user_row(username)
         if not user:
-            return False, "사용자를 찾을 수 없습니다."
+            return False, "사용자를 찾을 수 없어요."
         if user["role"] == "admin":
-            return False, "관리자 계정은 삭제할 수 없습니다."
+            return False, "관리자 계정은 삭제할 수 없어요."
         try:
             # 토큰 기록을 남기면 잡아 둔 칸이 계속 막히고, 같은 아이디로 재가입하면 잔액·예약을 물려받는다
             for table in (
@@ -228,7 +228,7 @@ class AuthManager:
                 await self.conn.execute(f"DELETE FROM {table} WHERE username = ?", (username,))
             await self.conn.execute("DELETE FROM users WHERE username = ?", (username,))
             await self.conn.commit()
-            return True, f"'{user.get('name') or username}' 회원을 삭제했습니다."
+            return True, f"'{user.get('name') or username}' 회원을 삭제했어요."
         except Exception as e:
             await self.conn.rollback()
             return False, f"삭제 실패: {str(e)}"
@@ -250,11 +250,11 @@ class AuthManager:
             reader = csv.DictReader(io.StringIO(csv_content))
             required = {"username", "password", "allowed_hours", "role"}
             if not reader.fieldnames or not required.issubset(set(reader.fieldnames)):
-                return False, "CSV 헤더는 username, password, allowed_hours, role 이어야 합니다."
+                return False, "CSV 헤더는 username, password, allowed_hours, role 이어야 해요."
 
             rows = list(reader)
             if not rows:
-                return False, "CSV에 데이터가 없습니다."
+                return False, "CSV에 데이터가 없어요."
 
             created = updated = skipped = 0
             for row in rows:
@@ -289,7 +289,7 @@ class AuthManager:
                     )
                     created += 1
             await self.conn.commit()
-            return True, f"신규 {created}명, 갱신 {updated}명, 건너뜀 {skipped}명 (기존 사용자·예약·정산 기록은 삭제하지 않습니다)."
+            return True, f"신규 {created}명, 갱신 {updated}명, 건너뜀 {skipped}명 (기존 사용자·예약·정산 기록은 삭제하지 않아요)."
         except Exception as e:
             await self.conn.rollback()
             return False, f"CSV 업로드 실패: {str(e)}"

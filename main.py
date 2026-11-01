@@ -51,11 +51,11 @@ MUST_CHANGE_ALLOWED_PATHS = {"/me", "/me/profile"}
 if SECRET_KEY in ("change-me-in-production", "change-me-to-a-long-random-string"):
     # 공개된 기본 키로는 누구나 로그인 토큰(관리자 포함)을 위조할 수 있다. 임시 키를 쓰고(재시작하면 로그아웃됨) 알린다.
     SECRET_KEY = secrets.token_urlsafe(48)
-    print("[WARN] SECRET_KEY가 기본값이라 임시 키로 실행합니다 (재시작하면 모두 로그아웃돼요). .env에 긴 임의 문자열을 설정하세요.")
+    print("[WARN] SECRET_KEY가 기본값이라 임시 키로 실행해요 (재시작하면 모두 로그아웃돼요). .env에 긴 임의 문자열을 설정하세요.")
 elif len(SECRET_KEY) < 32:
-    print("[WARN] SECRET_KEY가 짧습니다. 32자 이상의 임의 문자열을 권장합니다.")
+    print("[WARN] SECRET_KEY가 짧아요. 32자 이상의 임의 문자열을 권장해요.")
 if not os.getenv("ADMIN_PASSWORD"):
-    print("[WARN] ADMIN_PASSWORD가 없어 새 DB에서는 admin 계정이 생성되지 않습니다.")
+    print("[WARN] ADMIN_PASSWORD가 없어 새 DB에서는 admin 계정이 생성되지 않아요.")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
 
@@ -129,7 +129,7 @@ async def serialize_writes(request: Request, call_next):
     if origin and request.cookies.get(SESSION_COOKIE):
         host = request.headers.get("host", "")
         if origin.split("://", 1)[-1] != host and origin not in _cors_origins:
-            return JSONResponse(status_code=403, content={"detail": "허용되지 않은 요청 출처입니다."})
+            return JSONResponse(status_code=403, content={"detail": "허용되지 않은 요청 출처예요."})
     if request.url.path in _LOCK_EXEMPT:
         return await call_next(request)
     async with writing():
@@ -434,7 +434,7 @@ async def _user_from_token(token: Optional[str], conn: aiosqlite.Connection, pat
     """로그인 토큰을 검증해 사용자를 돌려준다. 실패하면 401/403 HTTPException."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="인증이 필요합니다. 다시 로그인해주세요.",
+        detail="인증이 필요해요. 다시 로그인해주세요.",
         headers={"WWW-Authenticate": "Bearer"},
     )
     if not token:
@@ -493,7 +493,7 @@ async def get_optional_user(
 
 async def get_current_admin_user(user: dict = Depends(get_current_user)):
     if user["role"] != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 권한이 필요합니다.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 권한이 필요해요.")
     return user
 
 
@@ -738,7 +738,7 @@ async def login_user(
     user_data = await auth_manager.login(username, data.password)
     if not user_data:
         _record_login_failure(request, username)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="아이디 또는 비밀번호가 올바르지 않아요.")
     _clear_login_failures(request, username)
     # 일반 로그인은 관리자 계정이어도 회원 권한 토큰을 준다
     role = "user" if user_data["role"] == "admin" else user_data["role"]
@@ -769,7 +769,7 @@ async def admin_login(
     user_data = await auth_manager.login(username, data.password)
     if not user_data or user_data["role"] != "admin":
         _record_login_failure(request, username)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="관리자 인증에 실패했습니다.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="관리자 인증에 실패했어요.")
     _clear_login_failures(request, username)
     access_token = create_access_token(
         data={"sub": user_data["username"], "role": user_data["role"], "ep": user_data.get("session_epoch", 0)}
@@ -1045,9 +1045,9 @@ async def update_user_profile(
     auth_manager = AuthManager(conn)
     user = await auth_manager.get_user_row(username)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없어요.")
     if user["role"] == "admin":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="관리자 계정은 수정할 수 없습니다.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="관리자 계정은 수정할 수 없어요.")
     is_success, message = await auth_manager.update_profile(username, name=data.name, phone=data.phone)
     if is_success:
         return {"status": "success", "message": message}
@@ -1065,7 +1065,7 @@ async def reset_user_password(
     if is_success:
         return {
             "status": "success",
-            "message": "임시 비밀번호를 발급했습니다. 이 화면을 닫으면 다시 볼 수 없어요.",
+            "message": "임시 비밀번호를 발급했어요. 이 화면을 닫으면 다시 볼 수 없어요.",
             "temp_password": result,
         }
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result)
@@ -1079,7 +1079,7 @@ async def get_user_delete_preview(
 ):
     preview = await AuthManager(conn).get_delete_preview(username)
     if preview is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="삭제할 수 있는 회원이 아닙니다.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="삭제할 수 있는 회원이 아니에요.")
     return preview
 
 
@@ -1112,7 +1112,7 @@ async def _require_token_charge_open(conn: aiosqlite.Connection, user: dict) -> 
         return
     settings = await SettingsManager(conn).get_settings()
     if settings.get("token_charge_enabled") != "true" and settings.get("reservation_mode") not in (MODE_TOKEN, MODE_BETA):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="아직 토큰 충전을 사용할 수 없습니다.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="아직 토큰 충전을 사용할 수 없어요.")
 
 
 @app.get("/tokens/packs")
@@ -1157,7 +1157,7 @@ async def request_token_purchase(
 ):
     await _require_token_charge_open(conn, current_user)
     if current_user["role"] == "admin":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="관리자 계정은 토큰을 충전할 수 없습니다.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="관리자 계정은 토큰을 충전할 수 없어요.")
     ok, message = await TokenManager(conn).request_purchase(current_user["username"], data.pack_id)
     if ok:
         return {"status": "success", "message": message}
@@ -1196,7 +1196,7 @@ async def update_token_settings(
         {"token_charge_enabled": "true" if data.token_charge_enabled else "false"}
     )
     if ok:
-        return {"status": "success", "message": "토큰 충전 공개 설정을 저장했습니다."}
+        return {"status": "success", "message": "토큰 충전 공개 설정을 저장했어요."}
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
 
 
@@ -1266,7 +1266,7 @@ async def admin_list_token_purchases(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     if status_filter not in (None, "pending", "confirmed", "cancelled"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status_filter가 올바르지 않습니다.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status_filter가 올바르지 않아요.")
     return await TokenManager(conn).list_purchases(status_filter)
 
 
@@ -1366,7 +1366,7 @@ def _parse_date(raw: str) -> date:
     try:
         return date.fromisoformat(raw)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="날짜 형식이 올바르지 않아요. (YYYY-MM-DD)")
 
 
 @app.get("/token-rules")
@@ -1394,7 +1394,7 @@ async def get_booking_calendar(
         year, mon = (int(x) for x in month.split("-"))
         date(year, mon, 1)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="month 형식이 올바르지 않습니다. (YYYY-MM)")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="month 형식이 올바르지 않아요. (YYYY-MM)")
     days = await BookingManager(conn).month_summary(current_user["username"], current_user["role"], year, mon)
     return {"month": month, "days": days}
 
@@ -1494,12 +1494,12 @@ async def update_booking_settings(
     elif data.beta_month is not None:
         results.append(await manager.set_mode(await manager.get_mode(), data.beta_month))
     if not results:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="변경할 항목이 없습니다.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="변경할 항목이 없어요.")
     for ok, message in results:
         if not ok:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
     await broadcast_reservation_updates(conn)
-    return {"status": "success", "message": "예약 설정을 저장했습니다."}
+    return {"status": "success", "message": "예약 설정을 저장했어요."}
 
 
 @app.get("/admin/bookings")
@@ -1557,10 +1557,10 @@ async def set_dawn_permission(
     async with conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
         row = await cursor.fetchone()
     if not row or row["role"] == "admin":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없어요.")
     await conn.execute("UPDATE users SET dawn_allowed = ? WHERE username = ?", (1 if data.allowed else 0, username))
     await conn.commit()
-    return {"status": "success", "message": "새벽 예약 권한을 저장했습니다."}
+    return {"status": "success", "message": "새벽 예약 권한을 저장했어요."}
 
 
 @app.get("/admin/roster")
@@ -1704,10 +1704,10 @@ async def update_plan_price(
 ):
     async with conn.execute("SELECT id FROM plans WHERE id = ?", (plan_id,)) as cursor:
         if not await cursor.fetchone():
-            raise HTTPException(status_code=404, detail="요금제를 찾을 수 없습니다.")
+            raise HTTPException(status_code=404, detail="요금제를 찾을 수 없어요.")
     await conn.execute("UPDATE plans SET monthly_price = ? WHERE id = ?", (data.monthly_price, plan_id))
     await conn.commit()
-    return {"status": "success", "message": "요금제 가격이 수정되었습니다."}
+    return {"status": "success", "message": "요금제 가격이 수정됐어요."}
 
 
 @app.get("/admin/settings", response_model=SettingsResponse)
@@ -1754,7 +1754,7 @@ async def update_payment_guide(
     text = data.payment_guide.strip()
     is_success, message = await settings_manager.upsert_settings({"payment_guide": text or None})
     if is_success:
-        return {"status": "success", "message": "입금 안내 문구가 저장되었습니다."}
+        return {"status": "success", "message": "입금 안내 문구가 저장됐어요."}
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
 
 
@@ -1944,7 +1944,7 @@ def _spa_index():
     if not os.path.exists(index_path):
         raise HTTPException(
             status_code=503,
-            detail="프론트엔드가 빌드되지 않았습니다. frontend 폴더에서 npm run build를 실행하세요.",
+            detail="프론트엔드가 빌드되지 않았어요. frontend 폴더에서 npm run build를 실행하세요.",
         )
     return FileResponse(index_path)
 
@@ -2070,7 +2070,7 @@ async def get_notice(
 ):
     notice = await NoticeManager(conn).get(notice_id, members=user is not None)
     if not notice:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없습니다.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없어요.")
     return notice
 
 
@@ -2090,7 +2090,7 @@ async def admin_get_notice(
 ):
     notice = await NoticeManager(conn).get(notice_id, include_drafts=True, members=True)
     if not notice:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없습니다.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없어요.")
     return notice
 
 
@@ -2129,7 +2129,7 @@ async def admin_delete_notice(
         await NoticeManager(conn).delete(notice_id)
     except NoticeError as e:
         raise _notice_error(e)
-    return {"status": "success", "message": "공지를 삭제했습니다."}
+    return {"status": "success", "message": "공지를 삭제했어요."}
 
 
 @app.get("/admin/notice-api-key")
@@ -2155,7 +2155,7 @@ async def admin_revoke_notice_key(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     await NoticeManager(conn).revoke_key()
-    return {"status": "success", "message": "에이전트 키를 폐기했습니다."}
+    return {"status": "success", "message": "에이전트 키를 폐기했어요."}
 
 
 # 에이전트 전용: 공지 작성 권한만 가진 API 키 (Authorization: Bearer ntc_...). 쿠키 로그인은 받지 않는다.
@@ -2165,7 +2165,7 @@ async def require_notice_agent(request: Request, conn: aiosqlite.Connection = De
     if not await NoticeManager(conn).verify_key(key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="유효하지 않은 API 키입니다.",
+            detail="유효하지 않은 API 키예요.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return "agent"
@@ -2182,7 +2182,7 @@ async def agent_get_notice(
 ):
     notice = await NoticeManager(conn).get(notice_id, include_drafts=True, members=True)
     if not notice:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없습니다.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="공지를 찾을 수 없어요.")
     return notice
 
 
@@ -2218,4 +2218,4 @@ async def agent_delete_notice(
         await NoticeManager(conn).delete(notice_id)
     except NoticeError as e:
         raise _notice_error(e)
-    return {"status": "success", "message": "공지를 삭제했습니다."}
+    return {"status": "success", "message": "공지를 삭제했어요."}

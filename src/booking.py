@@ -154,7 +154,7 @@ class BookingManager:
 
     async def set_mode(self, mode: str, beta_month: Optional[str] = None) -> Tuple[bool, str]:
         if mode not in MODES:
-            return False, "예약 방식이 올바르지 않습니다."
+            return False, "예약 방식이 올바르지 않아요."
         updates = {SETTING_MODE: mode}
         if beta_month is not None:
             try:
@@ -167,7 +167,7 @@ class BookingManager:
             # 자유이용은 토큰 예약으로 대신하므로, 남아 있는 자유이용 예약은 비운다 (같은 시간을 이중으로 잡지 않게)
             await self.conn.execute("DELETE FROM reservations WHERE reservation_type = 'free'")
             await self.conn.commit()
-        return ok, ("예약 방식을 저장했습니다." if ok else message)
+        return ok, ("예약 방식을 저장했어요." if ok else message)
 
     @staticmethod
     def _parse_month(raw: str) -> str:
@@ -236,7 +236,7 @@ class BookingManager:
         except BookingError as e:
             return False, str(e)
         ok, message = await SettingsManager(self.conn).upsert_settings({SETTING_PRICE_BANDS: json.dumps(cleaned)})
-        return ok, ("시간대별 토큰 가격을 저장했습니다." if ok else message)
+        return ok, ("시간대별 토큰 가격을 저장했어요." if ok else message)
 
     async def set_refund_tiers(self, tiers) -> Tuple[bool, str]:
         try:
@@ -244,7 +244,7 @@ class BookingManager:
         except BookingError as e:
             return False, str(e)
         ok, message = await SettingsManager(self.conn).upsert_settings({SETTING_REFUND_TIERS: json.dumps(cleaned)})
-        return ok, ("환불 정책을 저장했습니다." if ok else message)
+        return ok, ("환불 정책을 저장했어요." if ok else message)
 
     # ---------- 예약 가능 범위 ----------
     @staticmethod
@@ -347,9 +347,9 @@ class BookingManager:
             day = date.fromisoformat(str(raw["date"]))
             hour = int(raw["hour"])
         except (KeyError, TypeError, ValueError):
-            raise BookingError("예약 날짜와 시간이 올바르지 않습니다.")
+            raise BookingError("예약 날짜와 시간이 올바르지 않아요.")
         if not 0 <= hour <= 23:
-            raise BookingError("예약 시간은 0~23시여야 합니다.")
+            raise BookingError("예약 시간은 0~23시여야 해요.")
         return day, hour
 
     async def create_bookings(
@@ -370,12 +370,12 @@ class BookingManager:
         exempt = force_by is not None or role == "admin"
 
         if not exempt and settings.get("reservation_enabled") == "false":
-            raise BookingError("현재 예약이 불가능합니다. 관리자에게 문의하세요.")
+            raise BookingError("현재 예약이 불가능해요. 관리자에게 문의해주세요.")
 
         async with self.conn.execute("SELECT role, dawn_allowed FROM users WHERE username = ?", (username,)) as cursor:
             user = await cursor.fetchone()
         if not user:
-            raise BookingError("사용자를 찾을 수 없습니다.")
+            raise BookingError("사용자를 찾을 수 없어요.")
 
         bands = self._bands_from(settings)
         window = self.bookable_window(now, settings)
@@ -520,7 +520,7 @@ class BookingManager:
     async def range_grid(self, username: str, role: str, start: date, days: int) -> List[Dict]:
         """start부터 days일의 하루 24칸 상태. 칸 상태: free | taken | mine | past | closed."""
         if not 1 <= days <= 42:
-            raise BookingError("조회 기간이 올바르지 않습니다.")
+            raise BookingError("조회 기간이 올바르지 않아요.")
         end = start + timedelta(days=days - 1)
         settings = await self._settings()
         bands = self._bands_from(settings)
