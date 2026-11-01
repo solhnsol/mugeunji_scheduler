@@ -4,7 +4,7 @@ import { api, ApiError, SESSION } from '../../api';
 import { BookingConfig } from '../../types';
 import { formatTokens } from '../../utils';
 import { WEEKDAYS_KO, addMonths, bandFor, formatDateKo, monthOf, summarizeHours } from '../../utils/booking';
-import { WeeklyChoice, buildRows, defaultChoice, hoursFor, weeklyDates } from '../../utils/weekly';
+import { buildRows, freeWeeksByHour, weeklyDates } from '../../utils/weekly';
 import { useConfirm } from '../ConfirmDialog';
 import { ModalOverlay } from '../Modal';
 
@@ -13,7 +13,7 @@ const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // 월~일
 
 /**
  * 매주 같은 요일·시간을 예약 가능한 기간 전체에 한 번에 토큰 예약.
- * 미리보기에서 주마다 예약/빼기, 겹친 주는 건너뛰기·빈 시간만·다른 시간을 고르고, 기존 POST /bookings 한 번으로 보낸다
+ * 시간대별로 몇 주가 비어 있는지 보고 범위를 고른 뒤, 날짜마다 체크로 넣고 빼서(겹친 날은 기본 해제, 체크하면 빈 시간만) 기존 POST /bookings 한 번으로 보낸다
  * (서버가 쓰기 잠금 안에서 한 트랜잭션으로 처리하므로, 그사이 누가 가져가면 전부 취소되고 미리보기를 새로 불러온다).
  */
 export function WeeklyBookingSheet({
@@ -32,7 +32,9 @@ export function WeeklyBookingSheet({
   const [start, setStart] = useState(19);
   const [end, setEnd] = useState(21);
   const [occupancy, setOccupancy] = useState<Map<string, string> | null>(null);
-  const [choices, setChoices] = useState<Map<string, WeeklyChoice>>(new Map());
+  const [checked, setChecked] = useState<Map<string, boolean>>(new Map());
+  /** 시간표에서 시작을 누르고 끝을 기다리는 중인 시각 */
+  const [anchor, setAnchor] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const { confirm, dialog } = useConfirm();
@@ -52,17 +54,17 @@ export function WeeklyBookingSheet({
   }, [load, rev]);
 
   // 요일·시간을 바꾸면 주마다 고른 것은 처음부터
-  useEffect(() => setChoices(new Map()), [weekday, start, end]);
+  useEffect(() => setChecked(new Map()), [weekday, start, end]);
 
-  const rows = occupancy
-    ? buildRows(weeklyDates(config.bookable_from, config.bookable_until, weekday), occupancy, start, length, Date.now(), blocked)
-    : [];
+  const dates = weeklyDates(config.bookable_from, config.bookable_until, weekday);
+  const rows = occupancy ? buildRows(dates, occupancy, start, length, Date.now(), blocked) : [];
+  const freeByHour = occupancy ? freeWeeksByHour(buildRows(dates, occupancy, 0, 24, Date.now(), blocked)) : null;
 
   const costOf = (hours: number[]) => (config.is_admin ? 0 : hours.reduce((s, h) => s + (bandFor(config.price_bands, h)?.cost ?? 0), 0));
   const plan = rows.map((row) => {
-    const choice = choices.get(row.date) ?? defaultChoice(row);
-    const hours = hoursFor(row, choice, length);
-    return { row, choice, hours, cost: costOf(hours) };
+    const on = row.free.length > 0 && (checked.get(row.date) ?? row.ok);
+    const hours = on ? row.free : [];
+    return { row, on, hours, cost: costOf(hours) };
   });
   const slots = plan.flatMap((p) => p.hours.map((hour) => ({ date: p.row.date, hour })));
   const total = plan.reduce((s, p) => s + p.cost, 0);
@@ -76,7 +78,6 @@ export function WeeklyBookingSheet({
   else if (balance !== null && total > balance) blockReason = `토큰이 ${total - balance}개 부족해요`;
   else if (balance !== null && hasZeroCost && balance < 1) blockReason = '토큰이 1개 이상 있어야 예약할 수 있어요';
 
-  const setChoice = (date: string, choice: WeeklyChoice) => setChoices((prev) => new Map(prev).set(date, choice));
 
   const submit = async () => {
     if (busy || slots.length === 0 || blockReason) return;
@@ -101,13 +102,20 @@ export function WeeklyBookingSheet({
     }
   };
 
-  const hourOptions = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-  const startOptions = hourOptions(0, 23).filter((h) => !blocked.includes(h));
-  const span = (s: number) => Array.from({ length }, (_, i) => s + i);
-  const chip = (on: boolean) =>
-    `flex-1 min-w-0 rounded-full min-h-[36px] px-2 text-xs font-medium transition disabled:opacity-30 ${
-      on ? 'bg-sage text-white' : 'bg-cream-dark/60 text-ink-muted'
-    }`;
+  // 시간표: 처음 누르면 그 한 시간, 이어서 뒤쪽을 누르면 거기까지
+  const pickHour = (h: number) => {
+    if (anchor !== null && h >= anchor) {
+      setStart(anchor);
+      setEnd(h + 1);
+      setAnchor(null);
+    } else {
+      setStart(h);
+      setEnd(h + 1);
+      setAnchor(h);
+    }
+  };
+  const cellTone = (n: number) =>
+    n === dates.length && n > 0 ? 'bg-sage-muted text-sage' : n > 0 ? 'bg-amber-100 text-amber-800' : 'bg-cream-dark text-ink-faint line-through';
 
   return (
     <ModalOverlay onClose={onClose} labelledBy="weekly-title">
@@ -143,34 +151,39 @@ export function WeeklyBookingSheet({
             ))}
           </div>
 
-          <div className="flex items-center gap-2 text-base">
-            <select
-              aria-label="시작 시각"
-              className="flex-1 rounded-2xl bg-cream-dark/60 px-4 min-h-[48px] font-semibold text-ink tabular-nums"
-              value={start}
-              onChange={(e) => {
-                const s = Number(e.target.value);
-                setStart(s);
-                if (end <= s) setEnd(s + 1);
-              }}
-            >
-              {startOptions.map((h) => (
-                <option key={h} value={h}>{h}시</option>
-              ))}
-            </select>
-            <span className="text-ink-faint">~</span>
-            <select
-              aria-label="끝 시각"
-              className="flex-1 rounded-2xl bg-cream-dark/60 px-4 min-h-[48px] font-semibold text-ink tabular-nums"
-              value={end}
-              onChange={(e) => setEnd(Number(e.target.value))}
-            >
-              {hourOptions(start + 1, 24)
-                .filter((h) => !blocked.some((b) => b >= start && b < h))
-                .map((h) => (
-                  <option key={h} value={h}>{h}시</option>
-                ))}
-            </select>
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between">
+              <span className="text-base font-bold text-ink tabular-nums">
+                {start}시 ~ {end}시 <span className="text-sm font-medium text-ink-muted">{length}시간</span>
+              </span>
+              <span className="text-xs text-ink-faint">{anchor !== null ? '끝나는 시간을 눌러요' : '시작 시간을 눌러요'}</span>
+            </div>
+            <div className="grid grid-cols-12 gap-1" role="group" aria-label="시간 고르기">
+              {Array.from({ length: 24 }, (_, h) => {
+                const n = freeByHour?.[h] ?? 0;
+                const picked = h >= start && h < end;
+                return (
+                  <button
+                    key={h}
+                    type="button"
+                    disabled={blocked.includes(h)}
+                    aria-pressed={picked}
+                    aria-label={`${h}시, ${dates.length}번 중 ${n}번 비어 있어요`}
+                    className={`h-10 rounded-lg text-xs font-semibold tabular-nums transition disabled:opacity-30 ${
+                      freeByHour ? cellTone(n) : 'bg-cream-dark/40 text-ink-faint'
+                    } ${picked ? 'ring-2 ring-sage ring-offset-2 ring-offset-surface' : ''}`}
+                    onClick={() => pickHour(h)}
+                  >
+                    {h}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-3 text-2xs text-ink-muted">
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage-muted" />매주 비어 있어요</span>
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-amber-100" />일부만 비어 있어요</span>
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm ring-2 ring-sage" />고른 시간</span>
+            </div>
           </div>
         </div>
 
@@ -187,87 +200,35 @@ export function WeeklyBookingSheet({
           ) : plan.length === 0 ? (
             <li className="py-10 text-center text-sm text-ink-faint">남은 기간에 {WEEKDAYS_KO[weekday]}요일이 없어요</li>
           ) : (
-            plan.map(({ row, choice, hours, cost }) => {
-              const taken = row.hours.filter((h) => h.state !== 'free');
-              const free = row.hours.filter((h) => h.state === 'free').map((h) => h.hour);
-              const allMine = row.hours.every((h) => h.state === 'mine');
-              const allPast = row.hours.every((h) => h.state === 'past');
-              const on = hours.length > 0;
-              const note = allMine
-                ? '이미 예약했어요'
-                : allPast
-                  ? '지난 시간이에요'
-                  : `${summarizeHours(taken.map((h) => h.hour))}는 ${
-                      taken.every((h) => h.state === 'past') ? '지났어요' : taken.every((h) => h.state === 'mine') ? '이미 내 예약이에요' : '이미 예약됐어요'
-                    }`;
-              const dateLabel = (
-                <span className="min-w-0">
-                  <span className={`block text-[15px] font-semibold ${on ? 'text-ink' : 'text-ink-faint'}`}>{formatDateKo(row.date)}</span>
-                  {!row.ok && <span className={`block text-xs mt-0.5 ${allMine || allPast ? 'text-ink-faint' : 'text-amber-700'}`}>{note}</span>}
-                </span>
-              );
-              const price = (
-                <span className="shrink-0 text-right tabular-nums">
-                  <span className={`block text-[15px] font-semibold ${on ? 'text-ink' : 'text-ink-faint'}`}>{on ? `토큰 ${cost}개` : '안 해요'}</span>
-                  {on && <span className="block text-xs text-ink-muted">{summarizeHours(hours)}</span>}
-                </span>
-              );
+            plan.map(({ row, on, hours, cost }) => {
+              const busyHours = row.hours.filter((h) => h.state !== 'free');
+              const allMine = busyHours.length === row.hours.length && busyHours.every((h) => h.state === 'mine');
+              const note = row.ok
+                ? ''
+                : allMine
+                  ? '이미 예약했어요'
+                  : row.free.length === 0
+                    ? '예약할 수 있는 시간이 없어요'
+                    : `${summarizeHours(busyHours.map((h) => h.hour))}는 이미 예약됐어요`;
               return (
-                <li key={row.date} className="py-3.5">
-                  {row.ok ? (
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="accent-sage w-5 h-5 shrink-0"
-                        checked={choice.kind === 'book'}
-                        onChange={(e) => setChoice(row.date, { kind: e.target.checked ? 'book' : 'skip' })}
-                      />
-                      <span className="flex-1 flex items-center justify-between gap-3 min-w-0">
-                        {dateLabel}
-                        {price}
-                      </span>
-                    </label>
-                  ) : (
-                    <div className="pl-8 space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        {dateLabel}
-                        {price}
-                      </div>
-                      {!(allMine || allPast) && (
-                        <div className="flex gap-1.5" role="radiogroup" aria-label={`${formatDateKo(row.date)} 어떻게 할까요`}>
-                          <button type="button" role="radio" aria-checked={choice.kind === 'skip'} className={chip(choice.kind === 'skip')} onClick={() => setChoice(row.date, { kind: 'skip' })}>
-                            빼기
-                          </button>
-                          <button
-                            type="button"
-                            role="radio"
-                            aria-checked={choice.kind === 'free-only'}
-                            disabled={free.length === 0}
-                            className={chip(choice.kind === 'free-only')}
-                            onClick={() => setChoice(row.date, { kind: 'free-only' })}
-                          >
-                            {free.length ? `${summarizeHours(free)}만` : '빈 시간 없음'}
-                          </button>
-                          <select
-                            aria-label="다른 시간으로 예약"
-                            disabled={row.alternatives.length === 0}
-                            className={`${chip(choice.kind === 'alt')} text-center`}
-                            value={choice.kind === 'alt' ? choice.start : ''}
-                            onChange={(e) => setChoice(row.date, { kind: 'alt', start: Number(e.target.value) })}
-                          >
-                            <option value="" disabled>
-                              {row.alternatives.length ? '다른 시간' : '다른 시간 없음'}
-                            </option>
-                            {row.alternatives.map((s) => (
-                              <option key={s} value={s}>
-                                {summarizeHours(span(s))}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                <li key={row.date}>
+                  <label className={`flex items-center gap-3 py-3.5 ${row.free.length ? 'cursor-pointer' : 'opacity-50'}`}>
+                    <input
+                      type="checkbox"
+                      className="accent-sage w-5 h-5 shrink-0"
+                      checked={on}
+                      disabled={row.free.length === 0}
+                      onChange={(e) => setChecked((prev) => new Map(prev).set(row.date, e.target.checked))}
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className={`block text-[15px] font-semibold ${on ? 'text-ink' : 'text-ink-muted'}`}>{formatDateKo(row.date)}</span>
+                      {note && <span className={`block text-xs mt-0.5 ${row.free.length ? 'text-amber-700' : 'text-ink-faint'}`}>{note}</span>}
+                    </span>
+                    <span className="shrink-0 text-right tabular-nums">
+                      <span className={`block text-[15px] font-semibold ${on ? 'text-ink' : 'text-ink-faint'}`}>{on ? `토큰 ${cost}개` : '안 해요'}</span>
+                      {on && <span className="block text-xs text-ink-muted">{summarizeHours(hours)}</span>}
+                    </span>
+                  </label>
                 </li>
               );
             })
