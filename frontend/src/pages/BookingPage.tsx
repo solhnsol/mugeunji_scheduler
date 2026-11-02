@@ -231,8 +231,27 @@ export default function BookingPage({
 
   const dayOf = useCallback((date: string) => week?.days.find((d) => d.date === date), [week]);
   const handleFree = (date: string, hour: number) => {
-    const slot = dayOf(date)?.slots[hour];
-    if (slot) toggleFree(date, hour, slot.cost);
+    const day = dayOf(date);
+    const slot = day?.slots[hour];
+    if (!day || !slot) return;
+    // 같은 날 이미 고른 시간이 있으면, 새로 누른 시간까지 사이가 모두 비어 있을 때 한 번에 이어서 고른다 (시작·끝 두 번 탭으로 범위 선택)
+    if (!selected.has(slotKey(date, hour))) {
+      const picked = [...selected.values()].filter((s) => s.date === date).map((s) => s.hour);
+      const near = picked.reduce<number | null>((a, h) => (a === null || Math.abs(h - hour) < Math.abs(a - hour) ? h : a), null);
+      if (near !== null && Math.abs(near - hour) > 1) {
+        const gap = day.slots.slice(Math.min(near, hour), Math.max(near, hour) + 1);
+        if (gap.every((s) => s.status === 'free')) {
+          setCancelSel(new Map());
+          setSelected((prev) => {
+            const next = new Map(prev);
+            gap.forEach((s) => next.set(slotKey(date, s.hour), { date, hour: s.hour, cost: s.cost }));
+            return next;
+          });
+          return;
+        }
+      }
+    }
+    toggleFree(date, hour, slot.cost);
   };
   const handleMine = (bookingId: number) => {
     const day = week?.days.find((d) => d.slots.some((s) => s.booking_id === bookingId));
@@ -473,9 +492,6 @@ export default function BookingPage({
                   </div>
                 )}
                 <div className="flex items-center gap-1 shrink-0">
-                  <button type="button" className="btn-ghost !min-h-[36px] !px-2 text-xs whitespace-nowrap" aria-label="환불 정책" onClick={showRefundPolicy}>
-                    환불
-                  </button>
                   <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-cream-dark/50" role="tablist" aria-label="보기 방식">
                     {(['day', 'week'] as const).map((m) => (
                       <button
@@ -525,7 +541,8 @@ export default function BookingPage({
                       bands={config.price_bands}
                       today={today}
                       showHeader={false}
-                      rowHeight={38}
+                      rowHeight={44}
+                      legend={false}
                       scrollToHour={initialHour}
                       scrollKey={selectedDate}
                       selected={new Set(selected.keys())}
@@ -589,8 +606,9 @@ export default function BookingPage({
                 선택 해제
               </button>
             </div>
+            <div className="flex items-center justify-between gap-3 h-4">
             <p
-              className={`text-xs tabular-nums truncate h-4 ${blockReason || (barMode === 'cancel' && refundPreview.blocked) ? 'text-danger-ink' : 'text-ink-muted'}`}
+              className={`min-w-0 text-xs tabular-nums truncate ${blockReason || (barMode === 'cancel' && refundPreview.blocked) ? 'text-danger-ink' : 'text-ink-muted'}`}
               role="status"
               aria-live="polite"
             >
@@ -624,9 +642,13 @@ export default function BookingPage({
                   </>
                 )
               ) : (
-                <>빈 시간을 누르거나, 길게 눌러 끌어서 선택하세요{balance !== null && <> · 보유 {formatTokens(balance)}</>}</>
+                <>시작 시간과 끝 시간을 눌러 골라요</>
               )}
             </p>
+              <button type="button" className="text-xs text-ink-muted underline underline-offset-2 shrink-0" onClick={showRefundPolicy}>
+                환불 정책
+              </button>
+            </div>
             {barMode === 'cancel' ? (
               <button
                 type="button"
