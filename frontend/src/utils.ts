@@ -22,9 +22,6 @@ export function todayKst(): string {
   return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
 }
 
-/** 회원이 전체 시간표를 바로 보는 주소: 이번 주 일정표를 한 주 보기로 연다 */
-export const thisWeekLink = () => `/book?date=${todayKst()}&mode=week`;
-
 export function kstParts(iso: string | null | undefined) {
   if (!iso) return null;
   const d = new Date(iso);

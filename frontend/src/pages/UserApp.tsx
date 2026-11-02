@@ -15,12 +15,12 @@ import { ScheduleModal } from '../components/ScheduleModal';
 import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { useToast } from '../hooks/useToast';
 import { NoticeCard } from '../components/NoticeCard';
-import { TokenHome } from '../components/TokenHome';
+import BookingPage from './BookingPage';
 import { OnboardingTour, takeOnboardingPending } from '../components/OnboardingTour';
 import { InstallBanner, InstallGuide } from '../components/InstallGuide';
 import { installPlatform, needsInstallGuide } from '../install';
-import { MeResponse, MyBooking, Plan, ReservationMode } from '../types';
-import { formatTokens, thisWeekLink } from '../utils';
+import { MeResponse, Plan, ReservationMode } from '../types';
+import { formatTokens } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 import { PageSkeleton } from '../components/Skeleton';
 
@@ -49,7 +49,6 @@ export default function UserApp({
   const [tokenChargeEnabled, setTokenChargeEnabled] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const [reservationMode, setReservationMode] = useState<ReservationMode>('legacy');
-  const [upcomingBookings, setUpcomingBookings] = useState<MyBooking[]>([]);
   const navigate = useNavigate();
   const monthlyReservations = useMonthlyReservations();
   const mySummary = summarizeReservations(monthlyReservations, { username, type: 'monthly' });
@@ -79,12 +78,6 @@ export default function UserApp({
         .getMyTokens(token)
         .then((t) => setTokenBalance(t.balance))
         .catch(() => setTokenBalance(null));
-    }
-    if ((mode === 'token' || mode === 'beta') && meData.role !== 'admin') {
-      api
-        .getMyBookings(token)
-        .then(setUpcomingBookings)
-        .catch(() => setUpcomingBookings([]));
     }
   }, [token]);
 
@@ -205,20 +198,22 @@ export default function UserApp({
   const betaMode = reservationMode === 'beta' && me.role !== 'admin';
 
   const headerMenuItems = [
-    { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true) },
+    { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true), hidden: tokenMode || betaMode },
     {
       id: 'plan',
       label: '요금제',
       onClick: () => setPlanModalOpen(true),
-      hidden: !hasSubscription || tokenMode,
+      hidden: !hasSubscription || tokenMode || betaMode,
     },
-    { id: 'book', label: '예약', onClick: () => navigate('/book'), hidden: !tokenMode && !betaMode && me.role !== 'admin' },
-    { id: 'tokens', label: '토큰', onClick: () => navigate('/tokens'), hidden: !tokenChargeEnabled && me.role !== 'admin' },
+    // 토큰·베타 모드에서는 홈이 곧 예약 달력이라 따로 두지 않는다
+    { id: 'book', label: '예약', onClick: () => navigate('/book'), hidden: me.role !== 'admin' },
+    { id: 'monthly', label: '월 신청', onClick: () => setScheduleModalOpen(true), hidden: !betaMode || !canViewSchedule },
+    { id: 'tokens', label: '토큰', onClick: () => navigate('/tokens'), hidden: (!tokenChargeEnabled && me.role !== 'admin') || tokenMode || betaMode },
     { id: 'notices', label: '공지·이용 안내', onClick: () => navigate('/notices') },
     { id: 'tour', label: '둘러보기', onClick: () => setTourOpen(true) },
     { id: 'install', label: '홈 화면에 추가', onClick: () => setInstallOpen(true), hidden: !installPlatform() },
-    { id: 'guide', label: '시작 가이드', onClick: () => setGuideOpen(true), hidden: tokenMode },
-    { id: 'logout', label: '로그아웃', onClick: onLogout },
+    { id: 'guide', label: '시작 가이드', onClick: () => setGuideOpen(true), hidden: tokenMode || betaMode },
+    { id: 'logout', label: '로그아웃', onClick: onLogout, hidden: tokenMode || betaMode },
   ];
 
   const headerNav = me.can_access_free_schedule && !betaMode ? (
@@ -275,31 +270,6 @@ export default function UserApp({
         <span className="btn-secondary !w-auto text-sm">충전하기</span>
       </Link>
     ) : null;
-  const betaCard = betaMode ? (
-    <div className="card p-4 border-sage/30 bg-sage-muted/30 space-y-3">
-      <div>
-        <p className="text-sm font-semibold text-ink">토큰 예약 베타</p>
-        <p className="text-xs text-ink-muted mt-1 leading-relaxed">
-          자유이용은 토큰 예약으로 바뀌었어요. 월 신청은 지금처럼 쓰고, 그 외 시간은 토큰으로 예약해요. 불편한 점이나
-          오류가 있으면 단톡방으로 알려주세요.
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs text-ink-faint">내 토큰</p>
-          <p className="text-2xl font-bold text-ink tabular-nums">{tokenBalance === null ? '–' : formatTokens(tokenBalance)}</p>
-        </div>
-        <div className="flex gap-2 w-full">
-          <Link to="/tokens" className="btn-secondary flex-1 !px-3 text-sm whitespace-nowrap">충전·받기</Link>
-          <Link to={thisWeekLink()} className="btn-secondary flex-1 !px-3 text-sm whitespace-nowrap">시간표 보기</Link>
-          <Link to="/book" className="btn-primary flex-1 !px-3 text-sm whitespace-nowrap">토큰으로 예약</Link>
-        </div>
-      </div>
-      {upcomingBookings.length > 0 && (
-        <p className="text-xs text-ink-muted">앞으로의 토큰 예약 {upcomingBookings.length}시간</p>
-      )}
-    </div>
-  ) : null;
   // 관리자 계정은 요금제 없이 쓰므로 시작 가이드가 필요 없다
   const guideVisible = !me.admin_account && steps.some((s) => !s.done);
   const guideCard = guideVisible ? <GuideCard steps={steps} /> : null;
@@ -389,23 +359,27 @@ export default function UserApp({
     </ScheduleModal>
   );
 
-  if (tokenMode) {
+  // 토큰·베타 모드: 첫 화면이 토큰 예약 달력이다. 월 신청·요금제는 메뉴에서 연다
+  if (tokenMode || betaMode) {
     return (
-      <AppShell title={`${displayName}님`} actions={<HeaderActions items={headerMenuItems} />}>
-        {installBanner}
-        <div className="mb-4"><NoticeCard /></div>
-        <TokenHome
-          balance={tokenBalance}
-          upcoming={upcomingBookings}
-          profileIncomplete={!me.profile_complete}
-          onProfile={() => setProfileOpen(true)}
+      <>
+        <BookingPage
+          onLogout={onLogout}
+          title={`${displayName}님`}
+          titleMenu={[
+            { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true) },
+            { id: 'logout', label: '로그아웃', onClick: onLogout },
+          ]}
+          menu={<HeaderActions items={headerMenuItems} />}
         />
+        {planModal}
         {profileModal}
+        {scheduleModal}
         {tourModal}
-      {installModal}
-      {confirmDialog}
+        {installModal}
+        {confirmDialog}
         <Toast message={toast.message} type={toast.type} />
-      </AppShell>
+      </>
     );
   }
 
@@ -426,7 +400,6 @@ export default function UserApp({
           </div>
           <NoticeCard />
           {guideCard}
-          {betaCard}
           {tokenCard}
           <div>
             <h3 className="text-sm font-semibold text-ink mb-3">요금제 선택</h3>
@@ -469,7 +442,6 @@ export default function UserApp({
         <NoticeCard />
         {guideCard}
 
-        {betaCard}
         {tokenCard}
 
         {me.subscription && (
