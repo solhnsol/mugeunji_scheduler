@@ -1401,12 +1401,15 @@ async def get_booking_calendar(
 async def get_booking_range(
     start: str,
     days: int = 7,
+    admin_view: bool = False,
     current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     await _require_token_mode(conn, current_user)
     try:
-        grid = await BookingManager(conn).range_grid(current_user["username"], current_user["role"], _parse_date(start), days)
+        grid = await BookingManager(conn).range_grid(
+            current_user["username"], current_user["role"], _parse_date(start), days, admin_view=admin_view
+        )
     except BookingError as e:
         raise _booking_error(e)
     return {"days": grid}

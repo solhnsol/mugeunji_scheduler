@@ -187,8 +187,8 @@ export const api = {
     return parseResponse<{ month: string; days: import('./types').CalendarDay[] }>(res);
   },
 
-  async getBookingRange(token: string, start: string, days: number) {
-    const res = await fetch(`/bookings/range?start=${start}&days=${days}`, { headers: authHeaders(token) });
+  async getBookingRange(token: string, start: string, days: number, adminView = false) {
+    const res = await fetch(`/bookings/range?start=${start}&days=${days}${adminView ? '&admin_view=true' : ''}`, { headers: authHeaders(token) });
     return parseResponse<{ days: import('./types').GridDay[] }>(res);
   },
 

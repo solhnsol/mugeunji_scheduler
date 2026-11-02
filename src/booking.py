@@ -319,11 +319,9 @@ class BookingManager:
         settings = await self._settings()
         now = now_kst()
         window = self.bookable_window(now, settings)
-        dawn_allowed = True
-        if role != "admin":
-            async with self.conn.execute("SELECT dawn_allowed FROM users WHERE username = ?", (username,)) as cursor:
-                row = await cursor.fetchone()
-            dawn_allowed = bool(row["dawn_allowed"]) if row else True
+        async with self.conn.execute("SELECT dawn_allowed FROM users WHERE username = ?", (username,)) as cursor:
+            row = await cursor.fetchone()
+        dawn_allowed = bool(row["dawn_allowed"]) if row else True
         return {
             "mode": settings.get(SETTING_MODE) or MODE_LEGACY,
             "beta_month": settings.get(SETTING_BETA_MONTH) or "",
@@ -367,9 +365,8 @@ class BookingManager:
         settings = await self._settings()
         slots = sorted({self._parse_slot(s) for s in raw_slots})
         now = now_kst()
-        exempt = force_by is not None or role == "admin"
-        # 관리자도 자기 예약은 토큰을 낸다. 관리자 화면의 강제 등록(force_by)만 무료
-        free = force_by is not None
+        # 관리자도 회원 화면에서는 회원과 같은 규칙(기간·중지·새벽·토큰). 관리자 화면의 강제 등록(force_by)만 예외
+        exempt = force_by is not None
 
         if not exempt and settings.get("reservation_enabled") == "false":
             raise BookingError("현재 예약이 불가능해요. 관리자에게 문의해주세요.")
@@ -392,10 +389,10 @@ class BookingManager:
                     raise BookingError(f"{day.month}월 {day.day}일은 아직 예약할 수 없는 날짜예요.")
                 if hour in DAWN_HOURS and not user["dawn_allowed"]:
                     raise BookingError("새벽(0~4시) 예약 권한이 없어요. 필요하면 관리자에게 문의해주세요.")
-            costs.append(0 if free else cost_for_hour(bands, hour))
+            costs.append(0 if exempt else cost_for_hour(bands, hour))
 
         total = sum(costs)
-        if not free:
+        if not exempt:
             balance = await self.tokens.get_balance(username)
             if total > balance:
                 raise BookingError(f"토큰이 부족해요. (필요 {total}, 보유 {balance})")
@@ -519,7 +516,7 @@ class BookingManager:
         ) as cursor:
             return {r["username"]: r["display"] for r in await cursor.fetchall()}
 
-    async def range_grid(self, username: str, role: str, start: date, days: int) -> List[Dict]:
+    async def range_grid(self, username: str, role: str, start: date, days: int, admin_view: bool = False) -> List[Dict]:
         """start부터 days일의 하루 24칸 상태. 칸 상태: free | taken | mine | past | closed."""
         if not 1 <= days <= 42:
             raise BookingError("조회 기간이 올바르지 않아요.")
@@ -549,7 +546,7 @@ class BookingManager:
                     status = "mine" if booking["username"] == username else "taken"
                 elif slot_start(day, hour) <= now:
                     status = "past"
-                elif not in_window and role != "admin":
+                elif not in_window and not (admin_view and role == "admin"):
                     status = "closed"
                 else:
                     status = "free"
@@ -603,7 +600,7 @@ class BookingManager:
             cells = occupancy.get(day.isoformat(), ["0"] * 24)
             days.append({
                 "date": day.isoformat(),
-                "bookable": window["start"] <= day <= window["end"] or (role == "admin" and day >= window["start"]),
+                "bookable": window["start"] <= day <= window["end"],
                 "booked": sum(1 for c in cells if c != "0"),
                 "mine": sum(1 for c in cells if c == "2"),
                 "occupancy": "".join(cells),
