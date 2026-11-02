@@ -87,6 +87,7 @@ export function TimeGrid({
   scrollKey,
   emptyLabel,
   legend,
+  colorOnlyOnPhone = false,
 }: {
   days: GridDay[];
   bands: PriceBand[];
@@ -109,6 +110,8 @@ export function TimeGrid({
   scrollKey?: string;
   emptyLabel?: ReactNode;
   legend?: boolean;
+  /** 폰 주 보기에서 블록 글자를 빼고 색만 보여준다 (회원용. 관리자는 이름이 필요해서 끈다) */
+  colorOnlyOnPhone?: boolean;
 }) {
   const H = rowHeight;
   const single = days.length === 1;
@@ -486,11 +489,11 @@ export function TimeGrid({
                         }
                       }}
                     >
-                      {!single && mine && (
+                      {!single && mine && colorOnlyOnPhone && (
                         <p className="sm:hidden px-1 py-0.5 text-2xs font-semibold tabular-nums">{b.start}시</p>
                       )}
                       {/* 폰 주 보기는 열이 좁아 이름이 한 글자로 잘린다: 글자를 빼고 색만 보여준다 */}
-                      <div className={`${single ? 'px-1.5 py-1.5' : 'hidden sm:block px-1 py-0.5'} leading-tight ${single && tall === 1 ? ONE_LINE : ''}`}>
+                      <div className={`${single ? 'px-1.5 py-1.5' : `px-1 py-0.5 ${colorOnlyOnPhone ? 'hidden sm:block' : ''}`} leading-tight ${single && tall === 1 ? ONE_LINE : ''}`}>
                         <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-2xs'}`}>
                           {b.legacy ? (single ? `월 신청 · ${b.name}` : b.name || '월 신청') : mine ? (single ? '내 예약' : b.name || '내 예약') : b.name || '예약됨'}
                         </p>

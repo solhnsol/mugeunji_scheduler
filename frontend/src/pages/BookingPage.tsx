@@ -559,6 +559,7 @@ export default function BookingPage({
                   scrollToHour={initialHour}
                   scrollKey={week.start}
                   rowHeight={30}
+                  colorOnlyOnPhone
                   bands={config.price_bands}
                   today={today}
                   selected={new Set(selected.keys())}
