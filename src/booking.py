@@ -336,7 +336,7 @@ class BookingManager:
             "next_month_open": window["next_month_open"],
             "dawn_hours": list(DAWN_HOURS),
             "dawn_allowed": dawn_allowed,
-            "balance": await self.tokens.get_balance(username) if role != "admin" else None,
+            "balance": await self.tokens.get_balance(username),
             "is_admin": role == "admin",
         }
 
@@ -368,6 +368,8 @@ class BookingManager:
         slots = sorted({self._parse_slot(s) for s in raw_slots})
         now = now_kst()
         exempt = force_by is not None or role == "admin"
+        # 관리자도 자기 예약은 토큰을 낸다. 관리자 화면의 강제 등록(force_by)만 무료
+        free = force_by is not None
 
         if not exempt and settings.get("reservation_enabled") == "false":
             raise BookingError("현재 예약이 불가능해요. 관리자에게 문의해주세요.")
@@ -390,10 +392,10 @@ class BookingManager:
                     raise BookingError(f"{day.month}월 {day.day}일은 아직 예약할 수 없는 날짜예요.")
                 if hour in DAWN_HOURS and not user["dawn_allowed"]:
                     raise BookingError("새벽(0~4시) 예약 권한이 없어요. 필요하면 관리자에게 문의해주세요.")
-            costs.append(0 if exempt else cost_for_hour(bands, hour))
+            costs.append(0 if free else cost_for_hour(bands, hour))
 
         total = sum(costs)
-        if not exempt:
+        if not free:
             balance = await self.tokens.get_balance(username)
             if total > balance:
                 raise BookingError(f"토큰이 부족해요. (필요 {total}, 보유 {balance})")

@@ -332,3 +332,15 @@ def test_delete_user_clears_token_records(client, admin, make_user, token_mode):
     assert r.status_code == 200, r.text
     again = client.post("/login", json={"username": username, "password": "password1"}).json()
     assert _balance(client, {"Authorization": f"Bearer {again['access_token']}"}) == 0
+
+
+def test_admin_pays_tokens_like_members(client, admin, token_mode):
+    pack = client.post("/admin/token-packs", headers=admin, json={"name": "관리자 예약팩", "price_won": 10000, "tokens": 4})
+    assert pack.status_code == 200, pack.text
+    pack_id = next(p["id"] for p in client.get("/tokens/packs", headers=admin).json() if p["name"] == "관리자 예약팩")
+    before = _balance(client, admin)
+    # 관리자 로그인 상태에서도 충전은 무료로 바로 받고, 예약하면 토큰이 빠진다
+    assert client.post("/tokens/purchases", headers=admin, json={"pack_id": pack_id}).status_code == 200
+    assert _balance(client, admin) == before + 4
+    r = _book(client, admin, ("2026-12-27", 16))
+    assert r.status_code == 200 and r.json()["spent"] == 4 and _balance(client, admin) == before

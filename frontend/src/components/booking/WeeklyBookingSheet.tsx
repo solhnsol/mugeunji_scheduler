@@ -62,7 +62,7 @@ export function WeeklyBookingSheet({
   const rows = occupancy && ready ? buildRows(dates, occupancy, start, length, Date.now(), blocked) : [];
   const freeByHour = occupancy && weekday !== null ? freeWeeksByHour(buildRows(dates, occupancy, 0, 24, Date.now(), blocked)) : null;
 
-  const costOf = (hours: number[]) => (config.is_admin ? 0 : hours.reduce((s, h) => s + (bandFor(config.price_bands, h)?.cost ?? 0), 0));
+  const costOf = (hours: number[]) => hours.reduce((s, h) => s + (bandFor(config.price_bands, h)?.cost ?? 0), 0);
   const plan = rows.map((row) => {
     const on = row.free.length > 0 && (checked.get(row.date) ?? row.ok);
     const hours = on ? row.free : [];

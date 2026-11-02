@@ -244,9 +244,9 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   const hasDawn =
     config != null && [...selected.values()].some((s) => config.dawn_hours.includes(s.hour));
   let blockReason = '';
-  if (config && selected.size > 0 && !config.is_admin) {
-    if (!config.reservation_enabled) blockReason = '지금은 예약을 받지 않아요.';
-    else if (hasDawn && !config.dawn_allowed) blockReason = '새벽(0~4시) 예약 권한이 없어요. 관리자에게 문의해주세요.';
+  if (config && selected.size > 0) {
+    if (!config.reservation_enabled && !config.is_admin) blockReason = '지금은 예약을 받지 않아요.';
+    else if (hasDawn && !config.dawn_allowed && !config.is_admin) blockReason = '새벽(0~4시) 예약 권한이 없어요. 관리자에게 문의해주세요.';
     else if (balance !== null && total > balance) blockReason = `토큰이 ${total - balance}개 부족해요.`;
     else if (hasZeroCost && (balance ?? 0) < 1) blockReason = '이 시간대는 토큰이 1개 이상 있어야 예약할 수 있어요.';
   }

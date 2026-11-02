@@ -1156,8 +1156,6 @@ async def request_token_purchase(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     await _require_token_charge_open(conn, current_user)
-    if current_user["role"] == "admin":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="관리자 계정은 토큰을 충전할 수 없어요.")
     ok, message = await TokenManager(conn).request_purchase(current_user["username"], data.pack_id)
     if ok:
         return {"status": "success", "message": message}
