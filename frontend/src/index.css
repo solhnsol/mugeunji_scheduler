@@ -51,11 +51,12 @@
     --color-slot-legacy: #4a4f49;
     --color-slot-taken-bar: #5a5f58;
     --color-slot-monthly: #444942;
-    --color-amber-50: #2e2819;
-    --color-amber-200: #5c4d22;
-    --color-amber-700: #e0b85a;
-    --color-amber-800: #e6c36e;
-    --color-amber-900: #ecd08a;
+    /* 안내 배너가 어두운 화면에서 튀지 않게: 배경·선은 카드와 비슷한 밝기, 글자는 채도를 낮춘다 */
+    --color-amber-50: #25221a;
+    --color-amber-200: #3f3826;
+    --color-amber-700: #c9ab66;
+    --color-amber-800: #d0b576;
+    --color-amber-900: #cdb987;
   }
 }
 
@@ -190,6 +191,16 @@ body {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+}
+
+/* 모달 안 시간표: 좁은 폰에서도 월~일이 한 화면에 들어오게 */
+.schedule-grid-table--fit {
+  min-width: 0;
+  table-layout: fixed;
+}
+.schedule-grid-table--fit th,
+.schedule-grid-table--fit td {
+  min-width: 0;
 }
 
 .schedule-grid-table th,

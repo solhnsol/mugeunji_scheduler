@@ -18,7 +18,7 @@ export function ProfileModal({
   onError: (msg: string) => void;
 }) {
   const [name, setName] = useState(me.name || me.username);
-  const [phone, setPhone] = useState(me.phone || '');
+  const [phone, setPhone] = useState(formatPhone(me.phone || ''));
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -65,23 +65,20 @@ export function ProfileModal({
   return (
     <ModalOverlay onClose={onClose}>
       <form
-        className="card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 max-h-[90dvh] overflow-y-auto"
+        className="card w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
       >
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-ink">내 정보</h2>
+        <div className="flex items-center justify-between gap-3 px-6 pt-6 pb-4">
+          <h2 className="text-lg font-semibold text-ink min-w-0 truncate">
+            내 정보 <span className="text-sm font-normal text-ink-faint">@{me.username}</span>
+          </h2>
           <button type="button" className="btn-ghost !min-h-[36px] !py-1" onClick={onClose}>
             닫기
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="label">아이디</label>
-            <input className="input bg-cream-dark/50" value={me.username} disabled />
-            <p className="text-xs text-ink-faint mt-1">아이디는 바꿀 수 없어요</p>
-          </div>
+        <div className="space-y-4 px-6 pb-4 overflow-y-auto">
           <div>
             <label className="label" htmlFor="profile-name">이름</label>
             <input
@@ -104,7 +101,7 @@ export function ProfileModal({
             />
           </div>
           <div className="border-t border-line pt-4">
-            <p className="text-sm font-medium text-ink mb-3">비밀번호 변경 (선택)</p>
+            <p className="text-sm font-medium text-ink mb-3">비밀번호 바꾸기</p>
             <div className="space-y-3">
               <div>
                 <label className="label" htmlFor="current-pw">현재 비밀번호</label>
@@ -133,9 +130,11 @@ export function ProfileModal({
           </div>
         </div>
 
-        <button type="submit" className="btn-primary mt-6" disabled={saving}>
-          {saving ? '저장 중…' : '저장'}
-        </button>
+        <div className="px-6 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-line">
+          <button type="submit" className="btn-primary" disabled={saving}>
+            {saving ? '저장 중…' : '저장하기'}
+          </button>
+        </div>
       </form>
     </ModalOverlay>
   );

@@ -240,7 +240,9 @@ export function Toast({ message, type }: { message: string; type: 'success' | 'e
       className={`toast-in fixed left-1/2 -translate-x-1/2 z-[80] max-w-sm w-[calc(100%-2rem)] pointer-events-none
         top-[calc(env(safe-area-inset-top)+4rem)]
         rounded-2xl px-4 py-3 text-sm font-medium shadow-lg backdrop-blur-sm ${
-        type === 'error' ? 'bg-danger text-white' : 'bg-ink text-white'
+        type === 'error'
+          ? 'bg-danger text-white dark:bg-danger-soft dark:text-danger-ink dark:border dark:border-danger-line'
+          : 'bg-ink text-white dark:bg-sage-muted dark:text-ink dark:border dark:border-sage/40'
       }`}
       role={type === 'error' ? 'alert' : 'status'}
     >
