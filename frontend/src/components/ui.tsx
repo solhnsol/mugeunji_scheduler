@@ -170,7 +170,7 @@ export function AppShell({
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
       <header className="z-20 bg-cream border-b border-line/60 shrink-0 pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto max-w-3xl px-4 pt-3 pb-3 space-y-2">
+        <div className="mx-auto max-w-3xl px-5 pt-5 pb-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
             {titleMenu ? (
               <div className="relative min-w-0 flex-1">
@@ -222,11 +222,11 @@ export function AppShell({
       <main
         className={
           fillMain
-            ? 'flex-1 mx-auto w-full max-w-3xl px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col min-h-0 overflow-hidden'
+            ? 'flex-1 mx-auto w-full max-w-3xl px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col min-h-0 overflow-hidden'
             : 'flex-1 min-h-0 overflow-y-auto overscroll-contain'
         }
       >
-        {fillMain ? children : <div className="mx-auto w-full max-w-3xl px-4 py-5 pb-8">{children}</div>}
+        {fillMain ? children : <div className="mx-auto w-full max-w-3xl px-5 py-6 pb-8">{children}</div>}
       </main>
     </div>
   );
