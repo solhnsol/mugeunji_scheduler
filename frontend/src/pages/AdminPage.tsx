@@ -23,12 +23,12 @@ import { MemberPicker } from '../components/MemberPicker';
 import { AdminUsersTab } from '../components/AdminUsersTab';
 import { EditAdminModal, EditUserModal, PlanPriceRow } from '../components/AdminUserModals';
 
-// 매일 쓰는 탭 넷만 늘 보이고, 예전 방식(월 신청) 탭 넷은 "더보기" 하나로 묶어 그 아래 줄에서 고른다. 폰에서도 탭이 넘치지 않는다
+// 토큰제라 매일 쓰는 탭 셋만 늘 보이고, 시간표와 예전 방식(월 신청) 탭 넷은 "더보기" 하나로 묶어 그 아래 줄에서 고른다. 폰에서도 탭이 넘치지 않는다
 const TABS = [
-  { id: 'timetable' as const, label: '시간표' },
   { id: 'tokens' as const, label: '토큰' },
   { id: 'notices' as const, label: '공지' },
   { id: 'users' as const, label: '회원' },
+  { id: 'timetable' as const, label: '시간표', legacy: true },
   { id: 'roster' as const, label: '정산', legacy: true },
   { id: 'schedule' as const, label: '월신청', legacy: true },
   { id: 'free' as const, label: '자유이용', legacy: true },
@@ -110,7 +110,7 @@ function AdminDashboard({
   // 보고 있는 탭은 주소(?tab=)에 둬서 새로고침해도 같은 탭에 머문다
   const [params, setParams] = useSearchParams();
   const tabParam = params.get('tab');
-  const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'timetable';
+  const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'tokens';
   const setTab = (id: (typeof TABS)[number]['id']) => setParams({ tab: id }, { replace: true });
   const isLegacy = LEGACY_TABS.some((t) => t.id === tab);
   const [reloadKey, setReloadKey] = useState(0);
@@ -141,7 +141,6 @@ function AdminDashboard({
   } | null>(null);
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
   const [paymentGuide, setPaymentGuide] = useState('');
-  const [tokenOnly, setTokenOnly] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [freeScheduleModalOpen, setFreeScheduleModalOpen] = useState(false);
   const monthlyReservations = useMonthlyReservations();
@@ -166,7 +165,6 @@ function AdminDashboard({
       api.getSettings(),
     ]);
     setPaymentGuide(pub.payment_guide ?? '');
-    setTokenOnly(pub.reservation_mode === 'token');
     setPlans(p);
     setUsers(u);
     setAdmins(a);
@@ -230,11 +228,9 @@ function AdminDashboard({
                 className={`flex-1 min-w-0 rounded-full py-2.5 px-1 text-sm font-medium transition-colors min-h-[44px] whitespace-nowrap ${
                   active
                     ? 'bg-sage text-white shadow-sm'
-                    : t.id === 'legacy' && tokenOnly
-                      ? 'text-ink-faint hover:text-ink-muted'
-                      : 'text-ink-muted hover:text-ink'
+                    : 'text-ink-muted hover:text-ink'
                 }`}
-                onClick={() => setTab(t.id === 'legacy' ? (isLegacy ? tab : 'roster') : t.id)}
+                onClick={() => setTab(t.id === 'legacy' ? (isLegacy ? tab : 'timetable') : t.id)}
               >
                 {t.label}
                 {t.id === 'tokens' && pendingTokens > 0 && tab !== 'tokens' && (
