@@ -33,8 +33,8 @@ export function MonthCalendar({
   const firstWeekday = days && days.length ? dateFromISO(days[0].date).getDay() : 0;
 
   return (
-    <section className="card p-4 sm:p-5" {...swipe}>
-      <div className="flex items-center justify-between mb-3">
+    <section className="card p-4 sm:p-5 flex flex-col flex-1 min-h-0" {...swipe}>
+      <div className="flex items-center justify-between mb-2 shrink-0">
         <button type="button" className="btn-ghost !min-h-[40px] !px-3" onClick={onPrev} disabled={!canPrev} aria-label="이전 달">
           ‹
         </button>
@@ -44,7 +44,7 @@ export function MonthCalendar({
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-2xs text-ink-faint mb-1">
+      <div className="grid grid-cols-7 gap-1 text-center text-2xs text-ink-faint mb-1 shrink-0">
         {WEEKDAYS_KO.map((w, i) => (
           <span key={w} className={i === 0 ? 'text-danger-ink/70' : i === 6 ? 'text-slot-pick' : ''}>
             {w}
@@ -55,7 +55,8 @@ export function MonthCalendar({
       {!days ? (
         <CalendarCellsSkeleton />
       ) : (
-        <div className="grid grid-cols-7 gap-1">
+        // 남은 높이를 주 수만큼 나눠 갖는다: 폰에서도 스크롤 없이 한 달이 한 화면에 들어온다
+        <div className="grid grid-cols-7 auto-rows-fr gap-1 flex-1 min-h-0">
           {Array.from({ length: firstWeekday }, (_, i) => (
             <span key={`b${i}`} />
           ))}
@@ -73,7 +74,7 @@ export function MonthCalendar({
                 key={day.date}
                 type="button"
                 onClick={() => onSelect(day.date)}
-                className={`relative rounded-xl border px-1 pt-1.5 pb-1.5 min-h-[78px] sm:min-h-[96px] flex flex-col items-stretch gap-1 transition ${
+                className={`relative rounded-xl border px-1 pt-1.5 pb-1.5 min-h-[44px] sm:min-h-[80px] overflow-hidden flex flex-col items-stretch gap-1 transition ${
                   isSelected
                     ? 'border-sage bg-sage-muted/60 ring-1 ring-sage/40'
                     : 'border-line/70 bg-surface hover:border-sage/40'
@@ -119,7 +120,7 @@ export function MonthCalendar({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-2xs text-ink-muted">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 shrink-0 text-2xs text-ink-muted">
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage-muted inline-block" />빈 시간</span>
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-slot-taken-bar inline-block" />예약됨</span>
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage inline-block" />내 예약</span>
