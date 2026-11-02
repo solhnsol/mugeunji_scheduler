@@ -153,7 +153,7 @@ export default function Landing({ authed = false }: { authed?: boolean }) {
   const faq = upcoming ? FAQ.map((item) => ({ ...item, a: UPCOMING.faq[item.q] ?? item.a })) : FAQ;
   return (
     <div className="min-h-dvh flex flex-col">
-      <header className="sticky top-0 z-20 bg-cream/90 backdrop-blur-md border-b border-line/60">
+      <header className="sticky top-0 z-20 bg-cream border-b border-line/60 pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-3xl px-4 py-3 flex items-center justify-between gap-2">
           <Link to={authed ? '/about' : '/'} className="flex items-center gap-2.5 min-w-0">
             <span className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-sage flex items-center justify-center text-white text-sm font-bold">
