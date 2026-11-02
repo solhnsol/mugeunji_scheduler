@@ -6,9 +6,9 @@ export function Skeleton({ className = '' }: { className?: string }) {
 /** 달력 칸(7열)의 자리표시자. MonthCalendar의 날짜 칸과 같은 높이 */
 export function CalendarCellsSkeleton({ count = 35 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-7 gap-1" role="status" aria-label="불러오는 중">
+    <div className="grid grid-cols-7 auto-rows-fr gap-1 flex-1 min-h-0" role="status" aria-label="불러오는 중">
       {Array.from({ length: count }, (_, i) => (
-        <Skeleton key={i} className="rounded-xl min-h-[78px] sm:min-h-[96px]" />
+        <Skeleton key={i} className="rounded-xl min-h-[44px] sm:min-h-[80px]" />
       ))}
     </div>
   );

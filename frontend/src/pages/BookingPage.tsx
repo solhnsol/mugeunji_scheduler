@@ -406,8 +406,8 @@ export default function BookingPage({
             </p>
           )}
           {view === 'month' && config.mode === 'beta' && (
-            <p className="shrink-0 text-2xs text-sage bg-sage-muted/40 border border-sage/20 rounded-xl px-3 py-1.5 leading-snug">
-              토큰 예약 베타 · 줄무늬는 월 신청 시간이라 여기서 바꿀 수 없어요. 불편한 점은 단톡방으로 알려주세요.
+            <p className="shrink-0 text-2xs text-sage bg-sage-muted/40 border border-sage/20 rounded-xl px-3 py-1.5 leading-snug truncate">
+              토큰 예약 베타 · 줄무늬는 월 신청 시간이라 여기서 바꿀 수 없어요.
             </p>
           )}
           {!connected && (
@@ -422,7 +422,7 @@ export default function BookingPage({
           )}
 
           {view === 'month' ? (
-            <div key="month" className="view-in flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 pb-2">
+            <div key="month" className="view-in flex-1 min-h-0 flex flex-col gap-2 pb-1">
               <MonthCalendar
                 month={month}
                 days={calendar}
@@ -434,11 +434,11 @@ export default function BookingPage({
                 canPrev={!!todayMonth && month > todayMonth}
                 canNext={!!todayMonth && month < addMonths(todayMonth, 1)}
               />
-              <button type="button" className="btn-secondary w-full" onClick={() => setWeeklyOpen(true)}>
+              <button type="button" className="btn-secondary w-full shrink-0" onClick={() => setWeeklyOpen(true)}>
                 일괄 예약하기
               </button>
               {nextOpenNote && (
-                <p className="text-sm text-ink-muted bg-cream-dark/60 rounded-2xl px-4 py-3">{nextOpenNote}</p>
+                <p className="shrink-0 text-xs text-ink-muted text-center truncate">{nextOpenNote}</p>
               )}
 
             </div>
