@@ -1,17 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError, SESSION } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
 import { MonthCalendar } from '../components/booking/MonthCalendar';
 import { TimeGrid } from '../components/booking/TimeGrid';
 import { WeeklyBookingSheet } from '../components/booking/WeeklyBookingSheet';
-import { AppShell, SiteLinks, Toast } from '../components/ui';
+import { AppShell, HeaderMenuItem, SiteLinks, Toast } from '../components/ui';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { useSwipe } from '../hooks/useSwipe';
 import { useToast } from '../hooks/useToast';
-import { BookingConfig, CalendarDay, GridDay, MyBooking } from '../types';
+import { BookingConfig, CalendarDay, GridDay } from '../types';
 import { formatTokens, kstParts } from '../utils';
-import { downloadBookingIcs } from '../utils/ics';
 import {
   WEEKDAYS_KO,
   addDays,
@@ -19,7 +18,6 @@ import {
   dateFromISO,
   describeRefundPolicy,
   estimateRefund,
-  formatDateKo,
   monthOf,
   slotKey,
   startOfWeek,
@@ -32,7 +30,18 @@ type CancelSlot = { date: string; hour: number; paid: number };
 
 const shortDate = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8))}`;
 
-export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
+/** title·menu를 주면 회원 홈으로 쓴다 (토큰·베타 모드에서 달력이 첫 화면) */
+export default function BookingPage({
+  onLogout,
+  title = '예약',
+  menu,
+  titleMenu,
+}: {
+  onLogout?: () => void;
+  title?: string;
+  menu?: ReactNode;
+  titleMenu?: HeaderMenuItem[];
+}) {
   const [config, setConfig] = useState<BookingConfig | null>(null);
   const [error, setError] = useState('');
   const [month, setMonth] = useState<string | null>(null);
@@ -54,7 +63,6 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
   const [week, setWeek] = useState<{ start: string; days: GridDay[] } | null>(null);
   const [selected, setSelected] = useState<Map<string, SelectedSlot>>(new Map());
   const [cancelSel, setCancelSel] = useState<Map<number, CancelSlot>>(new Map());
-  const [mine, setMine] = useState<MyBooking[]>([]);
   const [busy, setBusy] = useState(false);
   const [weeklyOpen, setWeeklyOpen] = useState(false);
   /** 실시간 변경 등으로 새로 불러올 때마다 올라간다 (매주 예약 미리보기도 따라 새로 받게) */
@@ -100,10 +108,6 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     }
   }, []);
 
-  const loadMine = useCallback(async () => {
-    setMine(await api.getMyBookings(SESSION));
-  }, []);
-
   const refresh = useCallback(async () => {
     const { month: m, selectedDate: d } = stateRef.current;
     weekCache.current.clear();
@@ -112,9 +116,8 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
       loadConfig(),
       m ? loadCalendar(m) : Promise.resolve(),
       d ? loadWeek(d) : Promise.resolve(),
-      loadMine(),
     ]);
-  }, [loadConfig, loadCalendar, loadWeek, loadMine]);
+  }, [loadConfig, loadCalendar, loadWeek]);
 
   // 첫 로딩 (실패하면 "다시 시도"로 다시 부른다)
   const init = useCallback(async () => {
@@ -123,11 +126,11 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
       const cfg = await loadConfig();
       const m = monthOf(cfg.bookable_from);
       setMonth(m);
-      await Promise.all([loadCalendar(m), loadMine()]);
+      await loadCalendar(m);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '불러오지 못했어요');
     }
-  }, [loadConfig, loadCalendar, loadMine]);
+  }, [loadConfig, loadCalendar]);
 
   useEffect(() => {
     void init();
@@ -350,30 +353,18 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     onLeft: () => selectedDate && setSelectedDate(addDays(selectedDate, detailStep)),
     onRight: () => selectedDate && setSelectedDate(addDays(selectedDate, -detailStep)),
   });
-  /** 오늘 기준 남은 날짜 표기: 오늘 / 내일 / D-n */
-  const dayLabel = (date: string) => {
-    if (!today) return '';
-    const diff = Math.round((dateFromISO(date).getTime() - dateFromISO(today).getTime()) / 86_400_000);
-    return diff <= 0 ? '오늘' : diff === 1 ? '내일' : `D-${diff}`;
-  };
   const todayMonth = today ? monthOf(today) : null;
   const barMode: 'book' | 'cancel' | 'idle' = selected.size > 0 ? 'book' : cancelSel.size > 0 ? 'cancel' : 'idle';
   const currentDay = selectedDate && week ? week.days.find((d) => d.date === selectedDate) : undefined;
 
-  // 내 예약을 날짜별로 묶어 보여준다
-  const mineByDate = useMemo(() => {
-    const map = new Map<string, number[]>();
-    for (const b of mine) map.set(b.date, [...(map.get(b.date) ?? []), b.hour]);
-    return [...map.entries()];
-  }, [mine]);
-
   return (
     <AppShell
-      title="예약"
+      title={title}
+      titleMenu={titleMenu}
       fillMain
       actions={
         <>
-          <SiteLinks />
+          {!menu && <SiteLinks />}
           {config && config.balance !== null && (
           <Link
             to="/tokens"
@@ -386,6 +377,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
             <span className="text-xs font-medium">충전</span>
           </Link>
           )}
+          {menu}
         </>
       }
     >
@@ -449,45 +441,6 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
                 <p className="text-sm text-ink-muted bg-cream-dark/60 rounded-2xl px-4 py-3">{nextOpenNote}</p>
               )}
 
-              <section>
-                <h2 className="text-base font-bold text-ink">내 예약</h2>
-                {mineByDate.length === 0 ? (
-                  <p className="text-sm text-ink-faint mt-2">앞으로의 예약이 없어요. 날짜를 눌러 예약해보세요.</p>
-                ) : (
-                  <ul className="card divide-y divide-line/60 mt-2">
-                    {mineByDate.map(([date, hours]) => (
-                      <li key={date} className="flex items-center">
-                        <button
-                          type="button"
-                          className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-cream-dark/40"
-                          onClick={() => {
-                            setMonth(monthOf(date));
-                            openDay(date);
-                          }}
-                        >
-                          <span className="text-sm font-medium text-ink truncate">
-                            {formatDateKo(date)}
-                            <span className="ml-2 text-2xs font-normal text-sage tabular-nums">{dayLabel(date)}</span>
-                          </span>
-                          <span className="text-sm text-ink-muted tabular-nums shrink-0">{summarizeHours(hours)}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-ghost !min-h-[44px] !px-3 text-xs shrink-0"
-                          aria-label={`${formatDateKo(date)} 예약을 캘린더에 추가`}
-                          title="캘린더에 추가 (.ics)"
-                          onClick={() => downloadBookingIcs(date, hours)}
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
-                            <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
-                            <path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5" />
-                          </svg>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
             </div>
           ) : (
             <div key="detail" className="view-in flex flex-col flex-1 min-h-0 gap-2" {...swipe}>

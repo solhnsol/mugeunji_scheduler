@@ -142,6 +142,7 @@ export function AppShell({
   actions,
   fillMain = false,
   homeTo = '/',
+  titleMenu,
 }: {
   title: string;
   badge?: ReactNode;
@@ -151,7 +152,10 @@ export function AppShell({
   fillMain?: boolean;
   /** 로고·제목을 눌렀을 때 이동할 곳. null이면 링크 없이 표시만 한다 */
   homeTo?: string | null;
+  /** 주면 이름을 눌렀을 때 이 메뉴(내 정보·로그아웃 등)가 뜬다 */
+  titleMenu?: HeaderMenuItem[];
 }) {
+  const [titleOpen, setTitleOpen] = useState(false);
   const brand = (
     <>
       <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-sage flex items-center justify-center text-white text-sm font-bold">
@@ -168,7 +172,41 @@ export function AppShell({
       <header className="z-20 bg-cream border-b border-line/60 shrink-0 pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-3xl px-4 pt-3 pb-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            {homeTo ? (
+            {titleMenu ? (
+              <div className="relative min-w-0 flex-1">
+                <button
+                  type="button"
+                  className="flex items-center gap-2.5 min-w-0 max-w-full text-left"
+                  aria-expanded={titleOpen}
+                  onClick={() => setTitleOpen((v) => !v)}
+                >
+                  {brand}
+                  <svg className="shrink-0 text-ink-faint" width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                    <path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {titleOpen && (
+                  <>
+                    <button type="button" className="fixed inset-0 z-30" aria-label="메뉴 닫기" onClick={() => setTitleOpen(false)} />
+                    <div className="absolute left-0 top-[calc(100%+4px)] z-40 min-w-[9.5rem] rounded-2xl border border-line bg-surface py-1 shadow-lg">
+                      {titleMenu.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="block w-full text-left px-4 py-3 text-sm text-ink hover:bg-cream-dark/60"
+                          onClick={() => {
+                            setTitleOpen(false);
+                            item.onClick();
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : homeTo ? (
               <Link to={homeTo} className="flex items-center gap-2.5 min-w-0 flex-1" aria-label="홈으로">
                 {brand}
               </Link>

@@ -15,6 +15,13 @@ export function formatTokens(value: number): string {
 }
 
 /** ISO 시각을 한국 시간 기준 구성요소로 나눈다. (브라우저 시간대와 상관없이 같은 값) */
+/** 오늘 날짜 (한국 시간, YYYY-MM-DD) */
+export function todayKst(): string {
+  const p = kstParts(new Date().toISOString());
+  if (!p) return '';
+  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
+
 export function kstParts(iso: string | null | undefined) {
   if (!iso) return null;
   const d = new Date(iso);

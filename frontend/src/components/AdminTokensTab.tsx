@@ -6,7 +6,7 @@ import { formatDateTime, formatExpiresOn, formatExpiry, formatPhone, formatPrice
 import { expiryPhrase, useTokenRules } from '../hooks/useTokenRules';
 import { ExpiryInput } from './ExpiryInput';
 import { AdminBookingSettings } from './AdminBookingSettings';
-import { AdminBookingsPanel } from './AdminBookingsPanel';
+import { HistoryModal } from './AdminBookingsPanel';
 import { useConfirm } from './ConfirmDialog';
 import { ModalOverlay } from './Modal';
 
@@ -151,14 +151,9 @@ export function AdminTokensTab({
     <div className="space-y-5">
       <AdminBookingSettings token={token} show={show} />
 
-      <AdminBookingsPanel
-        token={token}
-        show={show}
-        members={balances}
-        onChanged={() => void loadAll()}
-        historyTarget={historyTarget}
-        onCloseHistory={() => setHistoryTarget(null)}
-      />
+      {historyTarget && (
+        <HistoryModal token={token} target={historyTarget} onClose={() => setHistoryTarget(null)} onError={(e) => fail(e, '불러오지 못했어요')} />
+      )}
 
       <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
