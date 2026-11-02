@@ -7,7 +7,7 @@ const CLIENT_LABEL = { app: '웹앱', mobile: '휴대폰 웹', pc: 'PC' } as con
 
 /** 마지막 접속 방식과 날짜 (예: 웹앱 · 11/1) */
 function clientCell(u: UserInfo) {
-  if (!u.last_client) return '-';
+  if (!u.last_client) return '접속 기록 없음';
   const d = u.last_client_at ? ` ${Number(u.last_client_at.slice(5, 7))}/${Number(u.last_client_at.slice(8))}` : '';
   return `${CLIENT_LABEL[u.last_client]}${d}`;
 }
@@ -77,7 +77,61 @@ export function AdminUsersTab({
             </table>
           </section>
 
-          <section className="card p-5 overflow-x-auto">
+          <section className="card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h2 className="font-semibold text-ink">
+                회원 <span className="text-sm font-normal text-ink-faint tabular-nums">{q ? `${filtered.length}/${users.length}` : users.length}명</span>
+              </h2>
+              <input
+                type="search"
+                className="input !py-2 !px-3 !w-full sm:!w-56 text-sm"
+                placeholder="이름·아이디·연락처 검색"
+                aria-label="회원 검색"
+                autoComplete="off"
+                value={q}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            {users.some((u) => u.last_client) && (
+              <p className="text-xs text-ink-muted mb-3 tabular-nums">
+                마지막 접속:{' '}
+                {(['app', 'mobile', 'pc'] as const)
+                  .map((k) => `${CLIENT_LABEL[k]} ${users.filter((u) => u.last_client === k).length}명`)
+                  .join(', ')}
+                , 기록 없음 {users.filter((u) => !u.last_client).length}명
+              </p>
+            )}
+            {/* 폰에서도 가로로 밀지 않게 표 대신 회원마다 두 줄로 보여준다 */}
+            {filtered.length === 0 ? (
+              <p className="py-6 text-center text-sm text-ink-faint">{q ? '검색 결과가 없어요' : '회원이 없어요'}</p>
+            ) : (
+              <ul className="divide-y divide-line/60 -mx-1">
+                {filtered.map((u) => {
+                  const hours = u.allowed_hours ? `월 ${u.allowed_hours}h${u.custom_allowed_hours != null ? ' 개별' : ''}` : u.subscription_status ? '자유전용' : '';
+                  const meta = [u.username, hours, u.free_access || u.role === 'free' ? '자유' : ''].filter(Boolean).join(' · ');
+                  return (
+                    <li key={u.username}>
+                      <button type="button" className="w-full text-left px-1 py-2.5 flex items-center gap-3 min-h-[44px]" onClick={() => onEdit(u)}>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-baseline gap-2 text-sm">
+                            <span className="font-medium text-ink truncate">{u.name || u.username}</span>
+                            <span className="text-ink-muted tabular-nums shrink-0">{u.phone ? formatPhone(u.phone) : ''}</span>
+                          </span>
+                          <span className="flex items-baseline justify-between gap-2 text-xs text-ink-faint mt-0.5">
+                            <span className="truncate">{meta}</span>
+                            <span className={`tabular-nums shrink-0 ${u.last_client === 'app' ? 'text-sage font-medium' : ''}`}>{clientCell(u)}</span>
+                          </span>
+                        </span>
+                        <span className="text-sage text-xs font-medium shrink-0">수정</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="card p-5">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <h2 className="font-semibold text-ink">
                 회원 <span className="text-sm font-normal text-ink-faint tabular-nums">{q ? `${filtered.length}/${users.length}` : users.length}명</span>

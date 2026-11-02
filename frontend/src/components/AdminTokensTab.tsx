@@ -149,42 +149,9 @@ export function AdminTokensTab({
 
   return (
     <div className="space-y-5">
-      <AdminBookingSettings token={token} show={show} />
-
       {historyTarget && (
         <HistoryModal token={token} target={historyTarget} onClose={() => setHistoryTarget(null)} onError={(e) => fail(e, '불러오지 못했어요')} />
       )}
-
-      <section className="card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="font-semibold text-ink">회원에게 토큰 충전 공개</h2>
-            <p className="text-xs text-ink-faint mt-1 leading-relaxed">
-              꺼져 있으면 회원에게는 토큰 메뉴가 보이지 않아요. 관리자는 항상 미리 써볼 수 있어요.
-            </p>
-          </div>
-          <button
-            type="button"
-            className={chargeEnabled ? 'btn-secondary shrink-0' : 'btn-primary !w-auto shrink-0'}
-            disabled={chargeEnabled === null || busy}
-            onClick={toggleCharge}
-          >
-            {chargeEnabled === null ? '…' : chargeEnabled ? '공개 중 · 끄기' : '공개하기'}
-          </button>
-        </div>
-      </section>
-
-      <section className="card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="font-semibold text-ink">토큰 예약 미리보기</h2>
-            <p className="text-xs text-ink-faint mt-1 leading-relaxed">
-              날짜·시간 단위 토큰 예약 화면을 관리자 계정으로 미리 써볼 수 있어요. 토큰이 차감되지 않아요.
-            </p>
-          </div>
-          <a href="/book" className="btn-secondary shrink-0">예약 화면 열기</a>
-        </div>
-      </section>
 
       <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -399,6 +366,47 @@ export function AdminTokensTab({
           </ul>
         )}
       </section>
+
+      {/* 한 번 정하면 잘 안 바꾸는 설정은 접어서 맨 아래에 둔다. 매일 보는 충전 요청이 맨 위에 온다 */}
+      <details className="group">
+        <summary className="cursor-pointer text-sm font-medium text-ink-muted py-2 select-none">
+          예약·가격·충전 설정
+        </summary>
+        <div className="space-y-5 mt-3">
+          <AdminBookingSettings token={token} show={show} />
+
+      <section className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-ink">회원에게 토큰 충전 공개</h2>
+            <p className="text-xs text-ink-faint mt-1 leading-relaxed">
+              꺼져 있으면 회원에게는 토큰 메뉴가 보이지 않아요. 관리자는 항상 미리 써볼 수 있어요.
+            </p>
+          </div>
+          <button
+            type="button"
+            className={chargeEnabled ? 'btn-secondary shrink-0' : 'btn-primary !w-auto shrink-0'}
+            disabled={chargeEnabled === null || busy}
+            onClick={toggleCharge}
+          >
+            {chargeEnabled === null ? '…' : chargeEnabled ? '공개 중 · 끄기' : '공개하기'}
+          </button>
+        </div>
+      </section>
+
+      <section className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-ink">토큰 예약 미리보기</h2>
+            <p className="text-xs text-ink-faint mt-1 leading-relaxed">
+              회원이 보는 예약 화면을 관리자 계정으로 열어요.
+            </p>
+          </div>
+          <a href="/book" className="btn-secondary shrink-0">예약 화면 열기</a>
+        </div>
+      </section>
+        </div>
+      </details>
 
       {packModal && (
         <PackModal
