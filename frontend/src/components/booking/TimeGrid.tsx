@@ -87,6 +87,7 @@ export function TimeGrid({
   scrollKey,
   emptyLabel,
   legend,
+  colorOnlyOnPhone = false,
 }: {
   days: GridDay[];
   bands: PriceBand[];
@@ -109,6 +110,8 @@ export function TimeGrid({
   scrollKey?: string;
   emptyLabel?: ReactNode;
   legend?: boolean;
+  /** 폰 주 보기에서 블록 글자를 빼고 색만 보여준다 (회원용. 관리자는 이름이 필요해서 끈다) */
+  colorOnlyOnPhone?: boolean;
 }) {
   const H = rowHeight;
   const single = days.length === 1;
@@ -286,7 +289,7 @@ export function TimeGrid({
   };
 
   const maxCost = Math.max(0, ...bands.map((b) => b.cost));
-  const cols = `${single ? 44 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
+  const cols = `${single ? 52 : 34}px repeat(${days.length}, minmax(0, 1fr))`;
 
   return (
     <div className={`${fill ? 'card flex flex-col flex-1 min-h-0 overflow-hidden' : 'card'} select-none`}>
@@ -356,8 +359,8 @@ export function TimeGrid({
                   <span className="text-2xs leading-none text-ink-faint tabular-nums relative -top-[1px]">
                     {String(hour).padStart(2, '0')}
                   </span>
-                  {bandStart &&
-                    (single ? (
+                  {/* 하루 보기만: 가격 구간 첫 줄에 값을 적고, 누르면 그 구간을 한 번에 고른다. 주 보기 칸은 좁아 색 띠만 둔다 */}
+                  {bandStart && single && (
                       <button
                         type="button"
                         className="absolute right-1 bottom-0.5 z-[1] rounded-full bg-sage-muted px-1.5 py-1 text-2xs leading-none text-sage font-medium tabular-nums hover:bg-sage-muted/70 active:scale-95 transition"
@@ -365,13 +368,9 @@ export function TimeGrid({
                         aria-label={`${band.start}시부터 ${band.end}시까지 전체 선택 또는 해제`}
                         onClick={() => selectBand(band)}
                       >
-                        {band.cost}t
+                        {band.cost}토큰
                       </button>
-                    ) : (
-                      <span className="absolute right-1 bottom-0.5 text-2xs leading-none text-sage font-medium tabular-nums">
-                        {band.cost}t
-                      </span>
-                    ))}
+                  )}
                 </div>
               );
             })}
@@ -419,11 +418,6 @@ export function TimeGrid({
                         if (free) onToggleFree(day.date, slot.hour);
                       }}
                     >
-                      {free && single && !isSelected && (
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs tabular-nums text-ink-faint">
-                          {slot.cost}토큰
-                        </span>
-                      )}
                     </div>
                   );
                 })}
@@ -495,7 +489,11 @@ export function TimeGrid({
                         }
                       }}
                     >
-                      <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight ${single && tall === 1 ? ONE_LINE : ''}`}>
+                      {!single && mine && colorOnlyOnPhone && (
+                        <p className="sm:hidden px-1 py-0.5 text-2xs font-semibold tabular-nums">{b.start}시</p>
+                      )}
+                      {/* 폰 주 보기는 열이 좁아 이름이 한 글자로 잘린다: 글자를 빼고 색만 보여준다 */}
+                      <div className={`${single ? 'px-1.5 py-1.5' : `px-1 py-0.5 ${colorOnlyOnPhone ? 'hidden sm:block' : ''}`} leading-tight ${single && tall === 1 ? ONE_LINE : ''}`}>
                         <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-2xs'}`}>
                           {b.legacy ? (single ? `월 신청 · ${b.name}` : b.name || '월 신청') : mine ? (single ? '내 예약' : b.name || '내 예약') : b.name || '예약됨'}
                         </p>
@@ -539,7 +537,6 @@ export function TimeGrid({
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-slot-taken inline-block" />예약됨</span>
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block bg-slot-legacy" style={{ backgroundImage: STRIPES }} />월 신청</span>
           <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-slot-pick inline-block" />선택</span>
-          <span className="text-ink-faint">t = 시간당 토큰</span>
         </div>
       )}
       {emptyLabel}

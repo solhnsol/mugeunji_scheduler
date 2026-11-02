@@ -96,19 +96,25 @@ export function MonthCalendar({
                   {day.occupancy.split('').map((c, i) => (
                     <i
                       key={i}
-                      className={c === '2' ? 'bg-sage' : c === '1' ? 'bg-slot-taken-bar' : 'bg-sage-muted'}
+                      // 내 예약은 아래 칩이 보여주므로 막대에서는 '찬 시간'으로만 그린다
+                      className={c === '0' ? 'bg-sage-muted' : 'bg-slot-taken-bar'}
                     />
                   ))}
                 </span>
                 <span className="flex flex-col gap-0.5 min-w-0">
-                  {mineChips.slice(0, 2).map((chip) => (
-                    <span key={chip} className="rounded bg-sage text-white text-2xs leading-4 px-0.5 tracking-tight truncate tabular-nums text-center">
-                      {/* 폰 칸은 좁아 시작 시각만, 넓은 화면은 구간 전체 */}
-                      <span className="sm:hidden">{chip.split('~')[0]}시</span>
+                  {mineChips.slice(0, 2).map((chip, i) => (
+                    <span
+                      key={chip}
+                      className={`rounded bg-sage text-white text-2xs sm:text-xs leading-4 px-0.5 tracking-tight truncate tabular-nums text-center ${i > 0 ? 'hidden sm:block' : ''}`}
+                    >
+                      {/* 폰 칸은 칩 하나만 들어간다: 한 건이면 시작 시각, 여러 건이면 건수, 넓은 화면은 구간 전체 */}
+                      <span className="sm:hidden">
+                        {mineChips.length > 1 ? `${mineChips.length}건` : `${chip.split('~')[0]}시`}
+                      </span>
                       <span className="hidden sm:inline">{chip}</span>
                     </span>
                   ))}
-                  {mineChips.length > 2 && <span className="text-2xs leading-none text-sage text-left">+{mineChips.length - 2}</span>}
+                  {mineChips.length > 2 && <span className="hidden sm:block text-2xs leading-none text-sage text-left">+{mineChips.length - 2}</span>}
                   {/* 빈 시간은 막대가 보여주므로, 다 찬 날만 글로 알린다 */}
                   {!inactive && freeHours === 0 && (
                     <span className="text-2xs leading-none text-left text-ink-faint">마감</span>
@@ -123,7 +129,7 @@ export function MonthCalendar({
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 shrink-0 text-2xs text-ink-muted">
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage-muted inline-block" />빈 시간</span>
         <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-slot-taken-bar inline-block" />예약됨</span>
-        <span className="flex items-center gap-1"><i className="w-3 h-1.5 rounded-full bg-sage inline-block" />내 예약</span>
+        <span className="flex items-center gap-1"><i className="w-3 h-2 rounded-sm bg-sage inline-block" />내 예약</span>
       </div>
     </section>
   );
