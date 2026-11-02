@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MyBooking } from '../types';
-import { formatTokens } from '../utils';
+import { formatTokens, thisWeekLink } from '../utils';
 import { expiryPhrase, useTokenRules } from '../hooks/useTokenRules';
 import { formatDateKo, summarizeHours } from '../utils/booking';
 
@@ -35,18 +35,24 @@ export function TokenHome({
       <div className="rounded-3xl bg-gradient-to-br from-sage via-[#345045] to-sage-light text-white p-6 shadow-[0_10px_40px_rgba(58,82,72,0.22)]">
         <p className="text-sm font-medium text-white/60">보유 토큰</p>
         <p className="text-6xl font-bold tabular-nums mt-2 leading-none">{balance === null ? '–' : formatTokens(balance)}</p>
-        <div className="flex flex-wrap gap-2 mt-5">
+        <div className="flex gap-2 mt-5">
           <Link
             to="/book"
-            className="inline-flex items-center justify-center rounded-full bg-white text-[#3a5248] font-semibold min-h-[48px] px-6 hover:bg-white/90 transition"
+            className="inline-flex items-center justify-center rounded-full bg-white text-[#3a5248] font-semibold min-h-[48px] flex-1 px-3 whitespace-nowrap hover:bg-white/90 transition"
           >
             예약하기
           </Link>
           <Link
             to="/tokens"
-            className="inline-flex items-center justify-center rounded-full border border-white/40 text-white font-medium min-h-[48px] px-5 hover:bg-white/10 transition"
+            className="inline-flex items-center justify-center rounded-full border border-white/40 text-white font-medium min-h-[48px] flex-1 px-3 whitespace-nowrap hover:bg-white/10 transition"
           >
             토큰 충전
+          </Link>
+          <Link
+            to={thisWeekLink()}
+            className="inline-flex items-center justify-center rounded-full border border-white/40 text-white font-medium min-h-[48px] flex-1 px-3 whitespace-nowrap hover:bg-white/10 transition"
+          >
+            시간표 보기
           </Link>
         </div>
       </div>

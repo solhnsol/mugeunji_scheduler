@@ -50,7 +50,7 @@ export default function BookingPage({ onLogout }: { onLogout?: () => void }) {
     if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
     else setParams({}, { replace: true });
   };
-  const [detailMode, setDetailMode] = useState<'day' | 'week'>(() => (typeof window !== 'undefined' && window.innerWidth >= 640 ? 'week' : 'day'));
+  const [detailMode, setDetailMode] = useState<'day' | 'week'>(() => (params.get('mode') === 'week' || typeof window !== 'undefined' && window.innerWidth >= 640 ? 'week' : 'day'));
   const [week, setWeek] = useState<{ start: string; days: GridDay[] } | null>(null);
   const [selected, setSelected] = useState<Map<string, SelectedSlot>>(new Map());
   const [cancelSel, setCancelSel] = useState<Map<number, CancelSlot>>(new Map());

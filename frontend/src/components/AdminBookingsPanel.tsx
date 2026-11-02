@@ -4,15 +4,9 @@ import { MemberPicker } from './MemberPicker';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { AdminBooking, GridDay, PriceBand, TokenBalance } from '../types';
 import { GridBlock, TimeGrid, buildBlocks } from './booking/TimeGrid';
-import { formatTokens, kstParts } from '../utils';
+import { formatTokens, todayKst } from '../utils';
 import { addDays, formatDateKo, hourLabel, slotKey, startOfWeek, summarizeHours } from '../utils/booking';
 import { ModalOverlay } from './Modal';
-
-function todayKst(): string {
-  const p = kstParts(new Date().toISOString());
-  if (!p) return '';
-  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
-}
 
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
   return (

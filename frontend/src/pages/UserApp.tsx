@@ -20,7 +20,7 @@ import { OnboardingTour, takeOnboardingPending } from '../components/OnboardingT
 import { InstallBanner, InstallGuide } from '../components/InstallGuide';
 import { installPlatform, needsInstallGuide } from '../install';
 import { MeResponse, MyBooking, Plan, ReservationMode } from '../types';
-import { formatTokens } from '../utils';
+import { formatTokens, thisWeekLink } from '../utils';
 import { summarizeReservations } from '../utils/reservationSummary';
 import { PageSkeleton } from '../components/Skeleton';
 
@@ -289,9 +289,10 @@ export default function UserApp({
           <p className="text-xs text-ink-faint">내 토큰</p>
           <p className="text-2xl font-bold text-ink tabular-nums">{tokenBalance === null ? '–' : formatTokens(tokenBalance)}</p>
         </div>
-        <div className="flex gap-2">
-          <Link to="/tokens" className="btn-secondary !w-auto text-sm">충전·받기</Link>
-          <Link to="/book" className="btn-primary !w-auto text-sm">토큰으로 예약</Link>
+        <div className="flex gap-2 w-full">
+          <Link to="/tokens" className="btn-secondary flex-1 !px-3 text-sm whitespace-nowrap">충전·받기</Link>
+          <Link to={thisWeekLink()} className="btn-secondary flex-1 !px-3 text-sm whitespace-nowrap">시간표 보기</Link>
+          <Link to="/book" className="btn-primary flex-1 !px-3 text-sm whitespace-nowrap">토큰으로 예약</Link>
         </div>
       </div>
       {upcomingBookings.length > 0 && (
