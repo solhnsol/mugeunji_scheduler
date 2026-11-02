@@ -23,7 +23,7 @@ import { MemberPicker } from '../components/MemberPicker';
 import { AdminUsersTab } from '../components/AdminUsersTab';
 import { EditAdminModal, EditUserModal, PlanPriceRow } from '../components/AdminUserModals';
 
-// 시간표를 가장 먼저 보여주고, 토큰 예약이 기본이라 토큰 탭을 그다음에 둔다. 예전 방식(월신청) 탭은 토큰 예약 중에 흐리게 보인다
+// 매일 쓰는 탭 넷만 늘 보이고, 예전 방식(월 신청) 탭 넷은 "더보기" 하나로 묶어 그 아래 줄에서 고른다. 폰에서도 탭이 넘치지 않는다
 const TABS = [
   { id: 'timetable' as const, label: '시간표' },
   { id: 'tokens' as const, label: '토큰' },
@@ -34,6 +34,8 @@ const TABS = [
   { id: 'free' as const, label: '자유이용', legacy: true },
   { id: 'automation' as const, label: '자동화', legacy: true },
 ];
+const MAIN_TABS = TABS.filter((t) => !('legacy' in t));
+const LEGACY_TABS = TABS.filter((t) => 'legacy' in t);
 
 function formatFreeWindow(start: string, end: string) {
   const s = new Date(start);
@@ -110,6 +112,7 @@ function AdminDashboard({
   const tabParam = params.get('tab');
   const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'timetable';
   const setTab = (id: (typeof TABS)[number]['id']) => setParams({ tab: id }, { replace: true });
+  const isLegacy = LEGACY_TABS.some((t) => t.id === tab);
   const [reloadKey, setReloadKey] = useState(0);
   // 확인 대기 중인 토큰 충전 요청 수: 다른 탭을 보고 있어도 토큰 탭에 배지로 알린다
   const [pendingTokens, setPendingTokens] = useState(0);
@@ -207,39 +210,63 @@ function AdminDashboard({
     <AppShell
       title="관리자"
       homeTo={null}
+      fillMain={tab === 'timetable'}
       actions={
         <>
           <button type="button" className="btn-ghost" onClick={onLogout}>로그아웃</button>
         </>
       }
     >
-      <div className="mb-4 -mx-4 px-4 overflow-x-auto shrink-0">
-        <div className="flex gap-1 p-1 bg-cream-dark/50 rounded-full min-w-max">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`flex-none rounded-full py-2.5 px-4 text-sm font-medium transition-colors min-h-[44px] whitespace-nowrap ${
-              tab === t.id
-                ? 'bg-sage text-white shadow-sm'
-                : t.legacy && tokenOnly
-                  ? 'text-ink-faint hover:text-ink-muted'
-                  : 'text-ink-muted hover:text-ink'
-            }`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-            {t.id === 'tokens' && pendingTokens > 0 && tab !== 'tokens' && (
-              <span
-                className="ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-danger text-white text-2xs font-semibold tabular-nums align-middle"
-                aria-label={`확인 대기 ${pendingTokens}건`}
+      <div className="mb-4 shrink-0 space-y-2">
+        <div className="flex gap-1 p-1 bg-cream-dark/50 rounded-full" role="tablist" aria-label="관리 메뉴">
+          {[...MAIN_TABS, { id: 'legacy' as const, label: '더보기' }].map((t) => {
+            const active = t.id === 'legacy' ? isLegacy : tab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={`flex-1 min-w-0 rounded-full py-2.5 px-1 text-sm font-medium transition-colors min-h-[44px] whitespace-nowrap ${
+                  active
+                    ? 'bg-sage text-white shadow-sm'
+                    : t.id === 'legacy' && tokenOnly
+                      ? 'text-ink-faint hover:text-ink-muted'
+                      : 'text-ink-muted hover:text-ink'
+                }`}
+                onClick={() => setTab(t.id === 'legacy' ? (isLegacy ? tab : 'roster') : t.id)}
               >
-                {pendingTokens}
-              </span>
-            )}
-          </button>
-        ))}
+                {t.label}
+                {t.id === 'tokens' && pendingTokens > 0 && tab !== 'tokens' && (
+                  <span
+                    className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-danger text-white text-2xs font-semibold tabular-nums align-middle"
+                    aria-label={`확인 대기 ${pendingTokens}건`}
+                  >
+                    {pendingTokens}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
+        {isLegacy && (
+          <div className="flex gap-1.5" role="tablist" aria-label="예전 방식 메뉴">
+            {LEGACY_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                className={`rounded-full px-3 py-1.5 text-xs min-h-[32px] border transition ${
+                  tab === t.id ? 'bg-sage text-white border-sage' : 'bg-surface text-ink-muted border-line hover:border-sage/30'
+                }`}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {tab === 'timetable' && <AdminTimetableTab token={token} show={show} />}

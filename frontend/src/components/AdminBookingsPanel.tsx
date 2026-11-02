@@ -4,7 +4,7 @@ import { MemberPicker } from './MemberPicker';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { AdminBooking, GridDay, PriceBand, TokenBalance } from '../types';
 import { GridBlock, TimeGrid, buildBlocks } from './booking/TimeGrid';
-import { formatTokens, todayKst } from '../utils';
+import { formatTokens, kstParts, todayKst } from '../utils';
 import { addDays, formatDateKo, hourLabel, slotKey, startOfWeek, summarizeHours } from '../utils/booking';
 import { ModalOverlay } from './Modal';
 
@@ -124,35 +124,54 @@ export function AdminBookingsPanel({
   };
 
   const weekEnd = addDays(weekStart, 6);
-  const range = `${formatDateKo(weekStart)} ~ ${formatDateKo(weekEnd)}`;
+  const [sm, sd] = [Number(weekStart.slice(5, 7)), Number(weekStart.slice(8))];
+  const [em, ed] = [Number(weekEnd.slice(5, 7)), Number(weekEnd.slice(8))];
+  const range = `${sm}월 ${sd}일 ~ ${em === sm ? '' : `${em}월 `}${ed}일`;
+  const isThisWeek = weekStart === startOfWeek(today);
   const bookedHours = days ? days.reduce((n, d) => n + d.slots.filter((sl) => sl.status === 'mine' || sl.status === 'taken').length, 0) : 0;
   const cancelBlockHours = cancelTarget ? cancelTarget.block.ids.filter((id) => id != null).length : 0;
+  // 이번 주는 지금 한 시간 전부터, 다른 주는 낮 시간대(7시)부터 보여준다 (회원 주 보기와 같다)
+  const initialHour = isThisWeek ? Math.max((kstParts(new Date().toISOString())?.hour ?? 8) - 1, 0) : 7;
 
   return (
-    <section className="card p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold text-ink">토큰 예약 일정표</h2>
-        <div className="flex items-center gap-1">
+    <section className="flex flex-col flex-1 min-h-0 gap-3">
+      <div className="shrink-0 flex items-center justify-between gap-2">
+        <div className="flex items-center min-w-0">
           <button type="button" className="btn-ghost !min-h-[40px] !px-3" aria-label="이전 주" onClick={() => setWeekStart(addDays(weekStart, -7))}>‹</button>
-          <button type="button" className="text-xs text-sage px-2 min-h-[40px]" onClick={() => setWeekStart(startOfWeek(today))}>이번 주</button>
-          <input
-            aria-label="날짜로 이동"
-            className="input !py-2 !w-auto"
-            type="date"
-            value={weekStart}
-            onChange={(e) => e.target.value && setWeekStart(startOfWeek(e.target.value))}
-          />
+          {/* 날짜 글자를 누르면 달력이 열려 원하는 주로 바로 간다 */}
+          <label className="relative text-sm font-semibold text-ink tabular-nums whitespace-nowrap px-1 min-h-[40px] flex items-center cursor-pointer">
+            {range}
+            <input
+              aria-label="날짜로 이동"
+              className="absolute inset-0 opacity-0 cursor-pointer"
+              type="date"
+              value={weekStart}
+              onClick={(e) => e.currentTarget.showPicker?.()}
+              onChange={(e) => e.target.value && setWeekStart(startOfWeek(e.target.value))}
+            />
+          </label>
           <button type="button" className="btn-ghost !min-h-[40px] !px-3" aria-label="다음 주" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
         </div>
+        <div className="flex items-center gap-2 shrink-0 text-xs text-ink-faint">
+          <span className="tabular-nums">예약 <b className="text-ink">{bookedHours}</b>시간</span>
+          <button
+            type="button"
+            className="text-sage px-1 min-h-[40px] whitespace-nowrap disabled:text-ink-faint disabled:opacity-50"
+            disabled={isThisWeek}
+            onClick={() => setWeekStart(startOfWeek(today))}
+          >
+            이번 주
+          </button>
+        </div>
       </div>
-      <p className="text-xs text-ink-faint">
-        {range} · 예약 <b className="text-ink tabular-nums">{bookedHours}</b>시간 · 예약 블록을 누르면 취소, 빈 시간을 고르면 회원 이름으로 등록해요. 줄무늬는 기존 월 신청(베타)이에요.
-      </p>
 
       {!days ? (
-        <p className="text-sm text-ink-faint py-8 text-center">불러오는 중…</p>
+        <p className="flex-1 text-sm text-ink-faint py-8 text-center">불러오는 중…</p>
       ) : (
         <TimeGrid
+          fill
+          scrollToHour={initialHour}
+          scrollKey={weekStart}
           days={days}
           bands={bands}
           today={today}
@@ -178,10 +197,10 @@ export function AdminBookingsPanel({
       )}
 
       {/* 선택 영역은 항상 같은 자리에 두고, 선택이 없으면 비활성으로 보여준다 (나타났다 사라지면 일정표가 밀린다) */}
-      <div className="rounded-2xl border border-line p-3 space-y-2">
+      <div className="shrink-0 card p-3 space-y-2">
         <div className="flex items-center justify-between gap-3 h-5">
           <p className="text-sm font-medium text-ink truncate">
-            {selected.size > 0 ? `선택 ${selected.size}시간` : <span className="text-ink-faint font-normal">빈 시간을 눌러 선택하면 회원 이름으로 등록할 수 있어요</span>}
+            {selected.size > 0 ? `선택 ${selected.size}시간` : <span className="text-ink-faint font-normal">빈 칸을 누르면 회원 이름으로 등록해요</span>}
           </p>
           <button
             type="button"
