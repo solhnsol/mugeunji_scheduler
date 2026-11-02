@@ -216,8 +216,8 @@ def test_admin_force_booking_and_list(client, admin, make_user, token_mode):
     assert rows[0]["username"] == username and rows[0]["cost"] == 0 and rows[0]["status"] == "active"
     # 지난 시간은 관리자도 불가
     assert client.post("/admin/bookings", headers=admin, json={"username": username, "slots": [{"date": "2026-12-01", "hour": 9}]}).status_code == 400
-    # 관리자 본인 예약은 토큰 없이 가능(미리보기)
-    assert _book(client, admin, ("2026-12-22", 18)).status_code == 200
+    # 회원 화면 예약 API로는 관리자도 기간 밖 날짜를 예약할 수 없다
+    assert _book(client, admin, ("2027-03-01", 10)).status_code == 400
     # 회원은 관리자 API 불가
     assert client.get("/admin/bookings", headers=member).status_code == 403
     assert client.post(f"/admin/bookings/{rows[0]['id']}/cancel", headers=member, json={}).status_code == 403
@@ -332,3 +332,20 @@ def test_delete_user_clears_token_records(client, admin, make_user, token_mode):
     assert r.status_code == 200, r.text
     again = client.post("/login", json={"username": username, "password": "password1"}).json()
     assert _balance(client, {"Authorization": f"Bearer {again['access_token']}"}) == 0
+
+
+def test_admin_pays_tokens_like_members(client, admin, token_mode):
+    pack = client.post("/admin/token-packs", headers=admin, json={"name": "관리자 예약팩", "price_won": 10000, "tokens": 4})
+    assert pack.status_code == 200, pack.text
+    pack_id = next(p["id"] for p in client.get("/tokens/packs", headers=admin).json() if p["name"] == "관리자 예약팩")
+    before = _balance(client, admin)
+    # 관리자 로그인 상태에서도 충전은 무료로 바로 받고, 예약하면 토큰이 빠진다
+    assert client.post("/tokens/purchases", headers=admin, json={"pack_id": pack_id}).status_code == 200
+    assert _balance(client, admin) == before + 4
+    r = _book(client, admin, ("2026-12-27", 16))
+    assert r.status_code == 200 and r.json()["spent"] == 4 and _balance(client, admin) == before
+    # 관리자 화면 표(admin_view)에서만 기간 밖 칸이 열려 보인다
+    member_view = client.get("/bookings/range", headers=admin, params={"start": "2027-03-01", "days": 1}).json()
+    admin_view = client.get("/bookings/range", headers=admin, params={"start": "2027-03-01", "days": 1, "admin_view": True}).json()
+    assert member_view["days"][0]["slots"][10]["status"] == "closed"
+    assert admin_view["days"][0]["slots"][10]["status"] == "free"

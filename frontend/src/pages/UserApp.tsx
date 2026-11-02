@@ -74,13 +74,13 @@ export default function UserApp({
     // 토큰 예약으로 전환되면 충전은 항상 열려 있다
     const tokensOpen = !!settings.token_charge_enabled || mode === 'token' || mode === 'beta';
     setTokenChargeEnabled(tokensOpen);
-    if (tokensOpen && meData.role !== 'admin') {
+    if (tokensOpen) {
       api
         .getMyTokens(token)
         .then((t) => setTokenBalance(t.balance))
         .catch(() => setTokenBalance(null));
     }
-    if ((mode === 'token' || mode === 'beta') && meData.role !== 'admin') {
+    if (mode === 'token' || mode === 'beta') {
       api
         .getMyBookings(token)
         .then(setUpcomingBookings)
@@ -199,10 +199,10 @@ export default function UserApp({
         ? me.message
         : undefined;
 
-  // 토큰 예약으로 전환된 뒤 회원에게 보이는 화면 (관리자는 기존 화면 + 미리보기 링크)
-  const tokenMode = reservationMode === 'token' && me.role !== 'admin';
+  // 토큰 예약으로 전환된 뒤 회원에게 보이는 화면. 관리자도 '사용자 페이지'에서 회원과 같은 화면을 본다
+  const tokenMode = reservationMode === 'token';
   // 베타: 월 신청은 기존 화면 그대로, 자유이용 자리를 토큰 예약이 대신한다
-  const betaMode = reservationMode === 'beta' && me.role !== 'admin';
+  const betaMode = reservationMode === 'beta';
 
   const headerMenuItems = [
     { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true) },

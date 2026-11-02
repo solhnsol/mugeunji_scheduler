@@ -1156,8 +1156,6 @@ async def request_token_purchase(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     await _require_token_charge_open(conn, current_user)
-    if current_user["role"] == "admin":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="관리자 계정은 토큰을 충전할 수 없어요.")
     ok, message = await TokenManager(conn).request_purchase(current_user["username"], data.pack_id)
     if ok:
         return {"status": "success", "message": message}
@@ -1403,12 +1401,15 @@ async def get_booking_calendar(
 async def get_booking_range(
     start: str,
     days: int = 7,
+    admin_view: bool = False,
     current_user: dict = Depends(get_current_user),
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     await _require_token_mode(conn, current_user)
     try:
-        grid = await BookingManager(conn).range_grid(current_user["username"], current_user["role"], _parse_date(start), days)
+        grid = await BookingManager(conn).range_grid(
+            current_user["username"], current_user["role"], _parse_date(start), days, admin_view=admin_view
+        )
     except BookingError as e:
         raise _booking_error(e)
     return {"days": grid}

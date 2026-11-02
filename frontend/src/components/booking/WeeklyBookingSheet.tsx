@@ -40,7 +40,7 @@ export function WeeklyBookingSheet({
   const [error, setError] = useState('');
   const { confirm, dialog } = useConfirm();
 
-  const blocked = config.is_admin || config.dawn_allowed ? [] : config.dawn_hours;
+  const blocked = config.dawn_allowed ? [] : config.dawn_hours;
   const length = end - start;
   const ready = weekday !== null && length > 0;
 
@@ -62,7 +62,7 @@ export function WeeklyBookingSheet({
   const rows = occupancy && ready ? buildRows(dates, occupancy, start, length, Date.now(), blocked) : [];
   const freeByHour = occupancy && weekday !== null ? freeWeeksByHour(buildRows(dates, occupancy, 0, 24, Date.now(), blocked)) : null;
 
-  const costOf = (hours: number[]) => (config.is_admin ? 0 : hours.reduce((s, h) => s + (bandFor(config.price_bands, h)?.cost ?? 0), 0));
+  const costOf = (hours: number[]) => hours.reduce((s, h) => s + (bandFor(config.price_bands, h)?.cost ?? 0), 0);
   const plan = rows.map((row) => {
     const on = row.free.length > 0 && (checked.get(row.date) ?? row.ok);
     const hours = on ? row.free : [];
@@ -75,7 +75,7 @@ export function WeeklyBookingSheet({
   const hasZeroCost = slots.some((s) => (bandFor(config.price_bands, s.hour)?.cost ?? 0) === 0);
 
   let blockReason = '';
-  if (!config.is_admin && !config.reservation_enabled) blockReason = '지금은 예약을 받지 않아요';
+  if (!config.reservation_enabled) blockReason = '지금은 예약을 받지 않아요';
   else if (slots.length > MAX_SLOTS) blockReason = `한 번에 ${MAX_SLOTS}시간까지 예약할 수 있어요`;
   else if (balance !== null && total > balance) blockReason = `토큰이 ${total - balance}개 부족해요`;
   else if (balance !== null && hasZeroCost && balance < 1) blockReason = '토큰이 1개 이상 있어야 예약할 수 있어요';
