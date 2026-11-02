@@ -44,6 +44,20 @@ export function buildBlocks(day: GridDay): GridBlock[] {
   return blocks;
 }
 
+/** 그 날 고른 빈 시간을 이어진 구간으로 묶는다 */
+function selectionRuns(day: GridDay, selected: Set<string>) {
+  const runs: { start: number; end: number; cost: number }[] = [];
+  for (const slot of day.slots) {
+    if (slot.status !== 'free' || !selected.has(slotKey(day.date, slot.hour))) continue;
+    const last = runs[runs.length - 1];
+    if (last && last.end === slot.hour) {
+      last.end += 1;
+      last.cost += slot.cost;
+    } else runs.push({ start: slot.hour, end: slot.hour + 1, cost: slot.cost });
+  }
+  return runs;
+}
+
 /** 터치로 끌어서 선택을 시작하기 위해 길게 누르는 시간 */
 const LONG_PRESS_MS = 350;
 
@@ -370,7 +384,7 @@ export function TimeGrid({
                   const free = slot.status === 'free';
                   const band = bandFor(bands, slot.hour);
                   let cls = 'border-b border-line/40 relative ';
-                  if (isSelected) cls += 'bg-slot-pick/90 ';
+                  if (isSelected) cls += 'bg-surface ';
                   else if (slot.status === 'past') cls += 'bg-cream-dark/50 ';
                   else if (slot.status === 'closed') cls += 'bg-cream-dark/70 ';
                   else if (free) cls += `${band && band.cost === 0 ? 'bg-sage-muted/25' : 'bg-surface'} hover:bg-sage-muted/50 active:bg-slot-pick/30 cursor-pointer `;
@@ -402,19 +416,34 @@ export function TimeGrid({
                         if (free) onToggleFree(day.date, slot.hour);
                       }}
                     >
-                      {free && isSelected && !single && (
-                        <span aria-hidden className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold">
-                          ✓
-                        </span>
-                      )}
-                      {free && single && (
-                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-2xs tabular-nums ${isSelected ? 'text-white' : 'text-ink-faint'}`}>
-                          {isSelected ? `선택 · ${slot.cost}토큰` : `${slot.cost}토큰`}
+                      {free && single && !isSelected && (
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs tabular-nums text-ink-faint">
+                          {slot.cost}토큰
                         </span>
                       )}
                     </div>
                   );
                 })}
+
+                {/* 고른 시간도 예약처럼 이어진 둥근 블록으로 그린다. 누르기는 아래 칸이 받는다 */}
+                {selectionRuns(day, selected).map((r) => (
+                  <div
+                    key={`sel-${r.start}`}
+                    aria-hidden
+                    className="absolute inset-x-[2px] rounded-md bg-slot-pick text-white shadow-sm pointer-events-none overflow-hidden"
+                    style={{ top: r.start * H + 1, height: (r.end - r.start) * H - 2 }}
+                  >
+                    <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight`}>
+                      <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-2xs'}`}>{single ? `선택 ${r.end - r.start}시간` : '✓'}</p>
+                      {(single || r.end - r.start >= 2) && (
+                        <p className={`opacity-90 tabular-nums ${single ? 'text-xs' : 'text-2xs'}`}>
+                          {String(r.start).padStart(2, '0')}:00~{String(r.end).padStart(2, '0')}:00
+                          {single ? ` · ${r.cost}토큰` : ''}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
 
                 {blocks.map((b) => {
                   const mine = b.status === 'mine';
