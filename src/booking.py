@@ -319,11 +319,9 @@ class BookingManager:
         settings = await self._settings()
         now = now_kst()
         window = self.bookable_window(now, settings)
-        dawn_allowed = True
-        if role != "admin":
-            async with self.conn.execute("SELECT dawn_allowed FROM users WHERE username = ?", (username,)) as cursor:
-                row = await cursor.fetchone()
-            dawn_allowed = bool(row["dawn_allowed"]) if row else True
+        async with self.conn.execute("SELECT dawn_allowed FROM users WHERE username = ?", (username,)) as cursor:
+            row = await cursor.fetchone()
+        dawn_allowed = bool(row["dawn_allowed"]) if row else True
         return {
             "mode": settings.get(SETTING_MODE) or MODE_LEGACY,
             "beta_month": settings.get(SETTING_BETA_MONTH) or "",
@@ -336,7 +334,7 @@ class BookingManager:
             "next_month_open": window["next_month_open"],
             "dawn_hours": list(DAWN_HOURS),
             "dawn_allowed": dawn_allowed,
-            "balance": await self.tokens.get_balance(username) if role != "admin" else None,
+            "balance": await self.tokens.get_balance(username),
             "is_admin": role == "admin",
         }
 
@@ -367,7 +365,8 @@ class BookingManager:
         settings = await self._settings()
         slots = sorted({self._parse_slot(s) for s in raw_slots})
         now = now_kst()
-        exempt = force_by is not None or role == "admin"
+        # 관리자도 회원 화면에서는 회원과 같은 규칙(기간·중지·새벽·토큰). 관리자 화면의 강제 등록(force_by)만 예외
+        exempt = force_by is not None
 
         if not exempt and settings.get("reservation_enabled") == "false":
             raise BookingError("현재 예약이 불가능해요. 관리자에게 문의해주세요.")
@@ -517,7 +516,7 @@ class BookingManager:
         ) as cursor:
             return {r["username"]: r["display"] for r in await cursor.fetchall()}
 
-    async def range_grid(self, username: str, role: str, start: date, days: int) -> List[Dict]:
+    async def range_grid(self, username: str, role: str, start: date, days: int, admin_view: bool = False) -> List[Dict]:
         """start부터 days일의 하루 24칸 상태. 칸 상태: free | taken | mine | past | closed."""
         if not 1 <= days <= 42:
             raise BookingError("조회 기간이 올바르지 않아요.")
@@ -547,7 +546,7 @@ class BookingManager:
                     status = "mine" if booking["username"] == username else "taken"
                 elif slot_start(day, hour) <= now:
                     status = "past"
-                elif not in_window and role != "admin":
+                elif not in_window and not (admin_view and role == "admin"):
                     status = "closed"
                 else:
                     status = "free"
@@ -601,7 +600,7 @@ class BookingManager:
             cells = occupancy.get(day.isoformat(), ["0"] * 24)
             days.append({
                 "date": day.isoformat(),
-                "bookable": window["start"] <= day <= window["end"] or (role == "admin" and day >= window["start"]),
+                "bookable": window["start"] <= day <= window["end"],
                 "booked": sum(1 for c in cells if c != "0"),
                 "mine": sum(1 for c in cells if c == "2"),
                 "occupancy": "".join(cells),

@@ -52,7 +52,7 @@ export function AdminBookingsPanel({
   const fail = useCallback((e: unknown, fb: string) => show(e instanceof ApiError ? e.message : fb, 'error'), [show]);
 
   const load = useCallback(async () => {
-    const res = await api.getBookingRange(token, weekStart, 7);
+    const res = await api.getBookingRange(token, weekStart, 7, true);
     setDays(res.days);
   }, [token, weekStart]);
 
