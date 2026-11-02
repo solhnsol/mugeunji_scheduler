@@ -51,11 +51,12 @@
     --color-slot-legacy: #4a4f49;
     --color-slot-taken-bar: #5a5f58;
     --color-slot-monthly: #444942;
-    --color-amber-50: #2e2819;
-    --color-amber-200: #5c4d22;
-    --color-amber-700: #e0b85a;
-    --color-amber-800: #e6c36e;
-    --color-amber-900: #ecd08a;
+    /* 안내 배너가 어두운 화면에서 튀지 않게: 배경·선은 카드와 비슷한 밝기, 글자는 채도를 낮춘다 */
+    --color-amber-50: #25221a;
+    --color-amber-200: #3f3826;
+    --color-amber-700: #c9ab66;
+    --color-amber-800: #d0b576;
+    --color-amber-900: #cdb987;
   }
 }
 
