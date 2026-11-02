@@ -61,6 +61,9 @@ function selectionRuns(day: GridDay, selected: Set<string>) {
 /** 터치로 끌어서 선택을 시작하기 위해 길게 누르는 시간 */
 const LONG_PRESS_MS = 350;
 
+/** 하루 보기의 한 시간짜리 블록: 두 줄이 들어가지 않아 제목과 시각을 한 줄에 가운데로 둔다 */
+const ONE_LINE = 'h-full !py-0 flex items-center gap-2 [&>p]:shrink-0';
+
 const STRIPES = 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-ink) 7%, transparent) 0 6px, transparent 6px 12px)';
 
 /**
@@ -433,7 +436,7 @@ export function TimeGrid({
                     className="absolute inset-x-[2px] rounded-md bg-slot-pick text-white shadow-sm pointer-events-none overflow-hidden"
                     style={{ top: r.start * H + 1, height: (r.end - r.start) * H - 2 }}
                   >
-                    <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight`}>
+                    <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight ${single && r.end - r.start === 1 ? ONE_LINE : ''}`}>
                       <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-2xs'}`}>{single ? `선택 ${r.end - r.start}시간` : '✓'}</p>
                       {(single || r.end - r.start >= 2) && (
                         <p className={`opacity-90 tabular-nums ${single ? 'text-xs' : 'text-2xs'}`}>
@@ -492,7 +495,7 @@ export function TimeGrid({
                         }
                       }}
                     >
-                      <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight`}>
+                      <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight ${single && tall === 1 ? ONE_LINE : ''}`}>
                         <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-2xs'}`}>
                           {b.legacy ? (single ? `월 신청 · ${b.name}` : b.name || '월 신청') : mine ? (single ? '내 예약' : b.name || '내 예약') : b.name || '예약됨'}
                         </p>
