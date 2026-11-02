@@ -12,6 +12,7 @@ import { AdminAutomationTab } from '../components/AdminAutomationTab';
 import { AdminRosterTab } from '../components/AdminRosterTab';
 import { AdminNoticesTab } from '../components/AdminNoticesTab';
 import { AdminTokensTab } from '../components/AdminTokensTab';
+import { AdminTimetableTab } from '../components/AdminBookingsPanel';
 import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
 import { ScheduleModal } from '../components/ScheduleModal';
 import { WeeklyUsage } from '../components/WeeklyUsage';
@@ -22,8 +23,9 @@ import { MemberPicker } from '../components/MemberPicker';
 import { AdminUsersTab } from '../components/AdminUsersTab';
 import { EditAdminModal, EditUserModal, PlanPriceRow } from '../components/AdminUserModals';
 
-// 토큰 예약이 기본이라 토큰 탭을 먼저 둔다. 예전 방식(월신청) 탭은 토큰 예약 중에 흐리게 보인다
+// 시간표를 가장 먼저 보여주고, 토큰 예약이 기본이라 토큰 탭을 그다음에 둔다. 예전 방식(월신청) 탭은 토큰 예약 중에 흐리게 보인다
 const TABS = [
+  { id: 'timetable' as const, label: '시간표' },
   { id: 'tokens' as const, label: '토큰' },
   { id: 'notices' as const, label: '공지' },
   { id: 'users' as const, label: '회원' },
@@ -106,7 +108,7 @@ function AdminDashboard({
   // 보고 있는 탭은 주소(?tab=)에 둬서 새로고침해도 같은 탭에 머문다
   const [params, setParams] = useSearchParams();
   const tabParam = params.get('tab');
-  const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'tokens';
+  const tab = TABS.find((t) => t.id === tabParam)?.id ?? 'timetable';
   const setTab = (id: (typeof TABS)[number]['id']) => setParams({ tab: id }, { replace: true });
   const [reloadKey, setReloadKey] = useState(0);
   // 확인 대기 중인 토큰 충전 요청 수: 다른 탭을 보고 있어도 토큰 탭에 배지로 알린다
@@ -240,6 +242,7 @@ function AdminDashboard({
         </div>
       </div>
 
+      {tab === 'timetable' && <AdminTimetableTab token={token} show={show} />}
       {tab === 'tokens' && <AdminTokensTab token={token} show={show} />}
       {tab === 'notices' && <AdminNoticesTab token={token} show={show} />}
 

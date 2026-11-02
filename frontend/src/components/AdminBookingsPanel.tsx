@@ -26,22 +26,24 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
   );
 }
 
+/** 관리자 첫 탭: 이번 주 시간표를 바로 보여준다. 회원 목록은 등록할 때 이름을 고르는 데 쓴다. */
+export function AdminTimetableTab({ token, show }: { token: string; show: (m: string, t: 'success' | 'error') => void }) {
+  const [members, setMembers] = useState<TokenBalance[]>([]);
+  useEffect(() => {
+    api.adminTokenBalances(token).then(setMembers).catch(() => undefined);
+  }, [token]);
+  return <AdminBookingsPanel token={token} show={show} members={members} />;
+}
+
 /** 주간 일정표로 보는 토큰 예약 현황. 빈 시간을 골라 회원 이름으로 등록하고, 예약 블록을 눌러 취소한다. */
 export function AdminBookingsPanel({
   token,
   show,
   members,
-  onChanged,
-  historyTarget,
-  onCloseHistory,
 }: {
   token: string;
   show: (m: string, t: 'success' | 'error') => void;
   members: TokenBalance[];
-  /** 예약이 바뀌어 토큰 잔액이 달라졌을 수 있을 때 */
-  onChanged: () => void;
-  historyTarget: TokenBalance | null;
-  onCloseHistory: () => void;
 }) {
   const today = todayKst();
   const [weekStart, setWeekStart] = useState(startOfWeek(today));
@@ -97,7 +99,6 @@ export function AdminBookingsPanel({
       show(`${ids.length}시간 예약을 취소했어요. (환불 ${formatTokens(refunded)}토큰)`, 'success');
       setCancelTarget(null);
       await load();
-      onChanged();
     } catch (e) {
       fail(e, '취소하지 못했어요');
       await load().catch(() => undefined);
@@ -237,14 +238,11 @@ export function AdminBookingsPanel({
           </div>
         </Modal>
       )}
-      {historyTarget && (
-        <HistoryModal token={token} target={historyTarget} onClose={onCloseHistory} onError={(e) => fail(e, '불러오지 못했어요')} />
-      )}
     </section>
   );
 }
 
-function HistoryModal({
+export function HistoryModal({
   token,
   target,
   onClose,
