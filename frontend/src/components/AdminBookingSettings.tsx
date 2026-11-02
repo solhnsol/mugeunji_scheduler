@@ -136,13 +136,13 @@ export function AdminBookingSettings({
         <ul className="mt-2 space-y-2">
           {bands.map((b, i) => (
             <li key={i} className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm whitespace-nowrap">
-              <input aria-label="시작 시" className="input !py-1.5 !px-2 !w-16 text-center" type="number" min={0} max={23} value={b.start} onChange={(e) => updateBand(i, 'start', e.target.value)} />
+              <input aria-label="시작 시" className="input !py-1.5 !px-2 !w-14 text-center" type="number" min={0} max={23} value={b.start} onChange={(e) => updateBand(i, 'start', e.target.value)} />
               <span className="text-ink-faint">~</span>
-              <input aria-label="끝 시" className="input !py-1.5 !px-2 !w-16 text-center" type="number" min={1} max={24} value={b.end} onChange={(e) => updateBand(i, 'end', e.target.value)} />
+              <input aria-label="끝 시" className="input !py-1.5 !px-2 !w-14 text-center" type="number" min={1} max={24} value={b.end} onChange={(e) => updateBand(i, 'end', e.target.value)} />
               <span className="text-ink-faint">시</span>
-              <input aria-label="시간당 토큰" className="input !py-1.5 !px-2 !w-16 text-center" type="number" min={0} value={b.cost} onChange={(e) => updateBand(i, 'cost', e.target.value)} />
+              <input aria-label="시간당 토큰" className="input !py-1.5 !px-2 !w-14 text-center" type="number" min={0} value={b.cost} onChange={(e) => updateBand(i, 'cost', e.target.value)} />
               <span className="text-ink-faint">토큰</span>
-              <button type="button" className="text-xs text-danger-ink px-2 min-h-[36px]" onClick={() => setBands((p) => p.filter((_, idx) => idx !== i))}>삭제</button>
+              <button type="button" aria-label="구간 삭제" className="text-ink-faint hover:text-danger-ink w-9 h-9 inline-flex items-center justify-center" onClick={() => setBands((p) => p.filter((_, idx) => idx !== i))}><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><path d="M5 5l10 10M15 5 5 15" /></svg></button>
             </li>
           ))}
         </ul>
@@ -159,11 +159,11 @@ export function AdminBookingSettings({
           {tiers.map((t, i) => (
             <li key={i} className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm whitespace-nowrap">
               <span className="text-ink-faint">시작</span>
-              <input aria-label="시간 전" className="input !py-1.5 !px-2 !w-20 text-center shrink-0" type="number" min={0} value={t.hours_before} onChange={(e) => updateTier(i, 'hours_before', e.target.value)} />
+              <input aria-label="시간 전" className="input !py-1.5 !px-2 !w-16 text-center shrink-0" type="number" min={0} value={t.hours_before} onChange={(e) => updateTier(i, 'hours_before', e.target.value)} />
               <span className="text-ink-faint">시간 전까지</span>
-              <input aria-label="환불 비율" className="input !py-1.5 !px-2 !w-16 text-center" type="number" min={0} max={100} value={t.percent} onChange={(e) => updateTier(i, 'percent', e.target.value)} />
+              <input aria-label="환불 비율" className="input !py-1.5 !px-2 !w-14 text-center" type="number" min={0} max={100} value={t.percent} onChange={(e) => updateTier(i, 'percent', e.target.value)} />
               <span className="text-ink-faint">%</span>
-              <button type="button" className="text-xs text-danger-ink px-2 min-h-[36px]" onClick={() => setTiers((p) => p.filter((_, idx) => idx !== i))}>삭제</button>
+              <button type="button" aria-label="단계 삭제" className="text-ink-faint hover:text-danger-ink w-9 h-9 inline-flex items-center justify-center" onClick={() => setTiers((p) => p.filter((_, idx) => idx !== i))}><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><path d="M5 5l10 10M15 5 5 15" /></svg></button>
             </li>
           ))}
         </ul>
