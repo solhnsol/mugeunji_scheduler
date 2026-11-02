@@ -1,4 +1,4 @@
-import { PointerEvent as ReactPointerEvent, useCallback, useState } from 'react';
+import { PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { DAYS, DAY_LABELS, Reservation, ValidDay } from '../types';
 import { useReservationSocket } from '../hooks/useReservationSocket';
 import { parseSlotKey, slotKey, useSlotPicker } from '../hooks/useSlotPicker';
@@ -124,6 +124,15 @@ export function ReservationGrid({
     }
   };
 
+  // 새벽은 거의 비어 있으니 9시 줄부터 보여준다
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = scrollRef.current;
+    const row = box?.querySelector<HTMLElement>('tbody tr:nth-child(10)');
+    const head = box?.querySelector<HTMLElement>('thead');
+    if (box && row) box.scrollTop = row.offsetTop - (head?.offsetHeight ?? 0);
+  }, []);
+
   return (
     <div className={`flex flex-col min-h-0 ${fillHeight ? 'flex-1' : 'space-y-4'}`}>
       {scheduleMessage && (
@@ -139,19 +148,16 @@ export function ReservationGrid({
         )}
         {canInteract && (
           <span className="text-ink-faint basis-full">
-            누르거나 끌어서 선택 · 요일을 누르면 하루 전체{canCancel ? ' · 내 예약 칸은 눌러서 취소' : ''}
+            끌어서 여러 칸을 골라요. 새벽 0~3시는 함께 골라져요{canCancel ? '. 내 예약은 눌러서 취소해요' : ''}
           </span>
-        )}
-        {canInteract && (
-          <span className="text-ink-faint basis-full">새벽 0~3시는 4시간이 함께 선택돼요</span>
         )}
         {mode === 'view' && (
           <span className="text-ink-faint">조회 전용</span>
         )}
       </div>
 
-      <div className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
-        <table className={`schedule-grid-table text-center text-2xs sm:text-xs ${canInteract ? 'select-none' : ''}`}>
+      <div ref={scrollRef} className={fillHeight ? 'schedule-grid-scroll--fill' : 'schedule-grid-scroll'}>
+        <table className={`schedule-grid-table ${fillHeight ? 'schedule-grid-table--fit' : ''} text-center text-2xs sm:text-xs ${canInteract ? 'select-none' : ''}`}>
           <thead>
             <tr>
               <th className="schedule-grid-th-corner p-2 w-11 font-medium text-ink-faint">시</th>
@@ -246,7 +252,7 @@ export function ReservationGrid({
             usedCount={allowedHours != null ? myCount : undefined}
             limit={allowedHours}
             submitting={submitting}
-            idleLabel="시간을 선택하세요"
+            idleLabel="시간을 골라주세요"
             onClear={picker.clear}
             onSubmit={handleSubmit}
           />

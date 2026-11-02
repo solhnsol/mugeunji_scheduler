@@ -116,8 +116,15 @@ export function WeeklyBookingSheet({
       setAnchor(h);
     }
   };
+  // 매주 빔 / 절반 넘게 빔(기본색) / 몇 주만 빔 / 꽉 참: 조금만 차도 노랑이 되지 않게
   const cellTone = (n: number) =>
-    n === dates.length && n > 0 ? 'bg-sage-muted text-sage' : n > 0 ? 'bg-amber-100 text-amber-800' : 'bg-cream-dark text-ink-faint line-through';
+    n === dates.length && n > 0
+      ? 'bg-sage-muted text-sage'
+      : n * 2 > dates.length
+        ? 'bg-surface text-ink border border-line'
+        : n > 0
+          ? 'bg-amber-100 text-amber-800'
+          : 'bg-cream-dark text-ink-faint line-through';
 
   return (
     <ModalOverlay onClose={onClose} labelledBy="weekly-title">
@@ -187,18 +194,19 @@ export function WeeklyBookingSheet({
               })}
             </div>
             <div className="flex items-center gap-3 text-2xs text-ink-muted">
-              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage-muted" />매주 비어 있어요</span>
-              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-amber-100" />일부만 비어 있어요</span>
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage-muted" />매주 비어요</span>
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-surface border border-line" />절반 넘게</span>
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-amber-100" />몇 주만</span>
               <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm ring-2 ring-sage" />고른 시간</span>
             </div>
           </div>
         </div>
 
         <div className="shrink-0 px-5 pb-2 flex items-baseline justify-between gap-3 border-t border-line/60 pt-4">
-          <h4 className="text-sm font-semibold text-ink">
+          <h4 className="text-sm font-semibold text-ink whitespace-nowrap">
             {formatDateKo(config.bookable_until).replace(/ \(.\)$/, '')}까지 {ready ? `${plan.length}번 있어요` : '예약할 수 있어요'}
           </h4>
-          {!config.next_month_open && <span className="text-2xs text-ink-faint shrink-0">다음 달은 예약이 열리면 골라요</span>}
+          {!config.next_month_open && <span className="text-2xs text-ink-faint min-w-0 truncate">다음 달은 열리면 골라요</span>}
         </div>
 
         <ul className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5">
@@ -250,7 +258,7 @@ export function WeeklyBookingSheet({
             <span className="text-sm text-ink-muted tabular-nums">
               {slots.length ? `${count}번 · ${slots.length}시간` : '아직 고르지 않았어요'}
             </span>
-            <span className="text-lg font-bold text-ink tabular-nums">토큰 {total}개</span>
+            <span className={`text-lg font-bold tabular-nums ${total ? 'text-ink' : 'text-ink-faint'}`}>토큰 {total}개</span>
           </div>
           <p
             className={`text-xs tabular-nums truncate h-4 text-right ${blockReason || error ? 'text-danger-ink' : 'text-ink-muted'}`}

@@ -36,7 +36,7 @@ export function SelectionBar({
               선택 <b className="text-ink tabular-nums">{selectedCount}시간</b>
             </>
           ) : (
-            '원하는 칸을 눌러 선택하세요'
+            '칸을 눌러 골라주세요'
           )}
           {hasLimit && (
             <span className={`ml-2 tabular-nums ${over ? 'text-danger-ink font-medium' : 'text-ink-faint'}`}>

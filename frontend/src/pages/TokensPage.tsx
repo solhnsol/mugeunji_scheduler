@@ -43,6 +43,9 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
 
   const hasInstantPacks = !!packs?.some((p) => p.auto_confirm);
   const hasPaidPacks = !!packs?.some((p) => !p.auto_confirm);
+  const pending = mine?.purchases.filter((p) => p.status === 'pending') ?? [];
+  const history = mine?.purchases.filter((p) => p.status !== 'pending') ?? [];
+  const expiring = mine?.lots.filter((lot) => lot.expires_at) ?? [];
 
   const requestPack = async (pack: TokenPack) => {
     if (busy) return;
@@ -131,105 +134,112 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
           <div className="rounded-3xl bg-gradient-to-br from-sage via-[#345045] to-sage-light text-white p-6 sm:p-8 shadow-[0_10px_40px_rgba(58,82,72,0.22)]">
             <p className="text-sm font-medium text-white/60">보유 토큰</p>
             <p className="text-6xl sm:text-7xl font-bold tabular-nums mt-2 leading-none">{formatTokens(mine.balance)}</p>
-            <p className="text-sm text-white/70 mt-4 leading-relaxed">
-              토큰으로 원하는 날짜와 시간에 예약해요.{' '}
-              {hasPaidPacks ? '충전은 언제든 요청할 수 있어요.' : hasInstantPacks ? '아래에서 토큰을 바로 받을 수 있어요.' : ''}
-            </p>
-            {mine.lots.some((lot) => lot.expires_at) && (
-              <ul className="mt-3 space-y-0.5 text-xs text-white/75 tabular-nums">
-                {mine.lots
-                  .filter((lot) => lot.expires_at)
-                  .slice(0, 4)
-                  .map((lot, i) => (
+            {mine.balance === 0 && (
+              <p className="text-sm text-white/70 mt-4">
+                {hasPaidPacks ? '충전하면 원하는 날짜와 시간에 예약할 수 있어요' : hasInstantPacks ? '아래에서 토큰을 바로 받을 수 있어요' : ''}
+              </p>
+            )}
+            {expiring.length > 0 && (
+              <ul className="mt-4 space-y-0.5 text-sm text-white/75 tabular-nums">
+                {expiring.length === 1 && expiring[0].tokens === mine.balance ? (
+                  <li>{formatExpiry(expiring[0].expires_at)} 쓸 수 있어요</li>
+                ) : (
+                  expiring.slice(0, 4).map((lot, i) => (
                     <li key={i}>
-                      {formatTokens(lot.tokens)}토큰 · {formatExpiry(lot.expires_at)} 쓰지 않으면 사라져요
+                      {formatTokens(lot.tokens)}개는 {formatExpiry(lot.expires_at)}
                     </li>
-                  ))}
+                  ))
+                )}
               </ul>
             )}
           </div>
 
+          {pending.length > 0 && (
+            <section className="card p-4 border-amber-200 space-y-3">
+              <ul className="space-y-2">
+                {pending.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink">
+                        {formatTokens(p.tokens)}토큰 {formatPrice(p.price_won)}
+                      </p>
+                      <p className="text-xs text-amber-700">입금 안내를 기다리고 있어요</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs text-danger-ink min-h-[44px] px-2 shrink-0 disabled:opacity-40"
+                      disabled={busy}
+                      onClick={() => cancelRequest(p)}
+                    >
+                      요청 취소
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {paymentGuide && (
+                <p className="text-xs text-ink-muted leading-relaxed whitespace-pre-line border-t border-line/60 pt-3">{paymentGuide}</p>
+              )}
+            </section>
+          )}
+
           <section>
             <h2 className="text-lg font-bold text-ink">토큰 충전</h2>
-            {hasInstantPacks && (
-              <p className="text-sm text-ink-muted mt-1 leading-relaxed">
-                <span className="font-medium text-ink">바로 받기</span> 상품은 누르면 토큰이 바로 들어와요. 입금이나 관리자 확인은
-                필요 없고, 필요할 때마다 다시 받을 수 있어요. 받은 토큰은 상품에 적힌 기한까지만 쓸 수 있어요.
-              </p>
-            )}
-            {hasPaidPacks && (
-              <p className="text-sm text-ink-muted mt-1 leading-relaxed">
-                {hasInstantPacks ? '유료 상품은 ' : '상품을 '}고르면 관리자가 확인한 뒤 연락처로 입금 안내를 드려요. 안내받은 금액을
-                입금하면 관리자가 확인하고 토큰을 지급해요. 충전한 토큰은 {expiryPhrase(rules)} 동안 쓰지 않으면 사라지고, 쓰는 동안은
-                계속 이어져요.
-              </p>
-            )}
+            <p className="text-sm text-ink-muted mt-1">
+              {hasPaidPacks
+                ? `고르면 입금 안내를 보내드려요. ${expiryPhrase(rules)} 동안 안 쓰면 사라져요.`
+                : hasInstantPacks
+                  ? '누르면 바로 들어와요'
+                  : ''}
+            </p>
             {packs.length === 0 ? (
-              <p className="text-sm text-ink-faint mt-4">지금 선택할 수 있는 상품이 없어요. 관리자에게 문의해주세요.</p>
+              <p className="text-sm text-ink-faint mt-4">지금 고를 수 있는 상품이 없어요. 관리자에게 문의해주세요.</p>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-3 mt-4">
-                {packs.map((pack) => (
-                  <button
-                    key={pack.id}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => requestPack(pack)}
-                    className="card p-5 text-left transition-all hover:border-sage/30 hover:shadow-sm active:scale-[0.98] disabled:opacity-50"
-                  >
-                    <p className="text-sm text-ink-muted">{pack.name}</p>
-                    <p className="text-3xl font-bold text-ink mt-1 tabular-nums">
-                      {formatTokens(pack.tokens)}
-                      <span className="text-base font-medium text-ink-muted"> 토큰</span>
-                    </p>
-                    <p className="text-lg font-semibold text-sage mt-3 tabular-nums">
-                      {pack.price_won === 0 ? '무료' : formatPrice(pack.price_won)}
-                    </p>
-                    {pack.expires_on && (
-                      <p className="text-xs text-ink-faint mt-1">{formatExpiresOn(pack.expires_on)} 사용</p>
-                    )}
-                    <p className="text-xs font-medium text-sage mt-2">{pack.auto_confirm ? '누르면 바로 받기' : '충전 요청하기'}</p>
-                  </button>
-                ))}
-              </div>
+              <ul className="card divide-y divide-line/60 mt-3">
+                {packs.map((pack) => {
+                  const sub = [pack.name !== `${formatTokens(pack.tokens)}토큰` && pack.name !== `${formatTokens(pack.tokens)} 토큰` ? pack.name : '', pack.expires_on ? `${formatExpiresOn(pack.expires_on)} 사용` : '']
+                    .filter(Boolean)
+                    .join(' · ');
+                  return (
+                    <li key={pack.id}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => requestPack(pack)}
+                        className="w-full min-h-[64px] px-4 py-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-sage-muted/30 active:bg-sage-muted/50 disabled:opacity-50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-lg font-bold text-ink tabular-nums">{formatTokens(pack.tokens)}토큰</span>
+                          {sub && <span className="block text-xs text-ink-faint truncate">{sub}</span>}
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="block text-base font-semibold text-sage tabular-nums">
+                            {pack.price_won === 0 ? '무료' : formatPrice(pack.price_won)}
+                          </span>
+                          <span className="block text-xs text-ink-muted">{pack.auto_confirm ? '바로 받기' : '충전 요청'}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </section>
 
-          {mine.purchases.length > 0 && (
+          {history.length > 0 && (
             <section>
               <h2 className="text-lg font-bold text-ink">충전 기록</h2>
-              {paymentGuide && mine.purchases.some((p) => p.status === 'pending') && (
-                <div className="card p-4 mt-3 border-sage/30 bg-sage-muted/30">
-                  <p className="text-sm font-semibold text-ink">입금 안내</p>
-                  <p className="text-sm text-ink-muted mt-1 leading-relaxed whitespace-pre-line">{paymentGuide}</p>
-                  <p className="text-xs text-ink-faint mt-2">관리자가 요청을 확인하고 연락드린 뒤 입금해주세요.</p>
-                </div>
-              )}
               <ul className="card divide-y divide-line/60 mt-3">
-                {mine.purchases.map((p) => {
+                {history.map((p) => {
                   const st = STATUS_LABEL[p.status];
                   return (
                     <li key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-ink">
-                          {p.pack_name} · {formatTokens(p.tokens)}토큰
-                        </p>
+                        <p className="text-sm font-medium text-ink">{formatTokens(p.tokens)}토큰</p>
                         <p className="text-xs text-ink-faint">
                           {formatPrice(p.price_won)} · {formatDateTime(p.created_at)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-xs ${st.cls}`}>{st.text}</span>
-                        {p.status === 'pending' && (
-                          <button
-                            type="button"
-                            className="text-xs text-danger-ink min-h-[32px] px-2 disabled:opacity-40"
-                            disabled={busy}
-                            onClick={() => cancelRequest(p)}
-                          >
-                            취소
-                          </button>
-                        )}
-                      </div>
+                      <span className={`text-xs shrink-0 ${st.cls}`}>{st.text}</span>
                     </li>
                   );
                 })}
