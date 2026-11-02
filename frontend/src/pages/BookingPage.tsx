@@ -336,6 +336,9 @@ export default function BookingPage({
 
   const nextOpenNote = (() => {
     if (!config || config.next_month_open || !config.next_month_open_at) return null;
+    // 늘 띄우지 않는다: 다음 달을 넘겨 봤을 때나 오픈 3일 전부터만
+    const soon = new Date(config.next_month_open_at).getTime() - Date.now() < 3 * 86_400_000;
+    if (!soon && (!today || month === monthOf(today))) return null;
     const p = kstParts(config.next_month_open_at);
     if (!p) return null;
     return `다음 달 예약은 ${p.month}월 ${p.day}일(${WEEKDAYS_KO[p.weekday]}) ${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}에 열려요.`;
@@ -422,11 +425,6 @@ export default function BookingPage({
           {view === 'month' && config.is_admin && (
             <p className="shrink-0 text-2xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 leading-snug">
               관리자 미리보기 · 토큰이 차감되지 않고 아직 열리지 않은 날짜도 볼 수 있어요.
-            </p>
-          )}
-          {view === 'month' && config.mode === 'beta' && (
-            <p className="shrink-0 text-2xs text-sage bg-sage-muted/40 border border-sage/20 rounded-xl px-3 py-1.5 leading-snug truncate">
-              토큰 예약 베타 · 줄무늬는 월 신청 시간이라 여기서 바꿀 수 없어요.
             </p>
           )}
           {!connected && (
@@ -594,7 +592,7 @@ export default function BookingPage({
                     취소할 예약 <b className="text-ink tabular-nums">{cancelSel.size}시간</b>
                   </>
                 ) : (
-                  <span className="text-ink-faint">선택한 시간이 없어요</span>
+                  <span className="text-ink-faint">시작과 끝 시간을 눌러주세요</span>
                 )}
               </span>
               <button
@@ -641,9 +639,7 @@ export default function BookingPage({
                     환불 예상 토큰 <b className="text-ink">{refundPreview.refund}</b>
                   </>
                 )
-              ) : (
-                <>시작 시간과 끝 시간을 눌러 골라요</>
-              )}
+              ) : null}
             </p>
               <button type="button" className="text-xs text-ink-muted underline underline-offset-2 shrink-0" onClick={showRefundPolicy}>
                 환불 정책
@@ -660,7 +656,7 @@ export default function BookingPage({
               </button>
             ) : (
               <button type="button" className="btn-primary" disabled={busy || barMode === 'idle' || !!blockReason} onClick={book}>
-                {busy ? '예약 중…' : barMode === 'book' ? `${selected.size}시간 예약하기` : '예약하기'}
+                {busy ? '예약 중…' : barMode === 'book' ? `${selected.size}시간 예약하기` : '시간을 골라주세요'}
               </button>
             )}
           </div>
