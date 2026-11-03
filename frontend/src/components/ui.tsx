@@ -234,12 +234,12 @@ export function AppShell({
 
 export function Toast({ message, type }: { message: string; type: 'success' | 'error' | '' }) {
   if (!message) return null;
-  // 하단 고정 예약 바·입력창을 가리지 않도록 헤더 아래(상단)에 띄운다
+  // 헤더의 제목 줄 자리에 띄운다: 본문·하단 예약 바를 가리지 않고, 레이아웃도 밀리지 않는다
   return (
     <div
       className={`toast-in fixed left-1/2 -translate-x-1/2 z-[80] max-w-sm w-[calc(100%-2rem)] pointer-events-none
-        top-[calc(env(safe-area-inset-top)+4rem)]
-        rounded-2xl px-4 py-3 text-sm font-medium shadow-lg backdrop-blur-sm ${
+        top-[calc(env(safe-area-inset-top)+1.125rem)]
+        rounded-2xl px-4 py-2 text-sm font-medium shadow-lg backdrop-blur-sm ${
         type === 'error'
           ? 'bg-danger text-white dark:bg-danger-soft dark:text-danger-ink dark:border dark:border-danger-line'
           : 'bg-ink text-white dark:bg-sage-muted dark:text-ink dark:border dark:border-sage/40'
