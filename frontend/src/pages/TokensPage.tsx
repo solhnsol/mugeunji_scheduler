@@ -45,7 +45,11 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
   const hasPaidPacks = !!packs?.some((p) => !p.auto_confirm);
   const pending = mine?.purchases.filter((p) => p.status === 'pending') ?? [];
   const history = mine?.purchases.filter((p) => p.status !== 'pending') ?? [];
-  const expiring = mine?.lots.filter((lot) => lot.expires_at) ?? [];
+  // 일주일 안에 사라지는 토큰이 있으면 그만큼, 없으면 한 달 안에 사라지는 만큼만 알려준다
+  const soon = (days: number) =>
+    (mine?.lots ?? []).reduce((n, lot) => (lot.expires_at && Date.parse(lot.expires_at) - Date.now() <= days * 86_400_000 ? n + lot.tokens : n), 0);
+  const [weekLeft, monthLeft] = [soon(7), soon(30)];
+  const expireNotice = weekLeft > 0 ? `일주일 내에 ${formatTokens(weekLeft)}개가 만료돼요` : monthLeft > 0 ? `한 달 내에 ${formatTokens(monthLeft)}개가 만료돼요` : '';
 
   const requestPack = async (pack: TokenPack) => {
     if (busy) return;
@@ -139,19 +143,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                 {hasPaidPacks ? '충전하면 원하는 날짜와 시간에 예약할 수 있어요' : hasInstantPacks ? '아래에서 토큰을 바로 받을 수 있어요' : ''}
               </p>
             )}
-            {expiring.length > 0 && (
-              <ul className="mt-4 space-y-0.5 text-sm text-white/75 tabular-nums">
-                {expiring.length === 1 && expiring[0].tokens === mine.balance ? (
-                  <li>{formatExpiry(expiring[0].expires_at)} 쓸 수 있어요</li>
-                ) : (
-                  expiring.slice(0, 4).map((lot, i) => (
-                    <li key={i}>
-                      {formatTokens(lot.tokens)}개는 {formatExpiry(lot.expires_at)}
-                    </li>
-                  ))
-                )}
-              </ul>
-            )}
+            {expireNotice && <p className="mt-4 text-sm text-white/75">{expireNotice}</p>}
           </div>
 
           {pending.length > 0 && (
