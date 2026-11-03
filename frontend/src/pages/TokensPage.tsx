@@ -45,7 +45,8 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
   const hasPaidPacks = !!packs?.some((p) => !p.auto_confirm);
   const pending = mine?.purchases.filter((p) => p.status === 'pending') ?? [];
   const history = mine?.purchases.filter((p) => p.status !== 'pending') ?? [];
-  const expiring = mine?.lots.filter((lot) => lot.expires_at) ?? [];
+  // 같은 소멸 시각의 묶음은 한 줄로 합친다
+  const expiring = [...(mine?.lots.filter((lot) => lot.expires_at) ?? []).reduce((m, lot) => m.set(lot.expires_at, (m.get(lot.expires_at) ?? 0) + lot.tokens), new Map<string, number>())].map(([expires_at, tokens]) => ({ expires_at, tokens }));
 
   const requestPack = async (pack: TokenPack) => {
     if (busy) return;
@@ -142,9 +143,9 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
             {expiring.length > 0 && (
               <ul className="mt-4 space-y-0.5 text-sm text-white/75 tabular-nums">
                 {expiring.length === 1 && expiring[0].tokens === mine.balance ? (
-                  <li>{formatExpiry(expiring[0].expires_at)} 쓸 수 있어요</li>
+                  <li>{formatTokens(mine.balance)}개 모두 {formatExpiry(expiring[0].expires_at)}</li>
                 ) : (
-                  expiring.slice(0, 4).map((lot, i) => (
+                  expiring.map((lot, i) => (
                     <li key={i}>
                       {formatTokens(lot.tokens)}개는 {formatExpiry(lot.expires_at)}
                     </li>
