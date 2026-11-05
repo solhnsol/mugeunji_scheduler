@@ -212,7 +212,6 @@ export function WeeklyBookingSheet({
           <h4 className="text-sm font-semibold text-ink whitespace-nowrap">
             {formatDateKo(config.bookable_until).replace(/ \(.\)$/, '')}까지 {ready ? `${plan.length}번 있어요` : '예약할 수 있어요'}
           </h4>
-          {!config.next_month_open && <span className="text-2xs text-ink-faint min-w-0 truncate">다음 달은 열리면 골라요</span>}
         </div>
 
         <ul className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5">
