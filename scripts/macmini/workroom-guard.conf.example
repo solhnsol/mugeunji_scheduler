@@ -1,0 +1,4 @@
+# /usr/local/etc/workroom-guard.conf 로 복사 (sudo chmod 600, root 소유)
+SERVER_URL=https://예약사이트주소
+DEVICE_API_KEY=서버_.env의_DEVICE_API_KEY와_같은_값
+GUEST_USER=일반계정의_짧은이름

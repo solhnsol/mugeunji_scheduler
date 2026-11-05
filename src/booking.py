@@ -653,3 +653,46 @@ class BookingManager:
             }
             for r in rows
         ]
+
+    # ---------- 작업실 기기(맥미니) ----------
+    async def occupied_blocks(self, now: datetime, hours: int = 48) -> List[Tuple[datetime, datetime]]:
+        """지금 시각이 든 시간부터 hours시간 동안 누가 쓰는 구간들. 같은 사람이 이어 쓰면 한 구간으로 합친다.
+
+        모드별로 실제 점유를 따른다: legacy는 요일·시간 패턴(reservations), token은 날짜 예약(bookings),
+        beta는 둘 다(월 신청 패턴은 대상 달에만).
+        """
+        settings = await self._settings()
+        mode = settings.get(SETTING_MODE) or MODE_LEGACY
+        start = now.astimezone(KST).replace(minute=0, second=0, microsecond=0)
+        hour_starts = [start + timedelta(hours=i) for i in range(hours)]
+
+        owners: Dict[datetime, str] = {}
+        if mode == MODE_LEGACY:
+            async with self.conn.execute("SELECT username, reservation_day, time_index FROM reservations") as cursor:
+                weekly = {(r["reservation_day"], r["time_index"]): r["username"] for r in await cursor.fetchall()}
+            for t in hour_starts:
+                owner = weekly.get((WEEKDAY_NAMES[t.weekday()], t.hour))
+                if owner:
+                    owners[t] = owner
+        else:
+            async with self.conn.execute(
+                "SELECT username, booking_date, hour FROM bookings WHERE status = 'active' AND booking_date BETWEEN ? AND ?",
+                (hour_starts[0].date().isoformat(), hour_starts[-1].date().isoformat()),
+            ) as cursor:
+                booked = {(r["booking_date"], r["hour"]): r["username"] for r in await cursor.fetchall()}
+            legacy = await self._legacy_map(settings)
+            for t in hour_starts:
+                owner = booked.get((t.date().isoformat(), t.hour)) or self._legacy_owner(legacy, t.date(), t.hour)
+                if owner:
+                    owners[t] = owner
+
+        blocks: List[List] = []  # [시작, 끝, 아이디]
+        for t in hour_starts:
+            owner = owners.get(t)
+            if not owner:
+                continue
+            if blocks and blocks[-1][1] == t and blocks[-1][2] == owner:
+                blocks[-1][1] = t + timedelta(hours=1)
+            else:
+                blocks.append([t, t + timedelta(hours=1), owner])
+        return [(s, e) for s, e, _ in blocks]

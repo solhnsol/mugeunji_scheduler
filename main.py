@@ -22,7 +22,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
@@ -2220,3 +2220,16 @@ async def agent_delete_notice(
     except NoticeError as e:
         raise _notice_error(e)
     return {"status": "success", "message": "공지를 삭제했어요."}
+
+
+# 작업실 기기(맥미니) 전용: 앞으로 48시간의 사용 구간. 한 줄에 "시작 끝"(유닉스 초). 이용자 정보는 보내지 않는다.
+# 인증: Authorization: Bearer <DEVICE_API_KEY>. 키를 설정하지 않으면 꺼져 있다.
+@app.get("/api/device/schedule", response_class=PlainTextResponse)
+async def device_schedule(request: Request, conn: aiosqlite.Connection = Depends(get_db_conn)):
+    expected = os.getenv("DEVICE_API_KEY", "")
+    header = request.headers.get("authorization", "")
+    key = header[7:].strip() if header.lower().startswith("bearer ") else ""
+    if not expected or not secrets.compare_digest(key.encode(), expected.encode()):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 기기 키예요.")
+    blocks = await BookingManager(conn).occupied_blocks(now_kst())
+    return "".join(f"{int(s.timestamp())} {int(e.timestamp())}\n" for s, e in blocks)
