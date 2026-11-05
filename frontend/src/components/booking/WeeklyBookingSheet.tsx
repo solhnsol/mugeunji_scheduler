@@ -9,6 +9,13 @@ import { useConfirm } from '../ConfirmDialog';
 import { ModalOverlay } from '../Modal';
 
 const MAX_SLOTS = 168; // 서버 MAX_SLOTS_PER_REQUEST와 같다
+// 칸 색과 범례가 같은 클래스를 쓴다 (다크 모드에서도 어긋나지 않게)
+const TONES = [
+  { cls: 'bg-sage-muted text-sage', label: '매주 비어 있어요' },
+  { cls: 'bg-cream-dark text-ink', label: '대부분 비어 있어요' },
+  { cls: 'bg-amber-50 text-amber-800', label: '자리가 얼마 없어요' },
+  { cls: 'bg-transparent ring-1 ring-inset ring-line text-ink-faint line-through', label: '다 찼어요' },
+];
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // 월~일
 
 /**
@@ -116,15 +123,8 @@ export function WeeklyBookingSheet({
       setAnchor(h);
     }
   };
-  // 몇 주만 차도 노랑이면 거의 다 노랑이 된다: 절반 넘게 찬 시간만 노랑으로
-  const cellTone = (n: number) =>
-    n === dates.length && n > 0
-      ? 'bg-sage-muted text-sage'
-      : n * 2 >= dates.length
-        ? 'bg-cream-dark/40 text-ink'
-        : n > 0
-          ? 'bg-amber-100 text-amber-800'
-          : 'bg-cream-dark text-ink-faint line-through';
+  const toneOf = (n: number) =>
+    n === dates.length && n > 0 ? 0 : n * 2 >= dates.length ? 1 : n > 0 ? 2 : 3;
 
   return (
     <ModalOverlay onClose={onClose} labelledBy="weekly-title">
@@ -172,10 +172,13 @@ export function WeeklyBookingSheet({
                 )}
               </span>
             </div>
-            <div className="grid grid-cols-12 gap-1" role="group" aria-label="시간 고르기">
+            <div className="grid grid-cols-12 gap-y-1" role="group" aria-label="시간 고르기">
               {Array.from({ length: 24 }, (_, h) => {
                 const n = freeByHour?.[h] ?? 0;
                 const picked = h >= start && h < end;
+                // 이어서 고른 칸은 한 덩어리로: 같은 줄에서 붙은 쪽은 간격과 둥근 모서리를 없앤다
+                const joinPrev = picked && h > start && h % 12 !== 0;
+                const joinNext = picked && h + 1 < end && h % 12 !== 11;
                 return (
                   <button
                     key={h}
@@ -184,8 +187,8 @@ export function WeeklyBookingSheet({
                     aria-pressed={picked}
                     aria-label={`${h}시, ${dates.length}번 중 ${n}번 비어 있어요`}
                     className={`h-10 rounded-lg text-xs font-semibold tabular-nums transition disabled:opacity-30 ${
-                      freeByHour ? cellTone(n) : 'bg-cream-dark/40 text-ink-faint'
-                    } ${picked ? 'ring-2 ring-sage ring-offset-2 ring-offset-surface' : ''}`}
+                      picked ? 'bg-sage text-white' : freeByHour ? TONES[toneOf(n)].cls : 'bg-cream-dark text-ink-faint'
+                    } ${joinPrev ? 'ml-0 rounded-l-none' : 'ml-0.5'} ${joinNext ? 'mr-0 rounded-r-none' : 'mr-0.5'}`}
                     onClick={() => pickHour(h)}
                   >
                     {h}
@@ -193,10 +196,14 @@ export function WeeklyBookingSheet({
                 );
               })}
             </div>
-            <div className="flex items-center gap-3 text-2xs text-ink-muted">
-              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage-muted" />매주 비어 있어요</span>
-              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-amber-100" />절반 넘게 찼어요</span>
-              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm ring-2 ring-sage" />고른 시간</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-ink-muted">
+              {TONES.map((t) => (
+                <span key={t.label} className="inline-flex items-center gap-1">
+                  <i className={`w-2.5 h-2.5 rounded-sm ring-1 ring-line ${t.cls.split(' ')[0]}`} />
+                  {t.label}
+                </span>
+              ))}
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage" />고른 시간</span>
             </div>
           </div>
         </div>
