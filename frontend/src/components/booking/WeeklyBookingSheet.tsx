@@ -12,7 +12,7 @@ const MAX_SLOTS = 168; // 서버 MAX_SLOTS_PER_REQUEST와 같다
 // 칸 색과 범례가 같은 클래스를 쓴다 (다크 모드에서도 어긋나지 않게)
 const TONES = [
   { cls: 'bg-sage-muted text-sage', label: '매주 비어 있어요' },
-  { cls: 'bg-cream-dark text-ink', label: '대부분 비어 있어요' },
+  { cls: 'bg-sage-muted/40 text-ink', label: '대부분 비어 있어요' },
   { cls: 'bg-amber-50 text-amber-800', label: '자리가 얼마 없어요' },
   { cls: 'bg-transparent ring-1 ring-inset ring-line text-ink-faint line-through', label: '다 찼어요' },
 ];
@@ -199,11 +199,11 @@ export function WeeklyBookingSheet({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-ink-muted">
               {TONES.map((t) => (
                 <span key={t.label} className="inline-flex items-center gap-1">
-                  <i className={`w-2.5 h-2.5 rounded-sm ring-1 ring-line ${t.cls.split(' ')[0]}`} />
+                  <i className={`w-5 h-4 rounded text-[10px] leading-4 text-center not-italic font-semibold ${t.cls}`}>1</i>
                   {t.label}
                 </span>
               ))}
-              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-sage" />고른 시간</span>
+              <span className="inline-flex items-center gap-1"><i className="w-5 h-4 rounded text-[10px] leading-4 text-center not-italic font-semibold bg-sage text-white">1</i>고른 시간</span>
             </div>
           </div>
         </div>
