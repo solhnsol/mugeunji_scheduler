@@ -431,7 +431,7 @@ export function TimeGrid({
                     style={{ top: r.start * H + 1, height: (r.end - r.start) * H - 2 }}
                   >
                     <div className={`${single ? 'px-1.5 py-1.5' : 'px-1 py-0.5'} leading-tight ${single && r.end - r.start === 1 ? ONE_LINE : ''}`}>
-                      <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-2xs'}`}>{single ? `선택 ${r.end - r.start}시간` : '✓'}</p>
+                      <p className={`font-semibold ${single ? 'truncate text-sm' : colorOnlyOnPhone ? 'break-all text-[10px] leading-[12px] sm:truncate sm:text-2xs sm:leading-tight' : 'truncate text-2xs'}`}>{single ? `선택 ${r.end - r.start}시간` : '✓'}</p>
                       {(single || r.end - r.start >= 2) && (
                         <p className={`opacity-90 tabular-nums ${single ? 'text-xs' : 'text-2xs'}`}>
                           {String(r.start).padStart(2, '0')}:00~{String(r.end).padStart(2, '0')}:00
@@ -492,9 +492,9 @@ export function TimeGrid({
                       {!single && mine && colorOnlyOnPhone && (
                         <p className="sm:hidden px-1 py-0.5 text-2xs font-semibold tabular-nums">{b.start}시</p>
                       )}
-                      {/* 폰 주 보기는 열이 좁아 이름이 한 글자로 잘린다: 글자를 빼고 색만 보여준다 */}
-                      <div className={`${single ? 'px-1.5 py-1.5' : `px-1 py-0.5 ${colorOnlyOnPhone ? 'hidden sm:block' : ''}`} leading-tight ${single && tall === 1 ? ONE_LINE : ''}`}>
-                        <p className={`font-semibold truncate ${single ? 'text-sm' : 'text-2xs'}`}>
+                      {/* 폰 주 보기는 열이 좁아 내 예약은 색과 시작 시각만, 남의 예약은 작은 글씨로 줄바꿈해 이름을 보여준다 */}
+                      <div className={`${single ? 'px-1.5 py-1.5' : `px-0.5 sm:px-1 py-0.5 ${colorOnlyOnPhone && mine ? 'hidden sm:block' : ''}`} leading-tight ${single && tall === 1 ? ONE_LINE : ''}`}>
+                        <p className={`font-semibold ${single ? 'truncate text-sm' : colorOnlyOnPhone ? 'break-all text-[10px] leading-[12px] sm:truncate sm:text-2xs sm:leading-tight' : 'truncate text-2xs'}`}>
                           {b.legacy ? (single ? `월 신청 · ${b.name}` : b.name || '월 신청') : mine ? (single ? '내 예약' : b.name || '내 예약') : b.name || '예약됨'}
                         </p>
                         {(single || tall >= 2) && (
