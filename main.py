@@ -2249,4 +2249,8 @@ async def admin_list_deposit_notifications(
     conn: aiosqlite.Connection = Depends(get_db_conn),
 ):
     async with conn.execute("SELECT * FROM deposit_notifications ORDER BY id DESC LIMIT 50") as cur:
-        return [dict(r) for r in await cur.fetchall()]
+        rows = [dict(r) for r in await cur.fetchall()]
+    # 브라우저가 글자 인코딩을 잘못 추측해 한글이 깨져 보이는지, 실제 저장이 깨졌는지 구분하는 용도 (ASCII라 화면 영향 없음)
+    for r in rows:
+        r["raw_hex"] = r["raw_body"].encode("utf-8").hex()
+    return rows

@@ -15,3 +15,12 @@ def test_deposit_notify(client, admin, monkeypatch):
     assert r.status_code == 200, r.text
     rows = client.get("/admin/deposit-notifications", headers=admin).json()
     assert rows[0]["raw_body"] == body and rows[0]["id"] == r.json()["id"]
+
+
+def test_deposit_notify_korean_roundtrip(client, admin, monkeypatch):
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    body = '{"title":"20원 입금","body":"테스트"}'
+    r = client.post("/api/deposit-notify", content=body.encode("utf-8"), headers={"X-Deposit-Token": "s3cret", "Content-Type": "application/json"})
+    assert r.status_code == 200
+    row = client.get("/admin/deposit-notifications", headers=admin).json()[0]
+    assert row["raw_body"] == body and row["raw_hex"] == body.encode("utf-8").hex()
