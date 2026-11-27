@@ -24,6 +24,7 @@ MODE_TOKEN = "token"
 MODE_BETA = "beta"
 MODES = (MODE_LEGACY, MODE_BETA, MODE_TOKEN)
 SETTING_BETA_MONTH = "beta_month"
+SETTING_SWITCH_AT = "token_switch_at"  # 이 시각이 지나면 정식 토큰 예약으로 자동 전환 (비우면 없음)
 WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # 새벽 시간대 (회원별 허용 체크 대상)
@@ -33,15 +34,21 @@ MAX_SLOTS_PER_REQUEST = 168
 
 # 기본 가격표: [시작 시, 끝 시(미포함), 1시간당 토큰]
 DEFAULT_PRICE_BANDS = [
-    {"start": 0, "end": 4, "cost": 1},
-    {"start": 4, "end": 8, "cost": 0},
-    {"start": 8, "end": 12, "cost": 1},
+    {"start": 0, "end": 2, "cost": 2},
+    {"start": 2, "end": 4, "cost": 1},
+    {"start": 4, "end": 7, "cost": 0},
+    {"start": 7, "end": 12, "cost": 1},
     {"start": 12, "end": 16, "cost": 2},
     {"start": 16, "end": 24, "cost": 4},
 ]
 
-# 기본 환불 정책: 시작 전까지 언제든 100% (이후 단계를 추가해 강화할 수 있다)
-DEFAULT_REFUND_TIERS = [{"hours_before": 0, "percent": 100}]
+# 기본 환불 정책: 48시간 전 100%, 24시간 전 80%, 3시간 전 50%, 그 뒤 0%
+DEFAULT_REFUND_TIERS = [
+    {"hours_before": 48, "percent": 100},
+    {"hours_before": 24, "percent": 80},
+    {"hours_before": 3, "percent": 50},
+    {"hours_before": 0, "percent": 0},
+]
 
 SETTING_PRICE_BANDS = "token_price_bands"
 SETTING_REFUND_TIERS = "token_refund_tiers"
@@ -168,6 +175,65 @@ class BookingManager:
             await self.conn.execute("DELETE FROM reservations WHERE reservation_type = 'free'")
             await self.conn.commit()
         return ok, ("예약 방식을 저장했어요." if ok else message)
+
+    async def set_switch_at(self, raw: str) -> Tuple[bool, str]:
+        """정식 전환 예약 시각 저장. 빈 값이면 예약을 없앤다."""
+        raw = (raw or "").strip()
+        if raw:
+            try:
+                at = datetime.fromisoformat(raw)
+            except ValueError:
+                return False, "전환 시각을 읽을 수 없어요."
+            raw = (at if at.tzinfo else at.replace(tzinfo=KST)).astimezone(KST).isoformat()
+        ok, message = await SettingsManager(self.conn).upsert_settings({SETTING_SWITCH_AT: raw})
+        return ok, ("전환 예약을 저장했어요." if ok else message)
+
+    async def apply_scheduled_switch(self) -> Optional[Dict]:
+        """전환 시각이 지났으면 정식 토큰 예약으로 바꾼다. 바꿨다면 정리 결과를, 아니면 None.
+
+        한 번만 실행된다 (끝나면 예약 시각을 비운다). 호출하는 쪽이 쓰기 락을 잡는다.
+        """
+        settings = await self._settings()
+        raw = settings.get(SETTING_SWITCH_AT) or ""
+        if not raw:
+            return None
+        try:
+            at = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+        now = now_kst()
+        if now < at.astimezone(KST):
+            return None
+
+        # 월 신청이 점유한 남은 시간은 비용 0 토큰 예약으로 옮겨 이중 예약·소실을 막는다
+        kept = 0
+        if (settings.get(SETTING_MODE) or MODE_LEGACY) == MODE_BETA:
+            month, mapping = await self._legacy_map(settings)
+            if month:
+                first = date.fromisoformat(f"{month}-01")
+                last = date(first.year, first.month, calendar.monthrange(first.year, first.month)[1])
+                day = max(first, now.date())
+                while day <= last:
+                    for hour in range(24):
+                        owner = mapping.get((day.weekday(), hour))
+                        if not owner or slot_start(day, hour) <= now:
+                            continue
+                        cursor = await self.conn.execute(
+                            """INSERT OR IGNORE INTO bookings (username, booking_date, hour, cost, status, created_at, created_by)
+                               VALUES (?, ?, ?, 0, 'active', ?, 'monthly-switch')""",
+                            (owner, day.isoformat(), hour, now.isoformat()),
+                        )
+                        kept += cursor.rowcount
+                    day += timedelta(days=1)
+
+        # 베타용 무료 충전 상품은 닫는다 (이후 무료 지급은 관리자가 직접)
+        cursor = await self.conn.execute("UPDATE token_packs SET active = 0 WHERE active = 1 AND price_won = 0")
+        closed = cursor.rowcount
+        await self.conn.commit()
+
+        await self.set_mode(MODE_TOKEN)
+        await SettingsManager(self.conn).upsert_settings({SETTING_SWITCH_AT: ""})
+        return {"kept_monthly_slots": kept, "closed_free_packs": closed}
 
     @staticmethod
     def _parse_month(raw: str) -> str:

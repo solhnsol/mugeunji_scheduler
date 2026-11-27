@@ -1,3 +1,4 @@
+import logging
 import time
 import asyncio
 import os
@@ -83,11 +84,31 @@ class ConnectionManager:
 connection_manager = ConnectionManager()
 
 
+async def _run_scheduled_switch(conn: aiosqlite.Connection) -> None:
+    async with writing():
+        result = await BookingManager(conn).apply_scheduled_switch()
+    if result:
+        logging.getLogger(__name__).info("정식 토큰 예약으로 자동 전환: %s", result)
+        await broadcast_reservation_updates(conn)
+
+
+async def _switch_watcher(conn: aiosqlite.Connection) -> None:
+    """전환 예약 시각이 지났는지 30초마다 확인한다 (재시작해도 시작할 때 한 번 더 확인)."""
+    while True:
+        try:
+            await _run_scheduled_switch(conn)
+        except Exception:
+            logging.getLogger(__name__).exception("자동 전환 확인 실패")
+        await asyncio.sleep(30)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     conn = await init_db()
     app.state.db_conn = conn
+    watcher = asyncio.create_task(_switch_watcher(conn))
     yield
+    watcher.cancel()
     await conn.close()
 
 
@@ -334,6 +355,7 @@ class RefundTierModel(BaseModel):
 class BookingSettingsRequest(BaseModel):
     reservation_mode: Optional[Literal["legacy", "beta", "token"]] = None
     beta_month: Optional[str] = None
+    token_switch_at: Optional[str] = None
     price_bands: Optional[List[PriceBandModel]] = None
     refund_tiers: Optional[List[RefundTierModel]] = None
 
@@ -1538,6 +1560,7 @@ async def get_booking_settings(
             lambda at: at.isoformat() if at else None
         )(BookingManager.month_open_at(await SettingsManager(conn).get_settings(), config["beta_month"])),
         "next_month_open_at": config["next_month_open_at"],
+        "token_switch_at": (await SettingsManager(conn).get_settings()).get("token_switch_at") or "",
         "price_bands": config["price_bands"],
         "refund_tiers": config["refund_tiers"],
     }
@@ -1559,6 +1582,8 @@ async def update_booking_settings(
         results.append(await manager.set_mode(data.reservation_mode, data.beta_month))
     elif data.beta_month is not None:
         results.append(await manager.set_mode(await manager.get_mode(), data.beta_month))
+    if data.token_switch_at is not None:
+        results.append(await manager.set_switch_at(data.token_switch_at))
     if not results:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="변경할 항목이 없어요.")
     for ok, message in results:

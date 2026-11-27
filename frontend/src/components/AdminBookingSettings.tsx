@@ -77,6 +77,7 @@ export function AdminBookingSettings({
 }) {
   const [mode, setMode] = useState<ReservationMode | null>(null);
   const [betaMonth, setBetaMonth] = useState('');
+  const [switchAt, setSwitchAt] = useState('');
   const [bands, setBands] = useState<BandDraft[]>([]);
   const [tiers, setTiers] = useState<TierDraft[]>([]);
   const [busy, setBusy] = useState(false);
@@ -86,6 +87,7 @@ export function AdminBookingSettings({
     const s = await api.adminGetBookingSettings(token);
     setMode(s.reservation_mode);
     setBetaMonth(s.beta_month);
+    setSwitchAt(s.token_switch_at ? s.token_switch_at.slice(0, 16) : '');
     setBands(sortBands(s.price_bands.map((b) => ({ start: String(b.start), end: String(b.end), cost: String(b.cost) }))));
     setTiers(sortTiers(s.refund_tiers.map((t) => ({ hours_before: String(t.hours_before), percent: String(t.percent) }))));
   }, [token]);
@@ -165,26 +167,42 @@ export function AdminBookingSettings({
             </button>
           ))}
         </div>
+        {mode !== 'token' && (
+          <>
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <div>
+                <label className="label" htmlFor="switch-at">정식 전환 시각 · 이때 자동으로 토큰 예약으로 바뀌어요</label>
+                <input id="switch-at" className="input !py-2 min-w-[210px]" type="datetime-local" value={switchAt} onChange={(e) => setSwitchAt(e.target.value)} />
+              </div>
+              <button type="button" className="btn-secondary !w-auto !min-h-[40px] !py-2 text-sm" disabled={busy} onClick={() => save({ token_switch_at: switchAt })}>
+                {switchAt ? '전환 예약' : '예약 없애기'}
+              </button>
+            </div>
+            <p className="text-xs text-ink-faint mt-1 leading-relaxed">
+              전환되면 월 신청이 잡아둔 남은 시간은 토큰 예약으로 옮겨 지켜지고, 무료 충전 상품은 닫혀요.
+            </p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
-          <div>
-            <label className="label" htmlFor="beta-month">베타 기간(달) · 무료 토큰 사용 기한 계산용</label>
-            <input
-              id="beta-month"
-              className="input !py-2 min-w-[170px]"
-              type="month"
-              value={betaMonth}
-              onChange={(e) => setBetaMonth(e.target.value)}
-            />
+            <div>
+              <label className="label" htmlFor="beta-month">베타 기간(달) · 무료 토큰 사용 기한 계산용</label>
+              <input
+                id="beta-month"
+                className="input !py-2 min-w-[170px]"
+                type="month"
+                value={betaMonth}
+                onChange={(e) => setBetaMonth(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn-secondary !w-auto !min-h-[40px] !py-2 text-sm"
+              disabled={busy || !betaMonth}
+              onClick={() => save({ beta_month: betaMonth })}
+            >
+              달 저장
+            </button>
           </div>
-          <button
-            type="button"
-            className="btn-secondary !w-auto !min-h-[40px] !py-2 text-sm"
-            disabled={busy || !betaMonth}
-            onClick={() => save({ beta_month: betaMonth })}
-          >
-            달 저장
-          </button>
-        </div>
+            </>
+        )}
       </div>
 
       <div>

@@ -498,6 +498,7 @@ export const api = {
       beta_month: string;
       beta_month_open_at: string | null;
       next_month_open_at: string | null;
+      token_switch_at: string;
       price_bands: import('./types').PriceBand[];
       refund_tiers: import('./types').RefundTier[];
     }>(res);
@@ -508,6 +509,7 @@ export const api = {
     body: Partial<{
       reservation_mode: import('./types').ReservationMode;
       beta_month: string;
+      token_switch_at: string;
       price_bands: import('./types').PriceBand[];
       refund_tiers: import('./types').RefundTier[];
     }>,
