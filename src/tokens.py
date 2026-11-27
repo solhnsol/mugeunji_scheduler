@@ -163,7 +163,7 @@ class TokenManager:
         if audience not in PACK_AUDIENCES:
             return "대상은 전체 또는 자유이용 회원이어야 해요."
         if min_recent_spend < 0 or min_recent_spend > 10_000_000:
-            return "구매 조건은 0원 이상 1,000만원 이하로 입력해주세요."
+            return "충전 조건은 0원 이상 1,000만원 이하로 입력해주세요."
         if tokens < 1 or tokens > MAX_PACK_TOKENS:
             return f"토큰은 1 이상 {MAX_PACK_TOKENS} 이하의 정수여야 해요."
         return None
@@ -510,7 +510,7 @@ class TokenManager:
             months = await self.spend_window_months()
             spent = await self.recent_spend(username, months)
             if spent < pack["min_recent_spend"]:
-                return False, f"최근 {months}개월 안에 {pack['min_recent_spend']:,}원 이상 충전하면 살 수 있어요. 지금까지 {spent:,}원 충전했어요."
+                return False, f"{pack['min_recent_spend']:,}원 이상 충전한 뒤에 살 수 있어요. 최근 {months}개월 동안 {spent:,}원 충전했어요."
         if not pack["auto_confirm"]:
             async with self.conn.execute(
                 "SELECT COUNT(*) FROM token_purchases WHERE username = ? AND status = 'pending'", (username,)

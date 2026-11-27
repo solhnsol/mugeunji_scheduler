@@ -257,14 +257,14 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                       onClick={() => setShowBig((v) => !v)}
                       className="w-full min-h-[48px] px-4 py-3 text-sm text-ink-muted text-center transition-colors hover:bg-sage-muted/30 active:bg-sage-muted/50"
                     >
-                      {showBig ? '접기' : qualified ? '큰 묶음 더 보기' : '더 많이 충전하기'}
+                      {showBig ? '접기' : '더 보기'}
                     </button>
                   </li>
                 )}
               </ul>
             )}
             {Number.isFinite(lockedMin) && (
-              <p className="text-xs text-ink-faint mt-2">최근 {expiryPhrase(rules)} 안에 {formatPrice(lockedMin)} 이상 충전하면 소량 충전도 할 수 있어요.</p>
+              <p className="text-xs text-ink-faint mt-2">{formatPrice(lockedMin)} 이상 충전하면 적은 양도 추가로 충전할 수 있어요.</p>
             )}
           </section>
 

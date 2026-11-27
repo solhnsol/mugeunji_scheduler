@@ -22,7 +22,7 @@ const bandIssues = (rows: BandDraft[]): string[] => {
   if (rows.length === 0) return ['구간을 한 개 이상 넣어주세요.'];
   if (rows.some((r) => r.start === '' || r.end === '' || r.cost === '')) return ['빈 칸을 채워주세요.'];
   const list = rows.map((r) => ({ s: Number(r.start), e: Number(r.end) })).sort((a, b) => a.s - b.s || a.e - b.e);
-  if (list.some((r) => r.s >= r.e || r.e > 24)) return ['시작은 끝보다 작고, 끝은 24 이하여야 해요.'];
+  if (list.some((r) => r.s >= r.e || r.e > 24)) return ['시작 시각은 끝 시각보다 빨라야 하고, 끝은 24시까지예요.'];
   const issues: string[] = [];
   let at = 0;
   for (const r of list) {
@@ -38,11 +38,11 @@ const tierIssues = (rows: TierDraft[]): string[] => {
   if (rows.length === 0) return ['단계를 한 개 이상 넣어주세요.'];
   if (rows.some((r) => r.hours_before === '' || r.percent === '')) return ['빈 칸을 채워주세요.'];
   const issues: string[] = [];
-  if (rows.some((r) => Number(r.percent) > 100)) issues.push('환불 비율은 0~100%여야 해요.');
+  if (rows.some((r) => Number(r.percent) > 100)) issues.push('환불 비율은 0~100% 사이로 입력해주세요.');
   const seen = new Set<string>();
   for (const r of rows) {
     if (seen.has(r.hours_before)) {
-      issues.push(`${r.hours_before}시간 전 단계가 두 번 들어 있어요.`);
+      issues.push(`${r.hours_before}시간 전 단계가 겹쳐요.`);
       break;
     }
     seen.add(r.hours_before);
@@ -231,7 +231,7 @@ export function AdminBookingSettings({
         </div>
         <Issues
           problems={tierProblems}
-          ok={lastTier === null ? '' : lastTier > 0 ? `시작 ${lastTier}시간 전이 지나면 취소할 수 없어요. 환불 없이 취소만 허용하려면 "0시간 전까지 0%" 단계를 넣어주세요.` : '시작 직전까지 취소할 수 있어요.'}
+          ok={lastTier === null ? '' : lastTier > 0 ? `시작 ${lastTier}시간 전부터는 취소할 수 없어요. 환불 없이 취소만 열어 두려면 "0시간 전까지 0%" 단계를 추가해주세요.` : '시작 직전까지 취소할 수 있어요.'}
         />
       </div>
       {dialog}

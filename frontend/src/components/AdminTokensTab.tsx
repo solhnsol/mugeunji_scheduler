@@ -285,7 +285,7 @@ export function AdminTokensTab({
                     {!pack.active && <span className="badge badge-closed ml-2">판매 중지</span>}
                     {pack.auto_confirm && <span className="badge ml-2">바로 지급</span>}
                     {pack.audience === 'free' && <span className="badge ml-2">자유이용 회원</span>}
-                    {pack.min_recent_spend > 0 && <span className="badge ml-2">최근 충전 {formatPrice(pack.min_recent_spend)} 이상일 때만</span>}
+                    {pack.min_recent_spend > 0 && <span className="badge ml-2">충전 {formatPrice(pack.min_recent_spend)} 이상 회원만</span>}
                   </p>
                   <p className="text-sm text-ink-muted tabular-nums">
                     {pack.price_won === 0 ? '무료' : formatPrice(pack.price_won)} → {formatTokens(pack.tokens)}토큰
@@ -502,7 +502,7 @@ function PackModal({
     }
     if (!Number.isInteger(tokenNum) || tokenNum < 1) return setError('토큰은 1 이상의 정수로 입력해주세요.');
     const minSpendNum = minSpend === '' ? 0 : Number(minSpend);
-    if (!Number.isInteger(minSpendNum) || minSpendNum < 0) return setError('구매 조건은 0 이상의 금액으로 입력해주세요.');
+    if (!Number.isInteger(minSpendNum) || minSpendNum < 0) return setError('충전 조건은 0원 이상으로 입력해주세요.');
     setBusy(true);
     try {
       await onSubmit({
@@ -538,9 +538,9 @@ function PackModal({
           </div>
         </div>
         <div>
-          <label className="label" htmlFor="pack-min-spend">구매 조건(원)</label>
+          <label className="label" htmlFor="pack-min-spend">충전 조건(원)</label>
           <input id="pack-min-spend" className="input" type="number" min={0} inputMode="numeric" value={minSpend} onChange={(e) => setMinSpend(e.target.value)} placeholder="없음" />
-          <p className="text-xs text-ink-faint mt-1.5">토큰 유효기간(기본 3개월) 안에 입금이 확인된 충전액이 이 금액 이상인 회원에게만 보여요. 한 번에 많이 충전해 토큰을 이월해 쓰는 회원도 유효기간 동안은 살 수 있어요.</p>
+          <p className="text-xs text-ink-faint mt-1.5">토큰 유효기간 동안 이 금액 이상 충전한 회원에게만 보여요. 비워 두면 모두에게 보여요.</p>
         </div>
         <ExpiryInput token={token} id="pack-expires" value={expiresOn} onChange={setExpiresOn} hint={`비워 두면 충전한 날부터 ${expiryPhrase(rules)} 뒤 사라져요. 11월 한정 무료분은 12월 예약이 열리는 시각으로 정하세요.`} />
         <label className="flex items-center gap-3 rounded-2xl border border-line p-4 cursor-pointer">
