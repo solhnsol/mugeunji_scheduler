@@ -195,6 +195,7 @@ export function AdminTokensTab({
                   </p>
                   <p className="text-xs text-ink-faint mt-0.5">
                     요청 {formatDateTime(p.created_at)}
+                    {p.deposit_name && ` · 입금자명 ${p.deposit_name}`}
                     {p.status === 'confirmed' && ` · 확인 ${formatDateTime(p.confirmed_at)} (${p.confirmed_by === 'auto' ? '자동' : p.confirmed_by})`}
                     {p.memo ? ` · ${p.memo}` : ''}
                   </p>

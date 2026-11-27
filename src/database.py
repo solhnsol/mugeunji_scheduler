@@ -227,6 +227,7 @@ async def setup_database(conn: aiosqlite.Connection):
         ("token_packs", "expires_on", "TEXT"),             # 이 날짜(KST) 끝에 소멸 (NULL이면 기본 소멸 기간)
         ("token_packs", "audience", "TEXT NOT NULL DEFAULT 'all'"),     # all | free(자유이용 회원만)
         ("token_purchases", "expires_on", "TEXT"),
+        ("token_purchases", "deposit_name", "TEXT"),       # 같은 이름의 다른 회원이 대기 중일 때 입금자명으로 쓰게 안내하는 이름
     ]:
         if not await _column_exists(conn, table=table, column=name):
             await conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {col_type}")

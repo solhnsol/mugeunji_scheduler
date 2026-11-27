@@ -162,7 +162,9 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                       <p className="text-sm font-semibold text-ink">
                         {formatTokens(p.tokens)}토큰 {formatPrice(p.price_won)}
                       </p>
-                      <p className="text-xs text-amber-700">입금을 기다리고 있어요</p>
+                      <p className="text-xs text-amber-700">
+                        {p.deposit_name ? `입금자명을 ‘${p.deposit_name}’(으)로 입금해주세요` : '입금을 기다리고 있어요'}
+                      </p>
                     </div>
                     <button
                       type="button"

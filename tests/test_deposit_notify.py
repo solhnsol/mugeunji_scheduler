@@ -69,3 +69,23 @@ def test_ambiguous_shows_notice_to_admin(client, admin, make_user, monkeypatch):
     assert _notice(client, 23456, "가족이름") == "no_match"
     # 수동 확인 때 알림 하나가 처리됨으로 표시돼, 남은 건 새로 온 알림 1건뿐
     assert client.get("/admin/deposit-notifications", headers=admin).json()[1]["result"] == f"manual:{pid}"
+
+
+def test_same_name_gets_distinct_deposit_name(client, admin, make_user, monkeypatch):
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "동명테스트", 34567, 9)
+    _, first = make_user("박동명")
+    _, second = make_user("박동명")
+    r1 = client.post("/tokens/purchases", headers=first, json={"pack_id": pack["id"]})
+    assert "'" not in r1.json()["message"]  # 먼저 요청한 회원은 이름 그대로
+    r2 = client.post("/tokens/purchases", headers=second, json={"pack_id": pack["id"]})
+    dn = client.get("/tokens/me", headers=second).json()["purchases"][0]["deposit_name"]
+    assert dn.startswith("박동명") and dn != "박동명" and dn in r2.json()["message"]
+    assert client.get("/tokens/me", headers=first).json()["purchases"][0]["deposit_name"] is None
+
+    assert _notice(client, 34567, dn).startswith("confirmed:")      # 두 번째 회원만 확인됨
+    assert client.get("/tokens/me", headers=second).json()["balance"] == 9
+    assert client.get("/tokens/me", headers=first).json()["balance"] == 0
+    assert _notice(client, 34567, "박동명").startswith("confirmed:")  # 이름 그대로 입금하면 첫 번째 회원
