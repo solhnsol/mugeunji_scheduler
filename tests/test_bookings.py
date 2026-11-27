@@ -182,6 +182,17 @@ def test_cancel_default_policy_full_refund(client, admin, make_user, token_mode,
     assert late.status_code == 400 and "시작" in late.json()["detail"]
 
 
+def test_refund_rounds_once_per_cancel(client, admin, make_user, token_mode, fixed_now):
+    username, member = make_user()
+    _give(client, admin, username, 10)
+    assert client.put("/admin/booking-settings", headers=admin, json={"refund_tiers": [{"hours_before": 24, "percent": 50}]}).status_code == 200
+    assert _book(client, member, ("2026-12-20", 8), ("2026-12-20", 9), ("2026-12-20", 10), ("2026-12-20", 11)).status_code == 200
+    ids = [b["id"] for b in client.get("/bookings/mine", headers=member).json() if b["date"] == "2026-12-20"]
+    # 1토큰 4칸을 50%로 한 번에 취소하면 칸마다 버려 0이 아니라 합계 2가 돌아온다
+    r = client.post("/bookings/cancel", headers=member, json={"ids": ids})
+    assert r.status_code == 200 and r.json()["refunded"] == 2 and _balance(client, member) == 8
+
+
 def test_refund_tiers(client, admin, make_user, token_mode, fixed_now):
     username, member = make_user()
     _give(client, admin, username, 60)
