@@ -232,6 +232,10 @@ export interface TokenPurchase {
   confirmed_at: string | null;
   confirmed_by: string | null;
   memo: string | null;
+  /** 같은 이름의 회원이 대기 중일 때 입금자명으로 써야 하는 이름 */
+  deposit_name?: string | null;
+  /** 확인 대기 요청에만: 같은 금액의 미처리 입금 알림 */
+  deposits?: { id: number; received_at: string; depositor: string | null }[];
 }
 
 export interface TokenBalance {

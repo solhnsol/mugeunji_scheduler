@@ -36,7 +36,7 @@ from src.reservation import ReservationManager
 from src.settings import SettingsManager
 from src.notices import NoticeError, NoticeManager
 from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
-from src.tokens import TokenManager, admin_pack, is_expired
+from src.tokens import TokenManager, admin_pack, auto_confirm_deposit, claim_deposit, deposits_for_purchase, is_expired, parse_deposit
 from src.write_lock import writing
 
 load_dotenv()
@@ -1265,7 +1265,11 @@ async def admin_list_token_purchases(
 ):
     if status_filter not in (None, "pending", "confirmed", "cancelled"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status_filter가 올바르지 않아요.")
-    return await TokenManager(conn).list_purchases(status_filter)
+    purchases = await TokenManager(conn).list_purchases(status_filter)
+    if status_filter == "pending":
+        for p in purchases:  # 같은 금액의 미처리 입금 알림을 함께 보여 줘 관리자가 대조하게 한다
+            p["deposits"] = await deposits_for_purchase(conn, p["price_won"], p["created_at"] or "")
+    return purchases
 
 
 @app.post("/admin/token-purchases/{purchase_id}/confirm")
@@ -1276,6 +1280,7 @@ async def admin_confirm_token_purchase(
 ):
     ok, message = await TokenManager(conn).confirm_purchase(purchase_id, admin_user["username"])
     if ok:
+        await claim_deposit(conn, purchase_id)
         return {"status": "success", "message": message}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
@@ -2239,8 +2244,15 @@ async def deposit_notify(request: Request, conn: aiosqlite.Connection = Depends(
         (now_kst().isoformat(timespec="seconds"), ctype, raw),
     )
     await conn.commit()
-    print(f"[deposit-notify] #{cur.lastrowid} ({ctype}) {raw!r}")
-    return {"status": "ok", "id": cur.lastrowid}
+    parsed = parse_deposit(raw)
+    result = await auto_confirm_deposit(conn, *parsed) if parsed else "unparsed"
+    await conn.execute(
+        "UPDATE deposit_notifications SET result = ?, amount = ?, depositor = ? WHERE id = ?",
+        (result, parsed[0] if parsed else None, parsed[1] if parsed else None, cur.lastrowid),
+    )
+    await conn.commit()
+    print(f"[deposit-notify] #{cur.lastrowid} ({ctype}) {result} {raw!r}")
+    return {"status": "ok", "id": cur.lastrowid, "result": result}
 
 
 @app.get("/admin/deposit-notifications")

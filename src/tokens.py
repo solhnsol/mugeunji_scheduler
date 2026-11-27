@@ -5,7 +5,9 @@
 - 충전은 [회원이 상품 선택 → 충전 요청(pending) → 관리자 입금 확인 → 장부에 지급] 순서로 진행한다.
   나중에 입금 알림으로 자동 확인할 때도 같은 confirm_purchase를 쓰고 confirmed_by만 'auto'로 남긴다.
 """
+import json
 import logging
+import re
 import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -462,6 +464,7 @@ class TokenManager:
             "confirmed_by": row["confirmed_by"],
             "memo": row["memo"],
             "expires_on": row["expires_on"],
+            "deposit_name": row["deposit_name"],
         }
 
     async def request_purchase(self, username: str, pack_id: int) -> Tuple[bool, str]:
@@ -470,7 +473,7 @@ class TokenManager:
             return False, "선택할 수 없는 상품이에요."
         if is_expired(pack["expires_on"]):
             return False, "이미 종료된 상품이에요."
-        async with self.conn.execute("SELECT role FROM users WHERE username = ?", (username,)) as cursor:
+        async with self.conn.execute("SELECT role, name, phone FROM users WHERE username = ?", (username,)) as cursor:
             user = await cursor.fetchone()
         if pack["audience"] == "free" and (not user or user["role"] not in ("free", "admin")):
             return False, "자유이용 회원만 받을 수 있는 상품이에요."
@@ -483,11 +486,21 @@ class TokenManager:
                 pending = (await cursor.fetchone())[0]
             if pending >= MAX_PENDING_PURCHASES:
                 return False, f"확인 대기 중인 충전 요청이 이미 {MAX_PENDING_PURCHASES}건 있어요. 확인이 끝난 뒤 다시 요청해주세요."
+        deposit_name = None
+        if not pack["auto_confirm"] and user and user["name"]:
+            # 같은 이름·같은 금액으로 다른 회원이 이미 입금 대기 중이면 (금액이 다르면 알림을 구분할 수 있다) 입금자명을 구분해 안내한다 (이름 + 연락처 끝 4자리)
+            async with self.conn.execute(
+                "SELECT 1 FROM token_purchases p JOIN users u ON u.username = p.username "
+                "WHERE p.status = 'pending' AND u.name = ? AND p.price_won = ? AND p.username != ?",
+                (user["name"], pack["price_won"], username),
+            ) as cursor:
+                if await cursor.fetchone():
+                    deposit_name = f"{user['name']}{(user['phone'] or '')[-4:] or '2'}"
         try:
             cursor = await self.conn.execute(
-                """INSERT INTO token_purchases (username, pack_id, pack_name, price_won, tokens, status, created_at, expires_on)
-                   VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)""",
-                (username, pack["id"], pack["name"], pack["price_won"], pack["tokens"], _now(), pack["expires_on"]),
+                """INSERT INTO token_purchases (username, pack_id, pack_name, price_won, tokens, status, created_at, expires_on, deposit_name)
+                   VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)""",
+                (username, pack["id"], pack["name"], pack["price_won"], pack["tokens"], _now(), pack["expires_on"], deposit_name),
             )
             await self.conn.commit()
         except Exception as e:
@@ -499,7 +512,9 @@ class TokenManager:
             if not ok:
                 return False, "토큰 지급에 실패했어요. 잠시 뒤 다시 시도해주세요."
             return True, f"{pack['tokens']}토큰이 바로 지급됐어요."
-        return True, "충전을 요청했어요. 관리자가 확인한 뒤 연락처로 입금 안내를 드릴게요. 조금만 기다려 주세요."
+        if deposit_name:
+            return True, f"충전을 요청했어요. 같은 이름의 회원이 있어서 입금자명을 '{deposit_name}'(으)로 해주세요."
+        return True, "충전을 요청했어요. 안내된 계좌로 입금해주세요."
 
     async def list_user_purchases(self, username: str, limit: int = 20) -> List[Dict]:
         async with self.conn.execute(
@@ -609,3 +624,58 @@ class TokenManager:
         except Exception as e:
             await self.conn.rollback()
             return False, f"취소 실패: {e}"
+
+
+_DEPOSIT_TITLE = re.compile(r"([\d,]+)\s*원\s*입금")
+
+
+def parse_deposit(raw_body: str) -> Optional[Tuple[int, str]]:
+    try:
+        data = json.loads(raw_body)
+        amount = int(_DEPOSIT_TITLE.search(data["title"]).group(1).replace(",", ""))
+        return amount, data["body"].split("→")[0].strip()
+    except (ValueError, KeyError, AttributeError, TypeError):
+        return None
+
+
+async def auto_confirm_deposit(conn: aiosqlite.Connection, amount: int, depositor: str) -> str:
+    """금액과 입금자명(회원 이름)이 같은 대기 중 충전 요청이 정확히 1건일 때만 자동 확인하고, 아니면 관리자가 직접 확인하게 둔다."""
+    async with conn.execute(
+        "SELECT p.id FROM token_purchases p JOIN users u ON u.username = p.username "
+        "WHERE p.status = 'pending' AND p.price_won = ? AND COALESCE(p.deposit_name, u.name) = ?",
+        (amount, depositor),
+    ) as cur:
+        ids = [r["id"] for r in await cur.fetchall()]
+    if len(ids) != 1:
+        return "no_match" if not ids else "ambiguous"
+    ok, _ = await TokenManager(conn).confirm_purchase(ids[0], "auto")
+    return f"confirmed:{ids[0]}" if ok else "confirm_failed"
+
+
+_UNMATCHED = "result IN ('no_match', 'ambiguous', 'confirm_failed')"
+
+
+async def deposits_for_purchase(conn: aiosqlite.Connection, price_won: int, since: str) -> List[Dict]:
+    """대기 요청과 금액이 같고 요청 이후에 받은, 아직 처리되지 않은 입금 알림 (관리자가 눈으로 대조)."""
+    async with conn.execute(
+        f"SELECT id, received_at, depositor FROM deposit_notifications "
+        f"WHERE amount = ? AND substr(received_at, 1, 19) >= substr(?, 1, 19) AND {_UNMATCHED} ORDER BY id LIMIT 5",
+        (price_won, since),
+    ) as cur:
+        return [dict(r) for r in await cur.fetchall()]
+
+
+async def claim_deposit(conn: aiosqlite.Connection, purchase_id: int) -> None:
+    """관리자가 직접 확인한 요청의 입금 알림을 처리된 것으로 표시한다. 입금자명이 같은 알림을 우선, 없으면 가장 오래된 것."""
+    async with conn.execute(
+        "SELECT p.price_won, p.created_at, COALESCE(p.deposit_name, u.name) AS name FROM token_purchases p LEFT JOIN users u ON u.username = p.username WHERE p.id = ?",
+        (purchase_id,),
+    ) as cur:
+        p = await cur.fetchone()
+    if not p:
+        return
+    rows = await deposits_for_purchase(conn, p["price_won"], p["created_at"] or "")
+    pick = next((r for r in rows if r["depositor"] == p["name"]), rows[0] if rows else None)
+    if pick:
+        await conn.execute("UPDATE deposit_notifications SET result = ? WHERE id = ?", (f"manual:{purchase_id}", pick["id"]))
+        await conn.commit()

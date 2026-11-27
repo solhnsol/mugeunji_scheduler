@@ -290,7 +290,7 @@ function AdminDashboard({
           <section className="card p-5">
             <h2 className="font-semibold text-ink mb-1">입금 안내 문구</h2>
             <p className="text-xs text-ink-faint mb-3">
-              계좌, 입금자명 규칙 등을 적어요. 회원의 시작 가이드·입금 대기 화면·이용 안내에 보여요.
+              계좌, 입금자명 규칙 등을 적어요. 회원의 시작 가이드·토큰 충전 화면·이용 안내에 보여요.
             </p>
             <textarea
               className="input min-h-[88px]"

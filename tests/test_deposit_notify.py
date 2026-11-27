@@ -24,3 +24,79 @@ def test_deposit_notify_korean_roundtrip(client, admin, monkeypatch):
     assert r.status_code == 200
     row = client.get("/admin/deposit-notifications", headers=admin).json()[0]
     assert row["raw_body"] == body and row["raw_hex"] == body.encode("utf-8").hex()
+
+
+def _notice(client, amount, who):
+    import json
+    body = json.dumps({"title": f"{amount:,}원 입금", "body": f"{who} → 내 묵은지 작업실 모임통장"}, ensure_ascii=False)
+    r = client.post("/api/deposit-notify", content=body.encode(), headers={"X-Deposit-Token": "s3cret", "Content-Type": "application/json"})
+    assert r.status_code == 200, r.text
+    return r.json()["result"]
+
+
+def test_auto_confirm(client, admin, make_user, monkeypatch):
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "입금테스트", 12345, 7)
+    _, member = make_user("정자동")
+    client.post("/tokens/purchases", headers=member, json={"pack_id": pack["id"]})
+    pid = client.get("/tokens/me", headers=member).json()["purchases"][0]["id"]
+
+    assert _notice(client, 12345, "다른사람") == "no_match"
+    assert _notice(client, 99999, "정자동") == "no_match"
+    assert _notice(client, 12345, "정자동") == f"confirmed:{pid}"
+    assert client.get("/tokens/me", headers=member).json()["balance"] == 7
+    assert _notice(client, 12345, "정자동") == "no_match"  # 이미 확인됨, 중복 지급 없음
+    assert client.post("/api/deposit-notify", content="그냥 글", headers={"X-Deposit-Token": "s3cret"}).json()["result"] == "unparsed"
+
+
+def test_ambiguous_shows_notice_to_admin(client, admin, make_user, monkeypatch):
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "대조테스트", 23456, 5)
+    _, member = make_user("김동명")
+    client.post("/tokens/purchases", headers=member, json={"pack_id": pack["id"]})
+    pid = client.get("/tokens/me", headers=member).json()["purchases"][0]["id"]
+
+    assert _notice(client, 23456, "가족이름") == "no_match"  # 이름이 달라 자동 처리 안 됨
+    pending = client.get("/admin/token-purchases", headers=admin, params={"status_filter": "pending"}).json()
+    mine = next(p for p in pending if p["id"] == pid)
+    assert [d["depositor"] for d in mine["deposits"]] == ["가족이름"]
+
+    assert client.post(f"/admin/token-purchases/{pid}/confirm", headers=admin).status_code == 200
+    assert _notice(client, 23456, "가족이름") == "no_match"
+    # 수동 확인 때 알림 하나가 처리됨으로 표시돼, 남은 건 새로 온 알림 1건뿐
+    assert client.get("/admin/deposit-notifications", headers=admin).json()[1]["result"] == f"manual:{pid}"
+
+
+def test_same_name_gets_distinct_deposit_name(client, admin, make_user, monkeypatch):
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "동명테스트", 34567, 9)
+    _, first = make_user("박동명")
+    _, second = make_user("박동명")
+    r1 = client.post("/tokens/purchases", headers=first, json={"pack_id": pack["id"]})
+    assert "'" not in r1.json()["message"]  # 먼저 요청한 회원은 이름 그대로
+    r2 = client.post("/tokens/purchases", headers=second, json={"pack_id": pack["id"]})
+    dn = client.get("/tokens/me", headers=second).json()["purchases"][0]["deposit_name"]
+    assert dn.startswith("박동명") and dn != "박동명" and dn in r2.json()["message"]
+    assert client.get("/tokens/me", headers=first).json()["purchases"][0]["deposit_name"] is None
+
+    assert _notice(client, 34567, dn).startswith("confirmed:")      # 두 번째 회원만 확인됨
+    assert client.get("/tokens/me", headers=second).json()["balance"] == 9
+    assert client.get("/tokens/me", headers=first).json()["balance"] == 0
+    assert _notice(client, 34567, "박동명").startswith("confirmed:")  # 이름 그대로 입금하면 첫 번째 회원
+
+
+def test_same_name_different_amount_needs_no_deposit_name(client, admin, make_user):
+    from tests.test_tokens import _add_pack, _enable
+    _enable(client, admin)
+    a, b = _add_pack(client, admin, "금액A", 45671, 1), _add_pack(client, admin, "금액B", 45672, 1)
+    _, first = make_user("이동명")
+    _, second = make_user("이동명")
+    client.post("/tokens/purchases", headers=first, json={"pack_id": a["id"]})
+    client.post("/tokens/purchases", headers=second, json={"pack_id": b["id"]})
+    assert client.get("/tokens/me", headers=second).json()["purchases"][0]["deposit_name"] is None
