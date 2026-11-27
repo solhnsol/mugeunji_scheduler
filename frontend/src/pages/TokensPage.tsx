@@ -71,7 +71,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
           }
         : {
             title: `${pack.name} 충전을 요청할까요?`,
-            message: `${alreadyPending ? '같은 상품의 충전 요청이 이미 확인 대기 중이에요. 한 번 더 요청할까요?\n\n' : ''}${formatPrice(pack.price_won)} → ${formatTokens(pack.tokens)}토큰\n요청하면 관리자가 확인한 뒤 등록하신 연락처로 입금 안내를 드려요. 입금이 확인되면 토큰이 지급돼요.`,
+            message: `${alreadyPending ? '같은 상품의 충전 요청이 이미 확인 대기 중이에요. 한 번 더 요청할까요?\n\n' : ''}${formatPrice(pack.price_won)} → ${formatTokens(pack.tokens)}토큰\n요청한 뒤 안내된 계좌로 입금해주세요. 입금이 확인되면 토큰이 지급돼요.`,
             confirmLabel: '충전 요청',
           },
     );
@@ -162,7 +162,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                       <p className="text-sm font-semibold text-ink">
                         {formatTokens(p.tokens)}토큰 {formatPrice(p.price_won)}
                       </p>
-                      <p className="text-xs text-amber-700">입금 안내를 기다리고 있어요</p>
+                      <p className="text-xs text-amber-700">입금을 기다리고 있어요</p>
                     </div>
                     <button
                       type="button"
@@ -175,9 +175,6 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                   </li>
                 ))}
               </ul>
-              {paymentGuide && (
-                <p className="text-xs text-ink-muted leading-relaxed whitespace-pre-line border-t border-line/60 pt-3">{paymentGuide}</p>
-              )}
             </section>
           )}
 
@@ -185,11 +182,23 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
             <h2 className="text-lg font-bold text-ink">토큰 충전</h2>
             <p className="text-sm text-ink-muted mt-1">
               {hasPaidPacks
-                ? `고르면 입금 안내를 보내드려요. ${expiryPhrase(rules)} 동안 안 쓰면 사라져요.`
+                ? `${expiryPhrase(rules)} 동안 안 쓰면 사라져요.`
                 : hasInstantPacks
                   ? '누르면 바로 들어와요'
                   : ''}
             </p>
+            {hasPaidPacks && (
+              <div className="card p-4 mt-3 space-y-3">
+                <ol className="space-y-1.5 text-sm text-ink-muted list-decimal list-inside">
+                  <li>아래에서 상품을 골라 충전을 요청해요</li>
+                  <li>요청한 금액을 입금해요. 입금자명은 가입한 이름으로 해주세요</li>
+                  <li>입금이 확인되면 토큰이 바로 들어와요</li>
+                </ol>
+                {paymentGuide && (
+                  <p className="text-sm font-medium text-ink leading-relaxed whitespace-pre-line border-t border-line/60 pt-3">{paymentGuide}</p>
+                )}
+              </div>
+            )}
             {packs.length === 0 ? (
               <p className="text-sm text-ink-faint mt-4">지금 고를 수 있는 상품이 없어요. 관리자에게 문의해주세요.</p>
             ) : (
