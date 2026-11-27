@@ -36,7 +36,7 @@ from src.reservation import ReservationManager
 from src.settings import SettingsManager
 from src.notices import NoticeError, NoticeManager
 from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
-from src.tokens import TokenManager, admin_pack, is_expired
+from src.tokens import TokenManager, admin_pack, auto_confirm_deposit, is_expired
 from src.write_lock import writing
 
 load_dotenv()
@@ -2239,8 +2239,11 @@ async def deposit_notify(request: Request, conn: aiosqlite.Connection = Depends(
         (now_kst().isoformat(timespec="seconds"), ctype, raw),
     )
     await conn.commit()
-    print(f"[deposit-notify] #{cur.lastrowid} ({ctype}) {raw!r}")
-    return {"status": "ok", "id": cur.lastrowid}
+    result = await auto_confirm_deposit(conn, raw)
+    await conn.execute("UPDATE deposit_notifications SET result = ? WHERE id = ?", (result, cur.lastrowid))
+    await conn.commit()
+    print(f"[deposit-notify] #{cur.lastrowid} ({ctype}) {result} {raw!r}")
+    return {"status": "ok", "id": cur.lastrowid, "result": result}
 
 
 @app.get("/admin/deposit-notifications")

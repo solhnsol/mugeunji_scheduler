@@ -5,7 +5,9 @@
 - 충전은 [회원이 상품 선택 → 충전 요청(pending) → 관리자 입금 확인 → 장부에 지급] 순서로 진행한다.
   나중에 입금 알림으로 자동 확인할 때도 같은 confirm_purchase를 쓰고 confirmed_by만 'auto'로 남긴다.
 """
+import json
 import logging
+import re
 import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -609,3 +611,27 @@ class TokenManager:
         except Exception as e:
             await self.conn.rollback()
             return False, f"취소 실패: {e}"
+
+
+_DEPOSIT_TITLE = re.compile(r"([\d,]+)\s*원\s*입금")
+
+
+async def auto_confirm_deposit(conn: aiosqlite.Connection, raw_body: str) -> str:
+    """토스 입금 알림(JSON: title "5원 입금", body "입금자 → 내 …")으로 대기 중인 충전 요청을 자동 확인한다.
+    금액과 입금자명(회원 이름)이 같은 대기 요청이 정확히 1건일 때만 확인하고, 아니면 관리자가 직접 확인하게 둔다."""
+    try:
+        data = json.loads(raw_body)
+        amount = int(_DEPOSIT_TITLE.search(data["title"]).group(1).replace(",", ""))
+        depositor = data["body"].split("→")[0].strip()
+    except (ValueError, KeyError, AttributeError, TypeError):
+        return "unparsed"
+    async with conn.execute(
+        "SELECT p.id FROM token_purchases p JOIN users u ON u.username = p.username "
+        "WHERE p.status = 'pending' AND p.price_won = ? AND u.name = ?",
+        (amount, depositor),
+    ) as cur:
+        ids = [r["id"] for r in await cur.fetchall()]
+    if len(ids) != 1:
+        return "no_match" if not ids else "ambiguous"
+    ok, _ = await TokenManager(conn).confirm_purchase(ids[0], "auto")
+    return f"confirmed:{ids[0]}" if ok else "confirm_failed"

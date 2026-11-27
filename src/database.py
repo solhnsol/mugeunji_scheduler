@@ -283,6 +283,9 @@ async def setup_database(conn: aiosqlite.Connection):
             raw_body TEXT NOT NULL
         );
     """)
+    # 자동 처리 결과 (confirmed:<구매 id> / no_match / ambiguous / unparsed)
+    if not await _column_exists(conn, "deposit_notifications", "result"):
+        await conn.execute("ALTER TABLE deposit_notifications ADD COLUMN result TEXT")
 
     admin_password = os.getenv("ADMIN_PASSWORD")
     if admin_password:

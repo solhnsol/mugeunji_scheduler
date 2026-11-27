@@ -24,3 +24,28 @@ def test_deposit_notify_korean_roundtrip(client, admin, monkeypatch):
     assert r.status_code == 200
     row = client.get("/admin/deposit-notifications", headers=admin).json()[0]
     assert row["raw_body"] == body and row["raw_hex"] == body.encode("utf-8").hex()
+
+
+def _notice(client, amount, who):
+    import json
+    body = json.dumps({"title": f"{amount:,}원 입금", "body": f"{who} → 내 묵은지 작업실 모임통장"}, ensure_ascii=False)
+    r = client.post("/api/deposit-notify", content=body.encode(), headers={"X-Deposit-Token": "s3cret", "Content-Type": "application/json"})
+    assert r.status_code == 200, r.text
+    return r.json()["result"]
+
+
+def test_auto_confirm(client, admin, make_user, monkeypatch):
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "입금테스트", 12345, 7)
+    _, member = make_user("정자동")
+    client.post("/tokens/purchases", headers=member, json={"pack_id": pack["id"]})
+    pid = client.get("/tokens/me", headers=member).json()["purchases"][0]["id"]
+
+    assert _notice(client, 12345, "다른사람") == "no_match"
+    assert _notice(client, 99999, "정자동") == "no_match"
+    assert _notice(client, 12345, "정자동") == f"confirmed:{pid}"
+    assert client.get("/tokens/me", headers=member).json()["balance"] == 7
+    assert _notice(client, 12345, "정자동") == "no_match"  # 이미 확인됨, 중복 지급 없음
+    assert client.post("/api/deposit-notify", content="그냥 글", headers={"X-Deposit-Token": "s3cret"}).json()["result"] == "unparsed"
