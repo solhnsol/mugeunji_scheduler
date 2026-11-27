@@ -49,6 +49,10 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
   const hasPaidPacks = !!packs?.some((p) => !p.auto_confirm);
   const bigPacks = packs?.filter((p) => p.price_won >= BIG_PACK_WON) ?? [];
   const foldBig = bigPacks.length > 0 && bigPacks.length < (packs?.length ?? 0) && !showBig;
+  // 토큰당 가격이 가장 비싼 유료 묶음을 기준으로 할인율을 보여준다
+  const perToken = (p: TokenPack) => p.price_won / p.tokens;
+  const paidPacks = (packs ?? []).filter((p) => p.price_won > 0 && p.tokens > 0);
+  const basePerToken = Math.max(0, ...paidPacks.map(perToken));
   const shownPacks = foldBig ? (packs ?? []).filter((p) => p.price_won < BIG_PACK_WON) : packs ?? [];
   const pending = mine?.purchases.filter((p) => p.status === 'pending') ?? [];
   const history = mine?.purchases.filter((p) => p.status !== 'pending') ?? [];
@@ -198,6 +202,8 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                   const sub = [pack.name !== `${formatTokens(pack.tokens)}토큰` && pack.name !== `${formatTokens(pack.tokens)} 토큰` ? pack.name : '', pack.expires_on ? `${formatExpiresOn(pack.expires_on)} 사용` : '']
                     .filter(Boolean)
                     .join(' · ');
+                  const paid = pack.price_won > 0 && pack.tokens > 0;
+                  const discount = paid ? Math.round((1 - perToken(pack) / basePerToken) * 100) : 0;
                   return (
                     <li key={pack.id}>
                       <button
@@ -209,6 +215,12 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                         <span className="min-w-0">
                           <span className="block text-lg font-bold text-ink tabular-nums">{formatTokens(pack.tokens)}토큰</span>
                           {sub && <span className="block text-xs text-ink-faint truncate">{sub}</span>}
+                          {paid && (
+                            <span className="block text-xs text-ink-muted tabular-nums">
+                              토큰당 {formatPrice(Math.round(perToken(pack)))}
+                              {discount > 0 && <span className="ml-1.5 font-semibold text-sage">{discount}% 할인</span>}
+                            </span>
+                          )}
                         </span>
                         <span className="shrink-0 text-right">
                           <span className="block text-base font-semibold text-sage tabular-nums">
