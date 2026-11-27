@@ -1,28 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { AppShell, HeaderActions, PlanGrid, ScheduleModeNav, Toast } from '../components/ui';
-import { buildSteps, GuideCard, isFreeOnly, UsageGuideModal } from '../components/GuideCard';
-import { useConfirm } from '../components/ConfirmDialog';
-import { PlanApplyModal } from '../components/PlanApplyModal';
-import { PlanManageModal } from '../components/PlanManageModal';
+import { AppShell, HeaderActions, Toast } from '../components/ui';
 import { ReportModal } from '../components/ReportModal';
 import { ProfileModal } from '../components/ProfileModal';
-import { ReservationGrid } from '../components/ReservationGrid';
-import { ScheduleStatus } from '../components/ScheduleStatus';
-import { ReservationSummaryCard } from '../components/ReservationSummaryCard';
-import { MonthlyPlanHero } from '../components/ScheduleHero';
-import { ScheduleModal } from '../components/ScheduleModal';
-import { useMonthlyReservations } from '../hooks/useMonthlyReservations';
 import { useToast } from '../hooks/useToast';
-import { NoticeCard } from '../components/NoticeCard';
 import BookingPage from './BookingPage';
 import { OnboardingTour, takeOnboardingPending } from '../components/OnboardingTour';
-import { InstallBanner, InstallGuide } from '../components/InstallGuide';
+import { InstallGuide } from '../components/InstallGuide';
 import { installPlatform, needsInstallGuide } from '../install';
-import { MeResponse, Plan, ReservationMode } from '../types';
-import { formatTokens } from '../utils';
-import { summarizeReservations } from '../utils/reservationSummary';
+import { MeResponse } from '../types';
 import { PageSkeleton } from '../components/Skeleton';
 
 export default function UserApp({
@@ -35,52 +22,16 @@ export default function UserApp({
   onLogout: () => void;
 }) {
   const [me, setMe] = useState<MeResponse | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [reservationOpen, setReservationOpen] = useState(true);
-  const [scheduleMessage, setScheduleMessage] = useState('');
-  const [nextOpenAt, setNextOpenAt] = useState<string | null>(null);
-  const [planModalOpen, setPlanModalOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const [applyPlan, setApplyPlan] = useState<Plan | null>(null);
-  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
-  const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
-  const [tokenChargeEnabled, setTokenChargeEnabled] = useState(false);
-  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
-  const [reservationMode, setReservationMode] = useState<ReservationMode>('legacy');
   const navigate = useNavigate();
-  const monthlyReservations = useMonthlyReservations();
-  const mySummary = summarizeReservations(monthlyReservations, { username, type: 'monthly' });
   const { toast, show } = useToast();
-  const { confirm, dialog: confirmDialog } = useConfirm();
   const [loadFailed, setLoadFailed] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [meData, planData, settings] = await Promise.all([
-      api.getMe(token),
-      api.getPlans(),
-      api.getSettings(),
-    ]);
-    setMe(meData);
-    setPlans(planData);
-    setReservationOpen(settings.reservation_enabled);
-    setScheduleMessage(settings.schedule_message || '');
-    setNextOpenAt(settings.next_monthly_open_at ?? null);
-    setPaymentGuide(settings.payment_guide ?? null);
-    const mode = settings.reservation_mode ?? 'legacy';
-    setReservationMode(mode);
-    // 토큰 예약으로 전환되면 충전은 항상 열려 있다
-    const tokensOpen = !!settings.token_charge_enabled || mode === 'token' || mode === 'beta';
-    setTokenChargeEnabled(tokensOpen);
-    if (tokensOpen) {
-      api
-        .getMyTokens(token)
-        .then((t) => setTokenBalance(t.balance))
-        .catch(() => setTokenBalance(null));
-    }
+    setMe(await api.getMe(token));
   }, [token]);
 
   const load = useCallback(() => {
@@ -104,63 +55,6 @@ export default function UserApp({
     else if (needsInstallGuide()) setInstallOpen(true);
   }, [meLoaded, username]);
 
-  useEffect(() => {
-    if (!scheduleModalOpen) return;
-    const id = window.setInterval(() => {
-      refresh().catch(() => undefined);
-    }, 30000);
-    return () => window.clearInterval(id);
-  }, [scheduleModalOpen, refresh]);
-
-  const handleApplyPlan = async (planId: number, startPeriod: 'current' | 'next') => {
-    try {
-      const res = await api.applyPlan(token, planId, startPeriod);
-      show(res.message, 'success');
-      setApplyPlan(null);
-      await refresh();
-    } catch (err) {
-      show(err instanceof ApiError ? err.message : '요청하지 못했어요', 'error');
-      throw err;
-    }
-  };
-
-  const handleChangePlan = async (planId: number) => {
-    try {
-      const res = await api.changePlan(token, planId);
-      show(res.message, 'success');
-      await refresh();
-    } catch (err) {
-      show(err instanceof ApiError ? err.message : '요청하지 못했어요', 'error');
-    }
-  };
-
-  const handleCancelPlan = async () => {
-    const ok = await confirm({
-      title: '요금제를 중단할까요?',
-      message: '다음 달부터 요금제가 중단돼요. 중단 예약은 이후 취소할 수 있어요.',
-      confirmLabel: '중단하기',
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      const res = await api.cancelPlan(token);
-      show(res.message, 'success');
-      await refresh();
-    } catch (err) {
-      show(err instanceof ApiError ? err.message : '요청하지 못했어요', 'error');
-    }
-  };
-
-  const handleRevokeCancellation = async () => {
-    try {
-      const res = await api.revokePlanCancellation(token);
-      show(res.message, 'success');
-      await refresh();
-    } catch (err) {
-      show(err instanceof ApiError ? err.message : '요청하지 못했어요', 'error');
-    }
-  };
-
   if (!me) {
     return (
       <AppShell title="묵은지 작업실" actions={loadFailed ? <HeaderActions items={[{ id: 'logout', label: '로그아웃', onClick: onLogout }]} /> : undefined}>
@@ -181,340 +75,57 @@ export default function UserApp({
   }
 
   const displayName = me.name || me.username;
-  const hasSubscription = me.access_status !== 'no_plan' && !!me.subscription;
-  const canViewSchedule = me.can_view_schedule ?? hasSubscription;
-  const canReserve =
-    (me.can_reserve_monthly ?? me.can_access_schedule) && reservationOpen;
-  const scheduleButtonLabel =
-    !mySummary.hasReservations && canReserve ? '신청하기' : '시간표 보기';
-  const gridMessage =
-    !reservationOpen && scheduleMessage
-      ? scheduleMessage
-      : !me.can_reserve_monthly && me.message !== '이용 가능'
-        ? me.message
-        : undefined;
-
-  // 토큰 예약으로 전환된 뒤 회원에게 보이는 화면. 관리자도 '사용자 페이지'에서 회원과 같은 화면을 본다
-  const tokenMode = reservationMode === 'token';
-  // 베타: 월 신청은 기존 화면 그대로, 자유이용 자리를 토큰 예약이 대신한다
-  const betaMode = reservationMode === 'beta';
-
+  // 홈이 곧 토큰 예약 달력이다. 토큰 충전은 달력 위 잔액 칩에서 열려서 메뉴에 따로 두지 않는다
   const headerMenuItems = [
-    { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true), hidden: tokenMode || betaMode },
-    {
-      id: 'plan',
-      label: '요금제',
-      onClick: () => setPlanModalOpen(true),
-      hidden: !hasSubscription || tokenMode || betaMode,
-    },
-    // 토큰·베타 모드에서는 홈이 곧 예약 달력이라 따로 두지 않는다
-    { id: 'book', label: '예약', onClick: () => navigate('/book'), hidden: me.role !== 'admin' || tokenMode || betaMode },
-    { id: 'monthly', label: '월 신청', onClick: () => setScheduleModalOpen(true), hidden: !betaMode || !canViewSchedule },
-    { id: 'tokens', label: '토큰', onClick: () => navigate('/tokens'), hidden: (!tokenChargeEnabled && me.role !== 'admin') || tokenMode || betaMode },
     { id: 'notices', label: '공지·이용 안내', onClick: () => navigate('/notices') },
     { id: 'report', label: '오류 신고', onClick: () => setReportOpen(true) },
     { id: 'tour', label: '둘러보기', onClick: () => setTourOpen(true) },
     { id: 'install', label: '홈 화면에 추가', onClick: () => setInstallOpen(true), hidden: !installPlatform() },
-    { id: 'guide', label: '시작 가이드', onClick: () => setGuideOpen(true), hidden: tokenMode || betaMode },
-    { id: 'logout', label: '로그아웃', onClick: onLogout, hidden: tokenMode || betaMode },
   ];
 
-  const headerNav = me.can_access_free_schedule && !betaMode ? (
-    <ScheduleModeNav mode="monthly" />
-  ) : undefined;
-
-  const showBillingHero =
-    !!me.billing && (me.access_status === 'pending_payment' || !me.can_access_schedule);
-  const heroNotice =
-    me.message && me.message !== '이용 가능' && !showBillingHero ? me.message : undefined;
-
-  const reportModal = reportOpen && (
-    <ReportModal
-      token={token}
-      onClose={() => setReportOpen(false)}
-      onDone={(m) => show(m, 'success')}
-      onError={(m) => show(m, 'error')}
-    />
-  );
-
-  const profileModal = profileOpen && (
-    <ProfileModal
-      me={me}
-      token={token}
-      onClose={() => setProfileOpen(false)}
-      onSaved={async (updated) => {
-        show('저장했어요.', 'success');
-        if (updated?.profile_complete !== undefined) {
-          setMe((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  name: updated.name ?? prev.name,
-                  phone: updated.phone ?? prev.phone,
-                  profile_complete: updated.profile_complete,
-                }
-              : prev,
-          );
-        }
-        await refresh();
-      }}
-      onError={(m) => show(m, 'error')}
-    />
-  );
-
-  const steps = buildSteps(me, {
-    hasReservations: mySummary.hasReservations,
-    onProfile: () => setProfileOpen(true),
-    onSchedule: () => setScheduleModalOpen(true),
-    paymentGuide,
-  });
-  if (isFreeOnly(me)) {
-    const reserve = steps[steps.length - 1];
-    reserve.done = steps[steps.length - 2].done;
-  }
-  const tokenCard =
-    tokenChargeEnabled && tokenBalance !== null && !betaMode ? (
-      <Link to="/tokens" className="card p-4 flex items-center justify-between gap-3 hover:border-sage/30">
-        <div>
-          <p className="text-xs text-ink-faint">내 토큰</p>
-          <p className="text-2xl font-bold text-ink tabular-nums">{formatTokens(tokenBalance)}</p>
-        </div>
-        <span className="btn-secondary !w-auto text-sm">충전하기</span>
-      </Link>
-    ) : null;
-  // 관리자 계정은 요금제 없이 쓰므로 시작 가이드가 필요 없다
-  const guideVisible = !me.admin_account && steps.some((s) => !s.done);
-  const guideCard = guideVisible ? <GuideCard steps={steps} /> : null;
-  const tourModal = tourOpen && (
-    <OnboardingTour
-      name={displayName}
-      mode={reservationMode}
-      onClose={() => {
-        setTourOpen(false);
-        if (needsInstallGuide()) setInstallOpen(true);
-      }}
-    />
-  );
-  const installBanner = <InstallBanner onOpen={() => setInstallOpen(true)} />;
-  const installModal = installOpen && <InstallGuide onClose={() => setInstallOpen(false)} />;
-  const guideModal = guideOpen && (
-    <UsageGuideModal onClose={() => setGuideOpen(false)} paymentGuide={paymentGuide} />
-  );
-
-  const profileBanner = !guideVisible && !me.profile_complete && me.role !== 'admin' && !me.admin_account && (
-    <div className="card p-4 mb-3 flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50/80 shrink-0">
-      <p className="text-sm text-amber-900">전화번호 등 내 정보를 등록해주세요.</p>
-      <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm" onClick={() => setProfileOpen(true)}>
-        정보 입력
-      </button>
-    </div>
-  );
-
-  const planModal = planModalOpen && me.subscription && (
-    <PlanManageModal
-      me={me}
-      plans={plans}
-      onClose={() => setPlanModalOpen(false)}
-      onChangePlan={handleChangePlan}
-      onCancelPlan={handleCancelPlan}
-      onRevokeCancellation={handleRevokeCancellation}
-    />
-  );
-
-  const scheduleModal = scheduleModalOpen && canViewSchedule && (
-    <ScheduleModal title="월신청 시간표" onClose={() => setScheduleModalOpen(false)}>
-      <ReservationGrid
-        username={username}
-        fillHeight
-        mode={canReserve ? 'reserve' : 'view'}
-        reservationOpen={reservationOpen}
-        scheduleMessage={gridMessage}
-        allowedHours={me.subscription?.allowed_hours}
-        allowDawn={me.role === 'free' || me.role === 'admin'}
-        onCancel={
-          canReserve
-            ? async (slots) => {
-                const hours = slots.length;
-                const ok = await confirm({
-                  title: '예약을 취소할까요?',
-                  message: `선택한 ${hours}시간 예약이 취소돼요. 취소한 시간은 다른 회원이 신청할 수 있어요.`,
-                  confirmLabel: '예약 취소',
-                  cancelLabel: '돌아가기',
-                  danger: true,
-                });
-                if (!ok) throw new Error('cancelled');
-                try {
-                  const res = await api.cancelReservations(token, slots);
-                  show(res.message, 'success');
-                } catch (err) {
-                  show(err instanceof ApiError ? err.message : '취소하지 못했어요', 'error');
-                  throw err;
-                }
-              }
-            : undefined
-        }
-        onSubmit={
-          canReserve
-            ? async (slots) => {
-                try {
-                  const res = await api.reserve(token, slots);
-                  show(res.message, 'success');
-                  setScheduleModalOpen(false);
-                } catch (err) {
-                  show(err instanceof ApiError ? err.message : '신청하지 못했어요', 'error');
-                  throw err;
-                }
-              }
-            : undefined
-        }
-      />
-    </ScheduleModal>
-  );
-
-  // 토큰·베타 모드: 첫 화면이 토큰 예약 달력이다. 월 신청·요금제는 메뉴에서 연다
-  if (tokenMode || betaMode) {
-    return (
-      <>
-        <BookingPage
-          onLogout={onLogout}
-          title={`${displayName}님`}
-          titleMenu={[
-            { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true) },
-            { id: 'logout', label: '로그아웃', onClick: onLogout },
-          ]}
-          menu={<HeaderActions items={headerMenuItems} />}
-        />
-        {planModal}
-        {profileModal}
-        {reportModal}
-        {scheduleModal}
-        {tourModal}
-        {installModal}
-        {confirmDialog}
-        <Toast message={toast.message} type={toast.type} />
-      </>
-    );
-  }
-
-  if (me.access_status === 'no_plan') {
-    return (
-      <AppShell
-        title={`${displayName}님`}
-        nav={headerNav}
-        actions={<HeaderActions items={headerMenuItems} />}
-      >
-        {installBanner}
-        <div className="space-y-5">
-          <div>
-            <h2 className="text-lg font-semibold text-ink">환영해요</h2>
-            <p className="text-sm text-ink-muted mt-1">
-              아래 순서대로 진행하면 시간표를 이용할 수 있어요. 막히면 상단 메뉴의 &quot;이용 안내&quot;를 확인해보세요.
-            </p>
-          </div>
-          <NoticeCard />
-          {guideCard}
-          {tokenCard}
-          <div>
-            <h3 className="text-sm font-semibold text-ink mb-3">요금제 선택</h3>
-            <PlanGrid
-              plans={plans}
-              onSelect={(planId) => {
-                const plan = plans.find((p) => p.id === planId);
-                if (plan) setApplyPlan(plan);
-              }}
-            />
-          </div>
-        </div>
-        {applyPlan && (
-          <PlanApplyModal
-            plan={applyPlan}
-            onClose={() => setApplyPlan(null)}
-            onConfirm={(startPeriod) => handleApplyPlan(applyPlan.id, startPeriod)}
-          />
-        )}
-        {planModal}
-        {profileModal}
-        {reportModal}
-        {guideModal}
-        {tourModal}
-      {installModal}
-      {confirmDialog}
-        <Toast message={toast.message} type={toast.type} />
-      </AppShell>
-    );
-  }
-
   return (
-    <AppShell
-      title={`${displayName}님`}
-      nav={headerNav}
-      actions={<HeaderActions items={headerMenuItems} />}
-    >
-      {installBanner}
-      <div className="space-y-4">
-        {profileBanner}
-        <NoticeCard />
-        {guideCard}
-
-        {tokenCard}
-
-        {me.subscription && (
-          <MonthlyPlanHero
-            paymentGuide={showBillingHero ? paymentGuide : undefined}
-            planName={me.subscription.plan_name}
-            allowedHours={me.subscription.allowed_hours}
-            startPeriod={me.subscription.start_period}
-            targetPeriod={me.reservation_target_period}
-            pendingBilling={showBillingHero ? me.billing : undefined}
-            pendingCancellation={me.pending_cancellation ?? undefined}
-            notice={heroNotice}
-          />
-        )}
-
-        {isFreeOnly(me) && me.can_access_free_schedule && !betaMode && (
-          <Link to="/free" className="btn-primary shadow-lg shadow-sage/20 inline-flex items-center justify-center">
-            자유이용 시간표 열기
-          </Link>
-        )}
-
-        {canViewSchedule && !isFreeOnly(me) && (
-          <>
-            <ScheduleStatus open={canReserve} message={gridMessage} nextOpenAt={nextOpenAt} />
-            <ReservationSummaryCard
-              title="이번 달 예약"
-              reservations={monthlyReservations}
-              username={username}
-              type="monthly"
-              allowedHours={me.subscription?.allowed_hours}
-              emptyLabel="아직 신청하지 않았어요"
-            />
-            <button
-              type="button"
-              className="btn-primary shadow-lg shadow-sage/20"
-              onClick={() => setScheduleModalOpen(true)}
-            >
-              {scheduleButtonLabel}
-            </button>
-          </>
-        )}
-      </div>
-
-      {applyPlan && (
-        <PlanApplyModal
-          plan={applyPlan}
-          onClose={() => setApplyPlan(null)}
-          onConfirm={(startPeriod) => handleApplyPlan(applyPlan.id, startPeriod)}
+    <>
+      <BookingPage
+        onLogout={onLogout}
+        title={`${displayName}님`}
+        titleMenu={[
+          { id: 'profile', label: '내 정보', onClick: () => setProfileOpen(true) },
+          { id: 'logout', label: '로그아웃', onClick: onLogout },
+        ]}
+        menu={<HeaderActions items={headerMenuItems} />}
+      />
+      {profileOpen && (
+        <ProfileModal
+          me={me}
+          token={token}
+          onClose={() => setProfileOpen(false)}
+          onSaved={async () => {
+            show('저장했어요.', 'success');
+            await refresh();
+          }}
+          onError={(m) => show(m, 'error')}
         />
       )}
-      {planModal}
-      {profileModal}
-        {reportModal}
-      {guideModal}
-      {scheduleModal}
-      {tourModal}
-      {installModal}
-      {confirmDialog}
+      {reportOpen && (
+        <ReportModal
+          token={token}
+          onClose={() => setReportOpen(false)}
+          onDone={(m) => show(m, 'success')}
+          onError={(m) => show(m, 'error')}
+        />
+      )}
+      {tourOpen && (
+        <OnboardingTour
+          name={displayName}
+          mode="token"
+          onClose={() => {
+            setTourOpen(false);
+            if (needsInstallGuide()) setInstallOpen(true);
+          }}
+        />
+      )}
+      {installOpen && <InstallGuide onClose={() => setInstallOpen(false)} />}
       <Toast message={toast.message} type={toast.type} />
-    </AppShell>
+    </>
   );
 }

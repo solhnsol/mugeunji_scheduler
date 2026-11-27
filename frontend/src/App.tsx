@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
 import { SESSION } from './api';
 import { AppShell } from './components/ui';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
@@ -10,7 +10,6 @@ const LoginPage = lazy(() => import('./pages/auth'));
 const RegisterPage = lazy(() => import('./pages/auth').then((m) => ({ default: m.RegisterPage })));
 const UserApp = lazy(() => import('./pages/UserApp'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
-const FreeApp = lazy(() => import('./pages/FreeApp'));
 const Landing = lazy(() => import('./pages/Landing'));
 const BookingPage = lazy(() => import('./pages/BookingPage'));
 const TokensPage = lazy(() => import('./pages/TokensPage'));
@@ -24,7 +23,6 @@ const ROUTE_TITLES: [string, string][] = [
   ['/book', '예약'],
   ['/tokens', '토큰'],
   ['/notices', '공지·이용 안내'],
-  ['/free', '자유이용'],
   ['/login', '로그인'],
   ['/register', '가입'],
   ['/admin', '관리자'],
@@ -110,30 +108,6 @@ function AboutRoute() {
   return <Landing authed={session.status === 'authed'} />;
 }
 
-function FreeRoute() {
-  const navigate = useNavigate();
-  const { session, refresh, logout } = useSession();
-
-  if (session.status === 'loading') return <Splash />;
-  if (session.status === 'anon') return <Navigate to="/" replace />;
-  if (session.mustChangePassword) return <ForcePasswordChange onDone={refresh} onLogout={logout} />;
-
-  const isAdminSession = session.role === 'admin';
-  const onLogout = async () => {
-    await logout();
-    navigate(isAdminSession ? '/admin' : '/');
-  };
-
-  return (
-    <FreeApp
-      token={SESSION}
-      username={session.username}
-      isAdminSession={isAdminSession}
-      onLogout={onLogout}
-    />
-  );
-}
-
 export default function App() {
   return (
     <BrowserRouter>
@@ -148,7 +122,6 @@ export default function App() {
         <Route path="/notices/:id" element={<NoticesRoute />} />
         <Route path="/tokens" element={<TokensRoute />} />
         <Route path="/book" element={<BookingRoute />} />
-        <Route path="/free" element={<FreeRoute />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
