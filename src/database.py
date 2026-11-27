@@ -226,6 +226,7 @@ async def setup_database(conn: aiosqlite.Connection):
         ("token_packs", "auto_confirm", "INTEGER NOT NULL DEFAULT 0"),  # 요청 즉시 지급
         ("token_packs", "expires_on", "TEXT"),             # 이 날짜(KST) 끝에 소멸 (NULL이면 기본 소멸 기간)
         ("token_packs", "audience", "TEXT NOT NULL DEFAULT 'all'"),     # all | free(자유이용 회원만)
+        ("token_packs", "min_month_spend", "INTEGER NOT NULL DEFAULT 0"),  # 이번 달 확정 충전액이 이 이상일 때만 살 수 있음 (0이면 제한 없음)
         ("token_purchases", "expires_on", "TEXT"),
         ("token_purchases", "deposit_name", "TEXT"),       # 같은 이름의 다른 회원이 대기 중일 때 입금자명으로 쓰게 안내하는 이름
     ]:

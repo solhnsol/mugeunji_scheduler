@@ -219,13 +219,16 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                     <li key={pack.id}>
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || !!pack.locked}
                         onClick={() => requestPack(pack)}
                         className="w-full min-h-[64px] px-4 py-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-sage-muted/30 active:bg-sage-muted/50 disabled:opacity-50"
                       >
                         <span className="min-w-0">
                           <span className="block text-lg font-bold text-ink tabular-nums">{formatTokens(pack.tokens)}토큰</span>
                           {sub && <span className="block text-xs text-ink-faint truncate">{sub}</span>}
+                          {pack.locked && (
+                            <span className="block text-xs text-amber-700">이번 달 {formatPrice(pack.min_month_spend)} 이상 충전하면 살 수 있어요</span>
+                          )}
                           {paid && (
                             <span className="block text-xs text-ink-muted tabular-nums">
                               토큰당 {formatPrice(Math.round(perToken(pack)))}
@@ -237,7 +240,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                           <span className="block text-base font-semibold text-sage tabular-nums">
                             {pack.price_won === 0 ? '무료' : formatPrice(pack.price_won)}
                           </span>
-                          <span className="block text-xs text-ink-muted">{pack.auto_confirm ? '바로 받기' : '충전 요청'}</span>
+                          <span className="block text-xs text-ink-muted">{pack.locked ? '잠겨 있어요' : pack.auto_confirm ? '바로 받기' : '충전 요청'}</span>
                         </span>
                       </button>
                     </li>

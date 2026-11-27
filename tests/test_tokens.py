@@ -72,6 +72,32 @@ def test_purchase_flow_confirm_and_undo(client, admin, make_user):
     assert client.post(f"/admin/token-purchases/{purchase_id}/undo", headers=admin).status_code == 400
 
 
+def test_pack_requires_month_spend(client, admin, make_user):
+    _enable(client, admin)
+    big = _add_pack(client, admin, "큰묶음", 32000, 40)
+    r = client.post("/admin/token-packs", headers=admin, json={"name": "소액", "price_won": 8000, "tokens": 10, "min_month_spend": 30000})
+    assert r.status_code == 200, r.text
+    small = [p for p in client.get("/admin/token-packs", headers=admin).json() if p["name"] == "소액"][0]
+    assert small["min_month_spend"] == 30000
+    _, member = make_user()
+
+    def find(name):
+        return [p for p in client.get("/tokens/packs", headers=member).json() if p["name"] == name][0]
+
+    # 조건을 못 채우면 목록에는 잠긴 채로 보이고, 요청은 서버가 거절한다
+    assert find("소액")["locked"] is True and find("큰묶음")["locked"] is False
+    assert client.post("/tokens/purchases", headers=member, json={"pack_id": small["id"]}).status_code == 400
+    # 입금 확인 전 요청은 합계에 넣지 않는다
+    assert client.post("/tokens/purchases", headers=member, json={"pack_id": big["id"]}).status_code == 200
+    assert find("소액")["locked"] is True
+    purchase_id = client.get("/tokens/me", headers=member).json()["purchases"][0]["id"]
+    assert client.post(f"/admin/token-purchases/{purchase_id}/confirm", headers=admin).status_code == 200
+    assert find("소액")["locked"] is False and find("소액")["month_spend"] == 32000
+    assert client.post("/tokens/purchases", headers=member, json={"pack_id": small["id"]}).status_code == 200
+    # 관리자는 조건과 상관없이 쓸 수 있다
+    assert [p for p in client.get("/tokens/packs", headers=admin).json() if p["name"] == "소액"][0]["locked"] is False
+
+
 def test_undo_blocked_when_tokens_were_used(client, admin, make_user):
     _enable(client, admin)
     pack = _add_pack(client, admin, "충전B", 10000, 16)
