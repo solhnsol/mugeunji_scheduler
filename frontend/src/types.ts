@@ -362,3 +362,32 @@ export interface Notice {
   /** 목록에는 없고 상세·관리자 조회에만 있다 */
   body?: string;
 }
+
+export interface ErrorReport {
+  id: number;
+  username: string;
+  name: string;
+  category: string;
+  category_label: string;
+  urgent: boolean;
+  message: string;
+  page: string | null;
+  status: 'open' | 'done';
+  created_at: string;
+  context: { ua?: string; viewport?: string; standalone?: boolean; online?: boolean; logs?: { t: string; k: string; m: string }[] };
+}
+
+export interface BookingStats {
+  month: string;
+  months: string[];
+  capacity_hours: number;
+  booked_hours: number;
+  utilization: number;
+  cancelled_hours: number;
+  members: number;
+  tokens_used: number;
+  admin_hours: number;
+  by_hour: number[];
+  by_weekday: number[];
+  top_members: { name: string; hours: number; spent: number }[];
+}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { AppShell, HeaderActions, Toast } from '../components/ui';
+import { ReportModal } from '../components/ReportModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { useToast } from '../hooks/useToast';
 import BookingPage from './BookingPage';
@@ -22,6 +23,7 @@ export default function UserApp({
 }) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const navigate = useNavigate();
@@ -76,6 +78,7 @@ export default function UserApp({
   // 홈이 곧 토큰 예약 달력이다. 토큰 충전은 달력 위 잔액 칩에서 열려서 메뉴에 따로 두지 않는다
   const headerMenuItems = [
     { id: 'notices', label: '공지·이용 안내', onClick: () => navigate('/notices') },
+    { id: 'report', label: '오류 신고', onClick: () => setReportOpen(true) },
     { id: 'tour', label: '둘러보기', onClick: () => setTourOpen(true) },
     { id: 'install', label: '홈 화면에 추가', onClick: () => setInstallOpen(true), hidden: !installPlatform() },
   ];
@@ -100,6 +103,14 @@ export default function UserApp({
             show('저장했어요.', 'success');
             await refresh();
           }}
+          onError={(m) => show(m, 'error')}
+        />
+      )}
+      {reportOpen && (
+        <ReportModal
+          token={token}
+          onClose={() => setReportOpen(false)}
+          onDone={(m) => show(m, 'success')}
           onError={(m) => show(m, 'error')}
         />
       )}

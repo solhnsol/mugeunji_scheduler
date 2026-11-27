@@ -290,6 +290,21 @@ async def setup_database(conn: aiosqlite.Connection):
         if not await _column_exists(conn, "deposit_notifications", name):
             await conn.execute(f"ALTER TABLE deposit_notifications ADD COLUMN {name} {col_type}")
 
+    # 회원 오류 신고 (설명 + 디버깅용 context JSON)
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS error_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            category TEXT NOT NULL,
+            message TEXT NOT NULL,
+            page TEXT,
+            context TEXT,
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL
+        );
+    """)
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_error_reports_status ON error_reports(status, id)")
+
     admin_password = os.getenv("ADMIN_PASSWORD")
     if admin_password:
         hashed_admin_password = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')

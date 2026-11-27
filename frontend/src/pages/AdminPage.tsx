@@ -8,6 +8,8 @@ import { useToast } from '../hooks/useToast';
 import { useSession } from '../hooks/useSession';
 import { AdminNoticesTab } from '../components/AdminNoticesTab';
 import { AdminTokensTab } from '../components/AdminTokensTab';
+import { AdminReportsTab } from '../components/AdminReportsTab';
+import { AdminStatsTab } from '../components/AdminStatsTab';
 import { AdminTimetableTab } from '../components/AdminBookingsPanel';
 import { Plan, UserInfo } from '../types';
 import { AdminUsersTab } from '../components/AdminUsersTab';
@@ -19,6 +21,8 @@ const TABS = [
   { id: 'timetable' as const, label: '시간표' },
   { id: 'notices' as const, label: '공지' },
   { id: 'users' as const, label: '회원' },
+  { id: 'stats' as const, label: '통계' },
+  { id: 'reports' as const, label: '신고' },
 ];
 
 export default function AdminPage() {
@@ -100,6 +104,11 @@ function AdminDashboard({
     const id = window.setInterval(() => loadPending().catch(() => undefined), 60_000);
     return () => window.clearInterval(id);
   }, [loadPending, tab]);
+  // 확인 전 오류 신고 수: 신고 탭에 배지로 알린다
+  const [openReports, setOpenReports] = useState(0);
+  useEffect(() => {
+    api.adminErrorReports(token, 'open', 0).then((r) => setOpenReports(r.open_count)).catch(() => undefined);
+  }, [token, tab]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [admins, setAdmins] = useState<UserInfo[]>([]);
@@ -144,6 +153,14 @@ function AdminDashboard({
             onClick={() => setTab(t.id)}
           >
             {t.label}
+            {t.id === 'reports' && openReports > 0 && tab !== 'reports' && (
+              <span
+                className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-danger text-white text-2xs font-semibold tabular-nums align-middle"
+                aria-label={`확인 전 신고 ${openReports}건`}
+              >
+                {openReports}
+              </span>
+            )}
             {t.id === 'tokens' && pendingTokens > 0 && tab !== 'tokens' && (
               <span
                 className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-danger text-white text-2xs font-semibold tabular-nums align-middle"
@@ -159,6 +176,8 @@ function AdminDashboard({
       {tab === 'timetable' && <AdminTimetableTab token={token} show={show} />}
       {tab === 'tokens' && <AdminTokensTab token={token} show={show} />}
       {tab === 'notices' && <AdminNoticesTab token={token} show={show} />}
+      {tab === 'reports' && <AdminReportsTab token={token} show={show} onCount={setOpenReports} />}
+      {tab === 'stats' && <AdminStatsTab token={token} show={show} />}
 
       {tab === 'users' && (
         <div className="space-y-5">
