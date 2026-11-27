@@ -187,6 +187,9 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                   </li>
                 ))}
               </ul>
+              {paymentGuide && (
+                <p className="text-sm font-medium text-ink leading-relaxed whitespace-pre-line border-t border-line/60 pt-3">{paymentGuide}</p>
+              )}
             </section>
           )}
 
