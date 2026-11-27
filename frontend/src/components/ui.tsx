@@ -1,45 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
-function scheduleTabClass(active: boolean) {
-  return `inline-flex items-center justify-center rounded-full px-2.5 sm:px-3 py-1.5 min-h-[36px] sm:min-h-[40px] text-xs sm:text-sm font-medium transition-colors flex-1 sm:flex-none ${
-    active
-      ? 'bg-sage text-white shadow-sm'
-      : 'text-ink-muted hover:text-ink hover:bg-cream-dark/60'
-  }`;
-}
-
-export function ScheduleModeNav({
-  mode,
-  showFree = true,
-}: {
-  mode: 'monthly' | 'free';
-  showFree?: boolean;
-}) {
-  return (
-    <nav
-      className="flex items-center gap-1 p-1 rounded-full bg-cream-dark/50 w-full sm:w-auto"
-      aria-label="예약 메뉴"
-    >
-      {mode === 'monthly' ? (
-        <span className={scheduleTabClass(true)}>월신청</span>
-      ) : (
-        <Link to="/" className={scheduleTabClass(false)}>
-          월신청
-        </Link>
-      )}
-      {showFree &&
-        (mode === 'free' ? (
-          <span className={scheduleTabClass(true)}>자유이용</span>
-        ) : (
-          <Link to="/free" className={scheduleTabClass(false)}>
-            자유이용
-          </Link>
-        ))}
-    </nav>
-  );
-}
-
 /** PC 헤더에서 회원 화면끼리 바로 오가는 링크. 폰은 화면이 좁아 각 화면의 "홈으로"만 둔다 */
 export function SiteLinks() {
   const links: [string, string][] = [['/', '홈'], ['/book', '예약'], ['/tokens', '토큰'], ['/notices', '공지']];
@@ -247,52 +208,6 @@ export function Toast({ message, type }: { message: string; type: 'success' | 'e
       role={type === 'error' ? 'alert' : 'status'}
     >
       {message}
-    </div>
-  );
-}
-
-export function PlanGrid({
-  plans,
-  currentPlanId,
-  selectedPlanId,
-  onSelect,
-}: {
-  plans: import('../types').Plan[];
-  currentPlanId?: number | null;
-  selectedPlanId?: number | null;
-  onSelect: (planId: number) => void;
-}) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {plans.map((plan) => {
-        const isCurrent = currentPlanId === plan.id;
-        const isSelected = selectedPlanId === plan.id;
-        return (
-          <button
-            key={plan.id}
-            type="button"
-            disabled={isCurrent}
-            onClick={() => onSelect(plan.id)}
-            className={`card p-5 text-left transition-all active:scale-[0.98] ${
-              isCurrent
-                ? 'ring-2 ring-sage bg-sage-muted/40'
-                : isSelected
-                  ? 'ring-2 ring-ink/20 bg-cream-dark/50'
-                  : 'hover:border-sage/30 hover:shadow-sm'
-            }`}
-          >
-            <p className="text-2xl font-bold text-ink">{plan.allowed_hours}<span className="text-base font-medium text-ink-muted">h</span></p>
-            <p className="text-sm text-ink-muted mt-1">주 {plan.allowed_hours}시간</p>
-            <p className="text-lg font-semibold text-sage mt-4">
-              {Number(plan.monthly_price).toLocaleString('ko-KR')}
-              <span className="text-sm font-normal text-ink-faint">원</span>
-            </p>
-            {isCurrent && (
-              <span className="badge badge-open mt-3">이용 중</span>
-            )}
-          </button>
-        );
-      })}
     </div>
   );
 }

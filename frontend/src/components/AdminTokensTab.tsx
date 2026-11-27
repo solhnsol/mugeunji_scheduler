@@ -381,6 +381,7 @@ export function AdminTokensTab({
         </summary>
         <div className="space-y-5 mt-3">
           <AdminBookingSettings token={token} show={show} />
+          <PaymentGuideCard token={token} show={show} />
 
       <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -760,5 +761,34 @@ function GrantModal({
       </div>
       {confirmDialog}
     </Modal>
+  );
+}
+
+// 토큰 충전 화면·시작 가이드에 보이는 입금 안내 문구 (예전 정산 탭에서 옮겨 옴)
+function PaymentGuideCard({ token, show }: { token: string; show: (m: string, t: 'success' | 'error') => void }) {
+  const [text, setText] = useState('');
+  useEffect(() => {
+    api.getSettings().then((st) => setText(st.payment_guide ?? '')).catch(() => undefined);
+  }, []);
+  const save = async () => {
+    try {
+      show((await api.updatePaymentGuide(token, text)).message, 'success');
+    } catch (e) {
+      show(e instanceof ApiError ? e.message : '저장하지 못했어요', 'error');
+    }
+  };
+  return (
+    <section className="card p-5">
+      <h2 className="font-semibold text-ink mb-1">입금 안내 문구</h2>
+      <p className="text-xs text-ink-faint mb-3">계좌, 입금자명 규칙 등을 적어요. 회원의 시작 가이드·토큰 충전 화면·이용 안내에 보여요.</p>
+      <textarea
+        className="input min-h-[88px]"
+        maxLength={1000}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="예) 토스뱅크 1000-0000-0000 (홍길동) · 입금자명은 가입한 이름으로 해주세요."
+      />
+      <button type="button" className="btn-secondary !py-2 !min-h-[40px] text-sm mt-3" onClick={save}>저장</button>
+    </section>
   );
 }
