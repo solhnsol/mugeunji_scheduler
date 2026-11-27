@@ -1,4 +1,5 @@
 import { clientKind } from './install';
+import { pushLog } from './clientLog';
 export class ApiError extends Error {
   constructor(message: string) {
     super(message);
@@ -16,6 +17,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
     void fetch('/logout', { method: 'POST' }).finally(() => window.location.reload());
   }
   if (!response.ok) {
+    pushLog('api', `${response.status} ${new URL(response.url, location.origin).pathname}`);
     const detail = (data as { detail?: string | { msg?: string }[] }).detail;
     const message = Array.isArray(detail)
       ? detail.map((item) => item.msg || JSON.stringify(item)).join(', ')
@@ -403,6 +405,29 @@ export const api = {
   async getNotice(id: number) {
     const res = await fetch(`/api/notices/${id}`);
     return parseResponse<import('./types').Notice>(res);
+  },
+
+  async createErrorReport(
+    token: string,
+    body: { category: string; message: string; page: string; context: Record<string, unknown> },
+  ) {
+    const res = await fetch('/error-reports', { method: 'POST', headers: authHeaders(token), body: JSON.stringify(body) });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async adminErrorReports(token: string, status: 'open' | 'done', limit = 100) {
+    const res = await fetch(`/admin/error-reports?status_filter=${status}&limit=${limit}`, { headers: authHeaders(token) });
+    return parseResponse<{ items: import('./types').ErrorReport[]; open_count: number }>(res);
+  },
+
+  async adminSetErrorReportDone(token: string, id: number, done: boolean) {
+    const res = await fetch(`/admin/error-reports/${id}/status?done=${done}`, { method: 'POST', headers: authHeaders(token) });
+    return parseResponse<{ status: string }>(res);
+  },
+
+  async adminBookingStats(token: string, month?: string) {
+    const res = await fetch(`/admin/booking-stats${month ? `?month=${month}` : ''}`, { headers: authHeaders(token) });
+    return parseResponse<import('./types').BookingStats>(res);
   },
 
   async adminListNotices(token: string) {

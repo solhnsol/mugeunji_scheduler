@@ -36,6 +36,7 @@ from src.membership import MembershipManager, period_from_offset, usage_period
 from src.reservation import ReservationManager
 from src.settings import SettingsManager
 from src.notices import NoticeError, NoticeManager
+from src import reports
 from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
 from src.tokens import TokenManager, admin_pack, auto_confirm_deposit, claim_deposit, deposits_for_purchase, is_expired, parse_deposit
 from src.write_lock import writing
@@ -1546,6 +1547,61 @@ async def cancel_booking(
     await broadcast_booking_update(result["dates"])
     refunded = f" (토큰 {result['refunded']} 환불)" if result["refunded"] else ""
     return {"status": "success", "message": f"{result['count']}시간 예약을 취소했어요.{refunded}", **result}
+
+
+# ---------------------------------------------------------------- 오류 신고·이용 통계
+class ErrorReportRequest(BaseModel):
+    category: str
+    message: str = Field(..., max_length=2000)
+    page: str = ""
+    context: Dict = {}
+
+
+@app.post("/error-reports")
+async def create_error_report(
+    data: ErrorReportRequest,
+    current_user: dict = Depends(get_current_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        await reports.create_report(conn, current_user["username"], data.category, data.message, data.page, data.context)
+    except reports.ReportError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return {"status": "success", "message": "신고를 보냈어요. 확인하고 필요하면 연락드릴게요."}
+
+
+@app.get("/admin/error-reports")
+async def admin_list_error_reports(
+    status_filter: str = "open",
+    limit: int = 100,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    return await reports.list_reports(conn, status_filter, max(0, min(limit, 200)))
+
+
+@app.post("/admin/error-reports/{report_id}/status")
+async def admin_set_error_report_status(
+    report_id: int,
+    done: bool,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    if not await reports.set_status(conn, report_id, "done" if done else "open"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="신고를 찾을 수 없어요.")
+    return {"status": "success"}
+
+
+@app.get("/admin/booking-stats")
+async def admin_booking_stats(
+    month: Optional[str] = None,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    try:
+        return await reports.booking_stats(conn, month)
+    except reports.ReportError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ---------------------------------------------------------------- 토큰 예약 (관리자)

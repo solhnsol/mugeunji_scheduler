@@ -6,6 +6,7 @@ import { buildSteps, GuideCard, isFreeOnly, UsageGuideModal } from '../component
 import { useConfirm } from '../components/ConfirmDialog';
 import { PlanApplyModal } from '../components/PlanApplyModal';
 import { PlanManageModal } from '../components/PlanManageModal';
+import { ReportModal } from '../components/ReportModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { ReservationGrid } from '../components/ReservationGrid';
 import { ScheduleStatus } from '../components/ScheduleStatus';
@@ -40,6 +41,7 @@ export default function UserApp({
   const [nextOpenAt, setNextOpenAt] = useState<string | null>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [applyPlan, setApplyPlan] = useState<Plan | null>(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -210,6 +212,7 @@ export default function UserApp({
     { id: 'monthly', label: '월 신청', onClick: () => setScheduleModalOpen(true), hidden: !betaMode || !canViewSchedule },
     { id: 'tokens', label: '토큰', onClick: () => navigate('/tokens'), hidden: (!tokenChargeEnabled && me.role !== 'admin') || tokenMode || betaMode },
     { id: 'notices', label: '공지·이용 안내', onClick: () => navigate('/notices') },
+    { id: 'report', label: '오류 신고', onClick: () => setReportOpen(true) },
     { id: 'tour', label: '둘러보기', onClick: () => setTourOpen(true) },
     { id: 'install', label: '홈 화면에 추가', onClick: () => setInstallOpen(true), hidden: !installPlatform() },
     { id: 'guide', label: '시작 가이드', onClick: () => setGuideOpen(true), hidden: tokenMode || betaMode },
@@ -224,6 +227,15 @@ export default function UserApp({
     !!me.billing && (me.access_status === 'pending_payment' || !me.can_access_schedule);
   const heroNotice =
     me.message && me.message !== '이용 가능' && !showBillingHero ? me.message : undefined;
+
+  const reportModal = reportOpen && (
+    <ReportModal
+      token={token}
+      onClose={() => setReportOpen(false)}
+      onDone={(m) => show(m, 'success')}
+      onError={(m) => show(m, 'error')}
+    />
+  );
 
   const profileModal = profileOpen && (
     <ProfileModal
@@ -374,6 +386,7 @@ export default function UserApp({
         />
         {planModal}
         {profileModal}
+        {reportModal}
         {scheduleModal}
         {tourModal}
         {installModal}
@@ -421,6 +434,7 @@ export default function UserApp({
         )}
         {planModal}
         {profileModal}
+        {reportModal}
         {guideModal}
         {tourModal}
       {installModal}
@@ -494,6 +508,7 @@ export default function UserApp({
       )}
       {planModal}
       {profileModal}
+        {reportModal}
       {guideModal}
       {scheduleModal}
       {tourModal}
