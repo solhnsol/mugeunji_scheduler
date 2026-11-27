@@ -15,12 +15,16 @@ const STATUS_LABEL: Record<TokenPurchase['status'], { text: string; cls: string 
   cancelled: { text: '취소됨', cls: 'text-ink-faint' },
 };
 
+// 가격 부담을 줄이려고 이 금액 이상의 묶음은 버튼을 눌러야 보인다
+const BIG_PACK_WON = 100_000;
+
 export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
   const [packs, setPacks] = useState<TokenPack[] | null>(null);
   const [mine, setMine] = useState<MyTokens | null>(null);
   const [paymentGuide, setPaymentGuide] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showBig, setShowBig] = useState(false);
   const rules = useTokenRules();
   const { toast, show } = useToast();
   const { confirm, dialog } = useConfirm();
@@ -43,6 +47,9 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
 
   const hasInstantPacks = !!packs?.some((p) => p.auto_confirm);
   const hasPaidPacks = !!packs?.some((p) => !p.auto_confirm);
+  const bigPacks = packs?.filter((p) => p.price_won >= BIG_PACK_WON) ?? [];
+  const foldBig = bigPacks.length > 0 && bigPacks.length < (packs?.length ?? 0) && !showBig;
+  const shownPacks = foldBig ? (packs ?? []).filter((p) => p.price_won < BIG_PACK_WON) : packs ?? [];
   const pending = mine?.purchases.filter((p) => p.status === 'pending') ?? [];
   const history = mine?.purchases.filter((p) => p.status !== 'pending') ?? [];
   // 일주일 안에 사라지는 토큰이 있으면 그만큼, 없으면 한 달 안에 사라지는 만큼만 알려준다
@@ -187,7 +194,7 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
               <p className="text-sm text-ink-faint mt-4">지금 고를 수 있는 상품이 없어요. 관리자에게 문의해주세요.</p>
             ) : (
               <ul className="card divide-y divide-line/60 mt-3">
-                {packs.map((pack) => {
+                {shownPacks.map((pack) => {
                   const sub = [pack.name !== `${formatTokens(pack.tokens)}토큰` && pack.name !== `${formatTokens(pack.tokens)} 토큰` ? pack.name : '', pack.expires_on ? `${formatExpiresOn(pack.expires_on)} 사용` : '']
                     .filter(Boolean)
                     .join(' · ');
@@ -213,6 +220,17 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                     </li>
                   );
                 })}
+                {foldBig && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => setShowBig(true)}
+                      className="w-full min-h-[48px] px-4 py-3 text-sm text-ink-muted text-center transition-colors hover:bg-sage-muted/30 active:bg-sage-muted/50"
+                    >
+                      더 많이 충전하기
+                    </button>
+                  </li>
+                )}
               </ul>
             )}
           </section>
