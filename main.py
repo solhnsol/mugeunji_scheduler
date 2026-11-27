@@ -2220,3 +2220,33 @@ async def agent_delete_notice(
     except NoticeError as e:
         raise _notice_error(e)
     return {"status": "success", "message": "공지를 삭제했어요."}
+
+
+# 입금 알림 수신: iOS 단축어가 토스 알림 내용을 그대로 POST한다. 원문만 저장하고, 파싱은 실제 알림을 본 뒤 붙인다.
+# 쿠키 로그인은 받지 않고 공유 비밀(DEPOSIT_WEBHOOK_TOKEN)을 X-Deposit-Token 헤더로 확인한다.
+@app.post("/api/deposit-notify")
+async def deposit_notify(request: Request, conn: aiosqlite.Connection = Depends(get_db_conn)):
+    expected = os.getenv("DEPOSIT_WEBHOOK_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="입금 알림 수신이 꺼져 있어요.")
+    given = request.headers.get("x-deposit-token", "")
+    if not secrets.compare_digest(given.encode(), expected.encode()):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰이 올바르지 않아요.")
+    raw = (await request.body())[:20_000].decode("utf-8", errors="replace")  # 알림 한 건은 짧다. 상한만 둔다
+    ctype = request.headers.get("content-type")
+    cur = await conn.execute(
+        "INSERT INTO deposit_notifications (received_at, content_type, raw_body) VALUES (?, ?, ?)",
+        (now_kst().isoformat(timespec="seconds"), ctype, raw),
+    )
+    await conn.commit()
+    print(f"[deposit-notify] #{cur.lastrowid} ({ctype}) {raw!r}")
+    return {"status": "ok", "id": cur.lastrowid}
+
+
+@app.get("/admin/deposit-notifications")
+async def admin_list_deposit_notifications(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    async with conn.execute("SELECT * FROM deposit_notifications ORDER BY id DESC LIMIT 50") as cur:
+        return [dict(r) for r in await cur.fetchall()]
