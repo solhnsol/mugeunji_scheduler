@@ -157,6 +157,12 @@ class RegisterInfo(BaseModel):
     password: str = Field(..., min_length=6)
     name: str = Field(..., min_length=2)
     phone: str = Field(..., min_length=9)
+    quiz_answer: str = ""
+
+
+class SignupQuizRequest(BaseModel):
+    question: str = Field("", max_length=100)
+    answer: str = Field("", max_length=100)
 
 
 class UpdateProfileRequest(BaseModel):
@@ -518,6 +524,47 @@ _REGISTER_MAX_PER_IP = 10
 _register_attempts: Dict[str, List[float]] = {}
 
 
+def _quiz_norm(text: str) -> str:
+    """띄어쓰기와 대소문자를 무시하고 비교한다."""
+    return "".join((text or "").split()).lower()
+
+
+@app.get("/signup-quiz")
+async def get_signup_quiz(conn: aiosqlite.Connection = Depends(get_db_conn)):
+    """가입 화면에 보여줄 질문만 내려준다. 정답은 내려주지 않는다."""
+    settings = await SettingsManager(conn).get_settings()
+    return {"question": settings.get("signup_quiz_question") or ""}
+
+
+@app.get("/admin/signup-quiz")
+async def admin_get_signup_quiz(
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    settings = await SettingsManager(conn).get_settings()
+    return {
+        "question": settings.get("signup_quiz_question") or "",
+        "answer": settings.get("signup_quiz_answer") or "",
+    }
+
+
+@app.put("/admin/signup-quiz")
+async def admin_update_signup_quiz(
+    data: SignupQuizRequest,
+    admin_user: dict = Depends(get_current_admin_user),
+    conn: aiosqlite.Connection = Depends(get_db_conn),
+):
+    question, answer = data.question.strip(), data.answer.strip()
+    if bool(question) != bool(answer):
+        raise HTTPException(status_code=400, detail="질문과 정답을 둘 다 입력해 주세요. 퀴즈를 끄려면 둘 다 비워 주세요.")
+    ok, message = await SettingsManager(conn).upsert_settings(
+        {"signup_quiz_question": question, "signup_quiz_answer": answer}
+    )
+    if ok:
+        return {"status": "success", "message": "가입 퀴즈를 저장했어요." if question else "가입 퀴즈를 껐어요."}
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
+
+
 @app.post("/register")
 async def register_user(data: RegisterInfo, request: Request, conn: aiosqlite.Connection = Depends(get_db_conn)):
     now = time.time()
@@ -531,6 +578,11 @@ async def register_user(data: RegisterInfo, request: Request, conn: aiosqlite.Co
         )
     recent.append(now)
     _register_attempts[ip] = recent
+    settings = await SettingsManager(conn).get_settings()
+    if settings.get("signup_quiz_question") and _quiz_norm(data.quiz_answer) != _quiz_norm(
+        settings.get("signup_quiz_answer") or ""
+    ):
+        raise HTTPException(status_code=400, detail="답이 맞지 않아요. 동아리 분께 물어보세요.")
     auth_manager = AuthManager(conn)
     is_success, message = await auth_manager.register(
         data.username, data.password, data.name, data.phone

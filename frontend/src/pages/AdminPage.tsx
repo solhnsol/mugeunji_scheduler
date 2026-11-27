@@ -21,6 +21,7 @@ import { Plan, Reservation, UserInfo } from '../types';
 import { summarizeReservations } from '../utils/reservationSummary';
 import { MemberPicker } from '../components/MemberPicker';
 import { AdminUsersTab } from '../components/AdminUsersTab';
+import { SignupQuizCard } from '../components/SignupQuizCard';
 import { EditAdminModal, EditUserModal, PlanPriceRow } from '../components/AdminUserModals';
 
 // 토큰제라 매일 쓰는 탭 셋만 늘 보이고, 시간표와 예전 방식(월 신청) 탭 넷은 "더보기" 하나로 묶어 그 아래 줄에서 고른다. 폰에서도 탭이 넘치지 않는다
@@ -543,7 +544,12 @@ function AdminDashboard({
         />
       )}
 
-      {tab === 'users' && <AdminUsersTab admins={admins} users={users} onEdit={setEditUser} />}
+      {tab === 'users' && (
+        <div className="space-y-5">
+          <SignupQuizCard token={token} show={show} />
+          <AdminUsersTab admins={admins} users={users} onEdit={setEditUser} />
+        </div>
+      )}
 
       {editUser && editUser.role === 'admin' ? (
         <EditAdminModal
