@@ -274,6 +274,15 @@ async def setup_database(conn: aiosqlite.Connection):
     await conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_token_purchases_status ON token_purchases(status, id)"
     )
+    # 입금 알림 원문 보관 (iOS 단축어 → /api/deposit-notify). 파싱·자동 처리는 이 원문을 보고 나중에 붙인다.
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS deposit_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            received_at TEXT NOT NULL,
+            content_type TEXT,
+            raw_body TEXT NOT NULL
+        );
+    """)
 
     admin_password = os.getenv("ADMIN_PASSWORD")
     if admin_password:
