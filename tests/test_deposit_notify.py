@@ -89,3 +89,14 @@ def test_same_name_gets_distinct_deposit_name(client, admin, make_user, monkeypa
     assert client.get("/tokens/me", headers=second).json()["balance"] == 9
     assert client.get("/tokens/me", headers=first).json()["balance"] == 0
     assert _notice(client, 34567, "박동명").startswith("confirmed:")  # 이름 그대로 입금하면 첫 번째 회원
+
+
+def test_same_name_different_amount_needs_no_deposit_name(client, admin, make_user):
+    from tests.test_tokens import _add_pack, _enable
+    _enable(client, admin)
+    a, b = _add_pack(client, admin, "금액A", 45671, 1), _add_pack(client, admin, "금액B", 45672, 1)
+    _, first = make_user("이동명")
+    _, second = make_user("이동명")
+    client.post("/tokens/purchases", headers=first, json={"pack_id": a["id"]})
+    client.post("/tokens/purchases", headers=second, json={"pack_id": b["id"]})
+    assert client.get("/tokens/me", headers=second).json()["purchases"][0]["deposit_name"] is None

@@ -488,11 +488,11 @@ class TokenManager:
                 return False, f"확인 대기 중인 충전 요청이 이미 {MAX_PENDING_PURCHASES}건 있어요. 확인이 끝난 뒤 다시 요청해주세요."
         deposit_name = None
         if not pack["auto_confirm"] and user and user["name"]:
-            # 같은 이름의 다른 회원이 이미 입금 대기 중이면 입금자명을 구분해 안내한다 (이름 + 연락처 끝 4자리)
+            # 같은 이름·같은 금액으로 다른 회원이 이미 입금 대기 중이면 (금액이 다르면 알림을 구분할 수 있다) 입금자명을 구분해 안내한다 (이름 + 연락처 끝 4자리)
             async with self.conn.execute(
                 "SELECT 1 FROM token_purchases p JOIN users u ON u.username = p.username "
-                "WHERE p.status = 'pending' AND u.name = ? AND p.username != ?",
-                (user["name"], username),
+                "WHERE p.status = 'pending' AND u.name = ? AND p.price_won = ? AND p.username != ?",
+                (user["name"], pack["price_won"], username),
             ) as cursor:
                 if await cursor.fetchone():
                     deposit_name = f"{user['name']}{(user['phone'] or '')[-4:] or '2'}"
