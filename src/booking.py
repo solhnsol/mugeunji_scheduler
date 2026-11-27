@@ -464,6 +464,7 @@ class BookingManager:
             rows.append(row)
 
         plan = []
+        running = 0  # 환불 합계에서 소수점을 한 번만 버리도록 누적 분자를 따라간다
         for row in rows:
             start = slot_start(date.fromisoformat(row["booking_date"]), row["hour"])
             remaining = (start - now).total_seconds() / 3600
@@ -475,7 +476,9 @@ class BookingManager:
                 percent = refund_percent(tiers, remaining)
                 if percent is None:
                     raise BookingError("취소할 수 있는 시간이 지났어요.")
-            plan.append((row, row["cost"] * percent // 100))
+            refund = (running + row["cost"] * percent) // 100 - running // 100
+            running += row["cost"] * percent
+            plan.append((row, refund))
 
         spend_expiries: Dict[str, Dict] = {}
         for row, _ in plan:
