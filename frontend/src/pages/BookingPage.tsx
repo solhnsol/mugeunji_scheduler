@@ -334,6 +334,15 @@ export default function BookingPage({
     }
   };
 
+  // 다음 달 오픈 시각이 되면 새로고침 없이 다시 불러온다. 남은 시간은 기기 시계가 아니라 서버 시각으로 잰다
+  useEffect(() => {
+    if (!config || config.next_month_open || !config.next_month_open_at) return;
+    const left = new Date(config.next_month_open_at).getTime() - new Date(config.server_now).getTime();
+    if (left > 24 * 3_600_000) return;
+    const timer = setTimeout(() => void refresh(), left > 0 ? left + 200 : 1000);
+    return () => clearTimeout(timer);
+  }, [config, refresh]);
+
   const nextOpenNote = (() => {
     if (!config || config.next_month_open || !config.next_month_open_at) return null;
     // 늘 띄우지 않는다: 다음 달을 넘겨 봤을 때나 오픈 3일 전부터만

@@ -15,10 +15,12 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.environ.setdefault("ADMIN_PASSWORD", "admin1234")
+os.environ.setdefault("TOKEN_SWITCH_AT", "")  # 테스트 DB는 정식 전환 시각에 저절로 바뀌지 않게
 
 from src.auth import AuthManager  # noqa: E402
 from src.database import init_db  # noqa: E402
 from src.membership import MembershipManager, usage_period  # noqa: E402
+from src.tokens import TokenManager  # noqa: E402
 from src.reservation import ReservationManager  # noqa: E402
 from src.automation_config import RESERVATION_FREE, RESERVATION_MONTHLY  # noqa: E402
 
@@ -77,6 +79,14 @@ async def main(db_path: str) -> None:
     await rm.force_create_reservation("freeonly", [
         {"day": "Sunday", "time_index": 22},
     ], RESERVATION_FREE)
+
+    tm = TokenManager(conn)
+    for name, price, tokens, min_spend in (
+        ("10토큰", 8000, 10, 0), ("20토큰", 16000, 20, 30000), ("40토큰", 32000, 40, 0),
+        ("80토큰", 56000, 80, 0), ("160토큰", 100000, 160, 0),
+    ):
+        await tm.create_pack(name, price, tokens, min_recent_spend=min_spend)
+    await tm.create_pack("11월 베타 무료 충전", 0, 8, auto_confirm=True)  # 전환 때 닫히는지 확인용
 
     await conn.close()
     print(f"완료: {db_path}")

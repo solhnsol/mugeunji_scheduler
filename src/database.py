@@ -313,6 +313,8 @@ async def setup_database(conn: aiosqlite.Connection):
         ('token_expiry_months', '3'),
         # 베타 모드에서 기존 월 예약을 매주 반복 적용할 달 (YYYY-MM)
         ('beta_month', ''),
+        # 정식 토큰 예약으로 자동 전환할 시각 (KST). 이미 지났으면 배포 직후 바로 전환된다. 환경 변수 TOKEN_SWITCH_AT로 바꾸거나 비울 수 있다
+        ('token_switch_at', os.getenv("TOKEN_SWITCH_AT", "2026-11-27T00:00:00+09:00")),
         # 에이전트가 공지를 올릴 때 쓰는 API 키의 해시 (평문은 저장하지 않는다)
         ('notice_api_key_hash', ''),
         *[(k, v) for k, v in AUTOMATION_SETTING_DEFAULTS.items()],

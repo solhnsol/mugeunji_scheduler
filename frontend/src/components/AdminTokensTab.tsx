@@ -683,7 +683,7 @@ function GrantModal({
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [amount, setAmount] = useState('10');
-  const [memo, setMemo] = useState('11월 베타 무료 지급');
+  const [memo, setMemo] = useState('무료 지급');
   const [expiresOn, setExpiresOn] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);

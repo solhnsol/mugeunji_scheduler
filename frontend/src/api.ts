@@ -217,11 +217,11 @@ export const api = {
     return parseResponse<import('./types').MyBooking[]>(res);
   },
 
-  async createBookings(token: string, slots: { date: string; hour: number }[]) {
+  async createBookings(token: string, slots: { date: string; hour: number }[], skipTaken = false) {
     const res = await fetch('/bookings', {
       method: 'POST',
       headers: authHeaders(token),
-      body: JSON.stringify({ slots }),
+      body: JSON.stringify({ slots, skip_taken: skipTaken }),
     });
     return parseResponse<{ message: string; count: number; spent: number }>(res);
   },
@@ -498,6 +498,7 @@ export const api = {
       beta_month: string;
       beta_month_open_at: string | null;
       next_month_open_at: string | null;
+      token_switch_at: string;
       price_bands: import('./types').PriceBand[];
       refund_tiers: import('./types').RefundTier[];
     }>(res);
@@ -508,6 +509,7 @@ export const api = {
     body: Partial<{
       reservation_mode: import('./types').ReservationMode;
       beta_month: string;
+      token_switch_at: string;
       price_bands: import('./types').PriceBand[];
       refund_tiers: import('./types').RefundTier[];
     }>,

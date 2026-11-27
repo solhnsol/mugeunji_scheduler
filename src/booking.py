@@ -24,6 +24,7 @@ MODE_TOKEN = "token"
 MODE_BETA = "beta"
 MODES = (MODE_LEGACY, MODE_BETA, MODE_TOKEN)
 SETTING_BETA_MONTH = "beta_month"
+SETTING_SWITCH_AT = "token_switch_at"  # 이 시각이 지나면 정식 토큰 예약으로 자동 전환 (비우면 없음)
 WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # 새벽 시간대 (회원별 허용 체크 대상)
@@ -33,15 +34,24 @@ MAX_SLOTS_PER_REQUEST = 168
 
 # 기본 가격표: [시작 시, 끝 시(미포함), 1시간당 토큰]
 DEFAULT_PRICE_BANDS = [
-    {"start": 0, "end": 4, "cost": 1},
-    {"start": 4, "end": 8, "cost": 0},
-    {"start": 8, "end": 12, "cost": 1},
+    {"start": 0, "end": 2, "cost": 2},
+    {"start": 2, "end": 4, "cost": 1},
+    {"start": 4, "end": 7, "cost": 0},
+    {"start": 7, "end": 12, "cost": 1},
     {"start": 12, "end": 16, "cost": 2},
     {"start": 16, "end": 24, "cost": 4},
 ]
 
-# 기본 환불 정책: 시작 전까지 언제든 100% (이후 단계를 추가해 강화할 수 있다)
-DEFAULT_REFUND_TIERS = [{"hours_before": 0, "percent": 100}]
+# 정식 출시 상품: (토큰, 가격, 충전 조건). 전환할 때 이 목록에 맞춘다.
+LAUNCH_PACKS = [(10, 8000, 0), (20, 16000, 30000), (40, 32000, 0), (80, 56000, 0), (160, 100000, 0)]
+
+# 기본 환불 정책: 48시간 전 100%, 24시간 전 80%, 3시간 전 50%, 그 뒤 0%
+DEFAULT_REFUND_TIERS = [
+    {"hours_before": 48, "percent": 100},
+    {"hours_before": 24, "percent": 80},
+    {"hours_before": 3, "percent": 50},
+    {"hours_before": 0, "percent": 0},
+]
 
 SETTING_PRICE_BANDS = "token_price_bands"
 SETTING_REFUND_TIERS = "token_refund_tiers"
@@ -168,6 +178,81 @@ class BookingManager:
             await self.conn.execute("DELETE FROM reservations WHERE reservation_type = 'free'")
             await self.conn.commit()
         return ok, ("예약 방식을 저장했어요." if ok else message)
+
+    async def set_switch_at(self, raw: str) -> Tuple[bool, str]:
+        """정식 전환 예약 시각 저장. 빈 값이면 예약을 없앤다."""
+        raw = (raw or "").strip()
+        if raw:
+            try:
+                at = datetime.fromisoformat(raw)
+            except ValueError:
+                return False, "전환 시각을 읽을 수 없어요."
+            raw = (at if at.tzinfo else at.replace(tzinfo=KST)).astimezone(KST).isoformat()
+        ok, message = await SettingsManager(self.conn).upsert_settings({SETTING_SWITCH_AT: raw})
+        return ok, ("전환 예약을 저장했어요." if ok else message)
+
+    async def apply_scheduled_switch(self) -> Optional[Dict]:
+        """전환 시각이 지났으면 정식 토큰 예약으로 바꾼다. 바꿨다면 정리 결과를, 아니면 None.
+
+        한 번만 실행된다 (끝나면 예약 시각을 비운다). 호출하는 쪽이 쓰기 락을 잡는다.
+        """
+        settings = await self._settings()
+        raw = settings.get(SETTING_SWITCH_AT) or ""
+        if not raw:
+            return None
+        try:
+            at = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+        now = now_kst()
+        if now < at.astimezone(KST):
+            return None
+
+        # 월 신청이 점유한 남은 시간은 비용 0 토큰 예약으로 옮겨 이중 예약·소실을 막는다
+        kept = 0
+        if (settings.get(SETTING_MODE) or MODE_LEGACY) == MODE_BETA:
+            month, mapping = await self._legacy_map(settings)
+            if month:
+                first = date.fromisoformat(f"{month}-01")
+                last = date(first.year, first.month, calendar.monthrange(first.year, first.month)[1])
+                day = max(first, now.date())
+                while day <= last:
+                    for hour in range(24):
+                        owner = mapping.get((day.weekday(), hour))
+                        if not owner or slot_start(day, hour) <= now:
+                            continue
+                        cursor = await self.conn.execute(
+                            """INSERT OR IGNORE INTO bookings (username, booking_date, hour, cost, status, created_at, created_by)
+                               VALUES (?, ?, ?, 0, 'active', ?, 'monthly-switch')""",
+                            (owner, day.isoformat(), hour, now.isoformat()),
+                        )
+                        kept += cursor.rowcount
+                    day += timedelta(days=1)
+
+        # 베타용 무료 충전 상품과 정식 가격이 아닌 옛 상품은 닫고, 정식 상품이 없으면 만든다
+        closed = 0
+        keep = {(t, p) for t, p, _ in LAUNCH_PACKS}
+        for pack in await self.tokens.list_packs(active_only=True):
+            if (pack["tokens"], pack["price_won"]) not in keep:
+                await self.tokens.update_pack(pack["id"], active=False)
+                closed += 1
+        for tokens, price, min_spend in LAUNCH_PACKS:
+            match = next((p for p in await self.tokens.list_packs(active_only=True) if (p["tokens"], p["price_won"]) == (tokens, price)), None)
+            if match is None:
+                await self.tokens.create_pack(f"{tokens}토큰", price, tokens, min_recent_spend=min_spend)
+            elif match["min_recent_spend"] != min_spend or match["audience"] != "all":
+                await self.tokens.update_pack(match["id"], min_recent_spend=min_spend, audience="all")
+        # 가격표·환불 정책·다음 달 예약 오픈(매달 말일 21:00)도 정식 값으로 맞춘다
+        await SettingsManager(self.conn).upsert_settings({
+            SETTING_PRICE_BANDS: json.dumps(validate_price_bands(DEFAULT_PRICE_BANDS)),
+            SETTING_REFUND_TIERS: json.dumps(validate_refund_tiers(DEFAULT_REFUND_TIERS)),
+            "auto_monthly_open_enabled": "true", "monthly_open_hour": "21", "monthly_open_minute": "0",
+        })
+        await self.conn.commit()
+
+        await self.set_mode(MODE_TOKEN)
+        await SettingsManager(self.conn).upsert_settings({SETTING_SWITCH_AT: ""})
+        return {"kept_monthly_slots": kept, "closed_packs": closed}
 
     @staticmethod
     def _parse_month(raw: str) -> str:
@@ -328,6 +413,7 @@ class BookingManager:
             "reservation_enabled": settings.get("reservation_enabled") != "false",
             "price_bands": self._bands_from(settings),
             "refund_tiers": self._tiers_from(settings),
+            "server_now": now.isoformat(),  # 화면이 기기 시계 대신 서버 시각으로 오픈까지 남은 시간을 잰다
             "bookable_from": window["start"].isoformat(),
             "bookable_until": window["end"].isoformat(),
             "next_month_open_at": window["next_month_open_at"].isoformat() if window["next_month_open_at"] else None,
@@ -351,7 +437,8 @@ class BookingManager:
         return day, hour
 
     async def create_bookings(
-        self, username: str, role: str, raw_slots: List[Dict], *, force_by: Optional[str] = None
+        self, username: str, role: str, raw_slots: List[Dict], *, force_by: Optional[str] = None,
+        skip_taken: bool = False,
     ) -> Dict:
         """예약 생성. force_by(관리자 아이디)가 있으면 범위·권한·토큰을 따지지 않는 강제 등록.
 
@@ -364,6 +451,23 @@ class BookingManager:
 
         settings = await self._settings()
         slots = sorted({self._parse_slot(s) for s in raw_slots})
+        skipped = 0
+        if skip_taken:
+            # 일괄 예약: 그사이 다른 사람이 가져간 칸은 빼고 나머지만 예약한다
+            legacy = await self._legacy_map(settings)
+            free_slots = []
+            for day, hour in slots:
+                async with self.conn.execute(
+                    "SELECT 1 FROM bookings WHERE booking_date = ? AND hour = ? AND status = 'active'", (day.isoformat(), hour)
+                ) as cursor:
+                    taken = await cursor.fetchone()
+                if taken or self._legacy_owner(legacy, day, hour):
+                    skipped += 1
+                else:
+                    free_slots.append((day, hour))
+            if not free_slots:
+                raise BookingError("고른 시간이 모두 이미 예약됐어요.")
+            slots = free_slots
         now = now_kst()
         # 관리자도 회원 화면에서는 회원과 같은 규칙(기간·중지·새벽·토큰). 관리자 화면의 강제 등록(force_by)만 예외
         exempt = force_by is not None
@@ -433,7 +537,7 @@ class BookingManager:
         except Exception:
             await self.conn.rollback()
             raise
-        return {"ids": ids, "count": len(ids), "spent": total, "dates": sorted({d.isoformat() for d, _ in slots})}
+        return {"ids": ids, "count": len(ids), "spent": total, "skipped": skipped, "dates": sorted({d.isoformat() for d, _ in slots})}
 
     async def cancel_bookings(
         self,

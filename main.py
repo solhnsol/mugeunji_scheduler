@@ -1,3 +1,4 @@
+import logging
 import time
 import asyncio
 import os
@@ -83,11 +84,31 @@ class ConnectionManager:
 connection_manager = ConnectionManager()
 
 
+async def _run_scheduled_switch(conn: aiosqlite.Connection) -> None:
+    async with writing():
+        result = await BookingManager(conn).apply_scheduled_switch()
+    if result:
+        logging.getLogger(__name__).info("정식 토큰 예약으로 자동 전환: %s", result)
+        await broadcast_reservation_updates(conn)
+
+
+async def _switch_watcher(conn: aiosqlite.Connection) -> None:
+    """전환 예약 시각이 지났는지 30초마다 확인한다 (재시작해도 시작할 때 한 번 더 확인)."""
+    while True:
+        try:
+            await _run_scheduled_switch(conn)
+        except Exception:
+            logging.getLogger(__name__).exception("자동 전환 확인 실패")
+        await asyncio.sleep(30)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     conn = await init_db()
     app.state.db_conn = conn
+    watcher = asyncio.create_task(_switch_watcher(conn))
     yield
+    watcher.cancel()
     await conn.close()
 
 
@@ -304,6 +325,7 @@ class BookingSlot(BaseModel):
 
 class BookingCreateRequest(BaseModel):
     slots: List[BookingSlot] = Field(..., min_length=1, max_length=168)
+    skip_taken: bool = False  # 일괄 예약: 이미 예약된 칸은 빼고 나머지만 예약
 
 
 class BookingCancelRequest(BaseModel):
@@ -334,6 +356,7 @@ class RefundTierModel(BaseModel):
 class BookingSettingsRequest(BaseModel):
     reservation_mode: Optional[Literal["legacy", "beta", "token"]] = None
     beta_month: Optional[str] = None
+    token_switch_at: Optional[str] = None
     price_bands: Optional[List[PriceBandModel]] = None
     refund_tiers: Optional[List[RefundTierModel]] = None
 
@@ -1498,13 +1521,15 @@ async def create_booking(
     await _require_token_mode(conn, current_user)
     try:
         result = await BookingManager(conn).create_bookings(
-            current_user["username"], current_user["role"], [slot.model_dump() for slot in data.slots]
+            current_user["username"], current_user["role"], [slot.model_dump() for slot in data.slots],
+            skip_taken=data.skip_taken,
         )
     except BookingError as e:
         raise _booking_error(e)
     await broadcast_booking_update(result["dates"])
     spent = f" (토큰 {result['spent']} 사용)" if result["spent"] else ""
-    return {"status": "success", "message": f"{result['count']}시간을 예약했어요.{spent}", **result}
+    skipped = f" 이미 예약된 {result['skipped']}시간은 빼고요." if result["skipped"] else ""
+    return {"status": "success", "message": f"{result['count']}시간을 예약했어요.{spent}{skipped}", **result}
 
 
 @app.post("/bookings/cancel")
@@ -1538,6 +1563,7 @@ async def get_booking_settings(
             lambda at: at.isoformat() if at else None
         )(BookingManager.month_open_at(await SettingsManager(conn).get_settings(), config["beta_month"])),
         "next_month_open_at": config["next_month_open_at"],
+        "token_switch_at": (await SettingsManager(conn).get_settings()).get("token_switch_at") or "",
         "price_bands": config["price_bands"],
         "refund_tiers": config["refund_tiers"],
     }
@@ -1559,6 +1585,8 @@ async def update_booking_settings(
         results.append(await manager.set_mode(data.reservation_mode, data.beta_month))
     elif data.beta_month is not None:
         results.append(await manager.set_mode(await manager.get_mode(), data.beta_month))
+    if data.token_switch_at is not None:
+        results.append(await manager.set_switch_at(data.token_switch_at))
     if not results:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="변경할 항목이 없어요.")
     for ok, message in results:

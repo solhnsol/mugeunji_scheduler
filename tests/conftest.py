@@ -9,6 +9,7 @@ _tmp = tempfile.mkdtemp()
 os.environ["DB_PATH"] = os.path.join(_tmp, "test.db")
 os.environ["ADMIN_PASSWORD"] = "admin-pass-1"
 os.environ["SECRET_KEY"] = "t" * 40
+os.environ["TOKEN_SWITCH_AT"] = ""  # 시계가 지나도 테스트 DB가 저절로 전환되지 않게
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.testclient import TestClient  # noqa: E402

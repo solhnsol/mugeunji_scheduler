@@ -41,12 +41,16 @@ def test_config_defaults(client, make_user):
     _, member = make_user()
     cfg = client.get("/bookings/config", headers=member).json()
     assert cfg["price_bands"] == [
-        {"start": 0, "end": 4, "cost": 1}, {"start": 4, "end": 8, "cost": 0}, {"start": 8, "end": 12, "cost": 1},
-        {"start": 12, "end": 16, "cost": 2}, {"start": 16, "end": 24, "cost": 4},
+        {"start": 0, "end": 2, "cost": 2}, {"start": 2, "end": 4, "cost": 1}, {"start": 4, "end": 7, "cost": 0},
+        {"start": 7, "end": 12, "cost": 1}, {"start": 12, "end": 16, "cost": 2}, {"start": 16, "end": 24, "cost": 4},
     ]
-    assert cfg["refund_tiers"] == [{"hours_before": 0, "percent": 100}]
+    assert cfg["refund_tiers"] == [
+        {"hours_before": 48, "percent": 100}, {"hours_before": 24, "percent": 80},
+        {"hours_before": 3, "percent": 50}, {"hours_before": 0, "percent": 0},
+    ]
     assert cfg["bookable_from"] == "2026-12-10" and cfg["bookable_until"] == "2026-12-31"
     assert cfg["next_month_open"] is False and cfg["next_month_open_at"].startswith("2026-12-31T21:00")
+    assert cfg["server_now"].startswith("2026-12-10T12:00")
     assert cfg["dawn_allowed"] is True and cfg["balance"] == 0
 
 
@@ -360,3 +364,53 @@ def test_admin_pays_tokens_like_members(client, admin, token_mode):
     admin_view = client.get("/bookings/range", headers=admin, params={"start": "2027-03-01", "days": 1, "admin_view": True}).json()
     assert member_view["days"][0]["slots"][10]["status"] == "closed"
     assert admin_view["days"][0]["slots"][10]["status"] == "free"
+
+
+def test_scheduled_switch_keeps_monthly_and_closes_free_packs(client, admin, make_user, fixed_now):
+    import main
+
+    owner, owner_h = make_user("월신청전환")
+    booker, booker_h = make_user("토큰전환")
+    _give(client, admin, booker, 30)
+    client.post("/admin/token-packs", headers=admin, json={"name": "베타 무료", "price_won": 0, "tokens": 8, "auto_confirm": True})
+    client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "beta"})
+    client.post("/admin/reservations/create", headers=admin, json={
+        "target_username": owner, "reservation_type": "monthly", "reservations": [{"day": "Thursday", "time_index": 15}],
+    })
+    # 전환 시각 전에는 아무 일도 없다
+    client.put("/admin/booking-settings", headers=admin, json={"token_switch_at": "2026-12-10T13:00:00+09:00"})
+    assert client.portal.call(main._run_scheduled_switch, main.app.state.db_conn) is None
+    assert client.get("/admin/booking-settings", headers=admin).json()["reservation_mode"] == "beta"
+    # 시각이 지나면 한 번만 전환된다
+    fixed_now["now"] = NOW + timedelta(hours=2)
+    client.portal.call(main._run_scheduled_switch, main.app.state.db_conn)
+    s = client.get("/admin/booking-settings", headers=admin).json()
+    assert s["reservation_mode"] == "token" and s["token_switch_at"] == ""
+    # 월 신청 시간(12/10 목 15시)이 비용 0 토큰 예약으로 남아 이중 예약이 막힌다
+    day = client.get("/bookings/range", headers=booker_h, params={"start": "2026-12-10", "days": 1}).json()["days"][0]
+    assert {x["hour"]: x for x in day["slots"]}[15]["status"] == "taken"
+    assert _book(client, booker_h, ("2026-12-10", 15)).status_code == 400
+    packs = client.get("/admin/token-packs", headers=admin).json()
+    assert not [p for p in packs if p["name"] == "베타 무료" and p["active"]]
+    active = sorted((p["tokens"], p["price_won"], p["min_recent_spend"]) for p in packs if p["active"])
+    assert active == [(10, 8000, 0), (20, 16000, 30000), (40, 32000, 0), (80, 56000, 0), (160, 100000, 0)]
+    cfg = client.get("/bookings/config", headers=booker_h).json()
+    assert cfg["price_bands"][0] == {"start": 0, "end": 2, "cost": 2} and cfg["refund_tiers"][0] == {"hours_before": 48, "percent": 100}
+    client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "legacy"})
+    client.post("/admin/reservations/delete", headers=admin, json={"reservations": [{"day": "Thursday", "time_index": 15}]})
+
+
+def test_bulk_skips_taken_slots(client, admin, make_user, token_mode):
+    a, a_h = make_user("선점")
+    b, b_h = make_user("일괄")
+    _give(client, admin, a, 10)
+    _give(client, admin, b, 20)
+    assert _book(client, a_h, ("2026-12-16", 16)).status_code == 200
+    slots = [{"date": "2026-12-16", "hour": 16}, {"date": "2026-12-16", "hour": 17}]
+    # 기본은 통째로 거절, skip_taken이면 잡힌 칸만 빼고 예약 (토큰도 예약된 칸만큼만)
+    assert client.post("/bookings", headers=b_h, json={"slots": slots}).status_code == 400
+    r = client.post("/bookings", headers=b_h, json={"slots": slots, "skip_taken": True})
+    assert r.status_code == 200 and r.json()["count"] == 1 and r.json()["skipped"] == 1 and r.json()["spent"] == 4
+    assert _balance(client, b_h) == 16
+    r = client.post("/bookings", headers=b_h, json={"slots": slots, "skip_taken": True})
+    assert r.status_code == 400 and "이미 예약" in r.json()["detail"]
