@@ -198,6 +198,11 @@ export function AdminTokensTab({
                     {p.status === 'confirmed' && ` · 확인 ${formatDateTime(p.confirmed_at)} (${p.confirmed_by === 'auto' ? '자동' : p.confirmed_by})`}
                     {p.memo ? ` · ${p.memo}` : ''}
                   </p>
+                  {p.deposits && p.deposits.length > 0 && (
+                    <p className="text-xs text-sage mt-0.5">
+                      같은 금액 입금 알림 · {p.deposits.map((d) => `${d.depositor ?? '이름 없음'} ${formatDateTime(d.received_at)}`).join(', ')}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-1 ml-auto">
                   {p.status === 'pending' && (

@@ -232,6 +232,8 @@ export interface TokenPurchase {
   confirmed_at: string | null;
   confirmed_by: string | null;
   memo: string | null;
+  /** 확인 대기 요청에만: 같은 금액의 미처리 입금 알림 */
+  deposits?: { id: number; received_at: string; depositor: string | null }[];
 }
 
 export interface TokenBalance {

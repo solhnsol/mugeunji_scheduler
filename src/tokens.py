@@ -616,15 +616,17 @@ class TokenManager:
 _DEPOSIT_TITLE = re.compile(r"([\d,]+)\s*원\s*입금")
 
 
-async def auto_confirm_deposit(conn: aiosqlite.Connection, raw_body: str) -> str:
-    """토스 입금 알림(JSON: title "5원 입금", body "입금자 → 내 …")으로 대기 중인 충전 요청을 자동 확인한다.
-    금액과 입금자명(회원 이름)이 같은 대기 요청이 정확히 1건일 때만 확인하고, 아니면 관리자가 직접 확인하게 둔다."""
+def parse_deposit(raw_body: str) -> Optional[Tuple[int, str]]:
     try:
         data = json.loads(raw_body)
         amount = int(_DEPOSIT_TITLE.search(data["title"]).group(1).replace(",", ""))
-        depositor = data["body"].split("→")[0].strip()
+        return amount, data["body"].split("→")[0].strip()
     except (ValueError, KeyError, AttributeError, TypeError):
-        return "unparsed"
+        return None
+
+
+async def auto_confirm_deposit(conn: aiosqlite.Connection, amount: int, depositor: str) -> str:
+    """금액과 입금자명(회원 이름)이 같은 대기 중 충전 요청이 정확히 1건일 때만 자동 확인하고, 아니면 관리자가 직접 확인하게 둔다."""
     async with conn.execute(
         "SELECT p.id FROM token_purchases p JOIN users u ON u.username = p.username "
         "WHERE p.status = 'pending' AND p.price_won = ? AND u.name = ?",
@@ -635,3 +637,32 @@ async def auto_confirm_deposit(conn: aiosqlite.Connection, raw_body: str) -> str
         return "no_match" if not ids else "ambiguous"
     ok, _ = await TokenManager(conn).confirm_purchase(ids[0], "auto")
     return f"confirmed:{ids[0]}" if ok else "confirm_failed"
+
+
+_UNMATCHED = "result IN ('no_match', 'ambiguous', 'confirm_failed')"
+
+
+async def deposits_for_purchase(conn: aiosqlite.Connection, price_won: int, since: str) -> List[Dict]:
+    """대기 요청과 금액이 같고 요청 이후에 받은, 아직 처리되지 않은 입금 알림 (관리자가 눈으로 대조)."""
+    async with conn.execute(
+        f"SELECT id, received_at, depositor FROM deposit_notifications "
+        f"WHERE amount = ? AND substr(received_at, 1, 19) >= substr(?, 1, 19) AND {_UNMATCHED} ORDER BY id LIMIT 5",
+        (price_won, since),
+    ) as cur:
+        return [dict(r) for r in await cur.fetchall()]
+
+
+async def claim_deposit(conn: aiosqlite.Connection, purchase_id: int) -> None:
+    """관리자가 직접 확인한 요청의 입금 알림을 처리된 것으로 표시한다. 입금자명이 같은 알림을 우선, 없으면 가장 오래된 것."""
+    async with conn.execute(
+        "SELECT p.price_won, p.created_at, u.name FROM token_purchases p LEFT JOIN users u ON u.username = p.username WHERE p.id = ?",
+        (purchase_id,),
+    ) as cur:
+        p = await cur.fetchone()
+    if not p:
+        return
+    rows = await deposits_for_purchase(conn, p["price_won"], p["created_at"] or "")
+    pick = next((r for r in rows if r["depositor"] == p["name"]), rows[0] if rows else None)
+    if pick:
+        await conn.execute("UPDATE deposit_notifications SET result = ? WHERE id = ?", (f"manual:{purchase_id}", pick["id"]))
+        await conn.commit()

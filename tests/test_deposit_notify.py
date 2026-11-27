@@ -49,3 +49,23 @@ def test_auto_confirm(client, admin, make_user, monkeypatch):
     assert client.get("/tokens/me", headers=member).json()["balance"] == 7
     assert _notice(client, 12345, "정자동") == "no_match"  # 이미 확인됨, 중복 지급 없음
     assert client.post("/api/deposit-notify", content="그냥 글", headers={"X-Deposit-Token": "s3cret"}).json()["result"] == "unparsed"
+
+
+def test_ambiguous_shows_notice_to_admin(client, admin, make_user, monkeypatch):
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "대조테스트", 23456, 5)
+    _, member = make_user("김동명")
+    client.post("/tokens/purchases", headers=member, json={"pack_id": pack["id"]})
+    pid = client.get("/tokens/me", headers=member).json()["purchases"][0]["id"]
+
+    assert _notice(client, 23456, "가족이름") == "no_match"  # 이름이 달라 자동 처리 안 됨
+    pending = client.get("/admin/token-purchases", headers=admin, params={"status_filter": "pending"}).json()
+    mine = next(p for p in pending if p["id"] == pid)
+    assert [d["depositor"] for d in mine["deposits"]] == ["가족이름"]
+
+    assert client.post(f"/admin/token-purchases/{pid}/confirm", headers=admin).status_code == 200
+    assert _notice(client, 23456, "가족이름") == "no_match"
+    # 수동 확인 때 알림 하나가 처리됨으로 표시돼, 남은 건 새로 온 알림 1건뿐
+    assert client.get("/admin/deposit-notifications", headers=admin).json()[1]["result"] == f"manual:{pid}"
