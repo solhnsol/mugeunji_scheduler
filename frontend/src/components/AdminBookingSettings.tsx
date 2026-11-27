@@ -171,7 +171,7 @@ export function AdminBookingSettings({
           <>
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <div>
-                <label className="label" htmlFor="switch-at">정식 전환 시각 · 이때 자동으로 토큰 예약으로 바뀌어요</label>
+                <label className="label" htmlFor="switch-at">정식 전환 시각</label>
                 <input id="switch-at" className="input !py-2 min-w-[210px]" type="datetime-local" value={switchAt} onChange={(e) => setSwitchAt(e.target.value)} />
               </div>
               <button type="button" className="btn-secondary !w-auto !min-h-[40px] !py-2 text-sm" disabled={busy} onClick={() => save({ token_switch_at: switchAt })}>
@@ -179,7 +179,7 @@ export function AdminBookingSettings({
               </button>
             </div>
             <p className="text-xs text-ink-faint mt-1 leading-relaxed">
-              전환되면 월 신청이 잡아둔 남은 시간은 토큰 예약으로 옮겨 지켜지고, 무료 충전 상품은 닫혀요.
+              이 시각에 자동으로 토큰 예약으로 바뀌어요. 월 신청이 잡아둔 남은 시간은 토큰 예약으로 옮겨 지켜지고, 무료 충전 상품은 닫혀요.
             </p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
             <div>
