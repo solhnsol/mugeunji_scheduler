@@ -272,7 +272,7 @@ export const api = {
       auto_confirm?: boolean;
       expires_on?: string | null;
       audience?: 'all' | 'free';
-      min_month_spend?: number;
+      min_recent_spend?: number;
     },
   ) {
     const res = await fetch('/admin/token-packs', {
@@ -296,7 +296,7 @@ export const api = {
       expires_on: string | null;
       clear_expires_on: boolean;
       audience: 'all' | 'free';
-      min_month_spend: number;
+      min_recent_spend: number;
     }>,
   ) {
     const res = await fetch(`/admin/token-packs/${packId}`, {

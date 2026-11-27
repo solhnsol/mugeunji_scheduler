@@ -72,13 +72,13 @@ def test_purchase_flow_confirm_and_undo(client, admin, make_user):
     assert client.post(f"/admin/token-purchases/{purchase_id}/undo", headers=admin).status_code == 400
 
 
-def test_pack_requires_month_spend(client, admin, make_user):
+def test_pack_requires_recent_spend(client, admin, make_user):
     _enable(client, admin)
     big = _add_pack(client, admin, "큰묶음", 32000, 40)
-    r = client.post("/admin/token-packs", headers=admin, json={"name": "소액", "price_won": 8000, "tokens": 10, "min_month_spend": 30000})
+    r = client.post("/admin/token-packs", headers=admin, json={"name": "소액", "price_won": 8000, "tokens": 10, "min_recent_spend": 30000})
     assert r.status_code == 200, r.text
     small = [p for p in client.get("/admin/token-packs", headers=admin).json() if p["name"] == "소액"][0]
-    assert small["min_month_spend"] == 30000
+    assert small["min_recent_spend"] == 30000
     _, member = make_user()
 
     def find(name):
@@ -92,7 +92,7 @@ def test_pack_requires_month_spend(client, admin, make_user):
     assert find("소액")["locked"] is True
     purchase_id = client.get("/tokens/me", headers=member).json()["purchases"][0]["id"]
     assert client.post(f"/admin/token-purchases/{purchase_id}/confirm", headers=admin).status_code == 200
-    assert find("소액")["locked"] is False and find("소액")["month_spend"] == 32000
+    assert find("소액")["locked"] is False
     assert client.post("/tokens/purchases", headers=member, json={"pack_id": small["id"]}).status_code == 200
     # 관리자는 조건과 상관없이 쓸 수 있다
     assert [p for p in client.get("/tokens/packs", headers=admin).json() if p["name"] == "소액"][0]["locked"] is False

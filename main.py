@@ -231,7 +231,7 @@ class TokenPackCreate(BaseModel):
     auto_confirm: bool = False
     expires_on: Optional[str] = None
     audience: Literal["all", "free"] = "all"
-    min_month_spend: int = Field(0, ge=0)
+    min_recent_spend: int = Field(0, ge=0)
 
 
 class TokenPackUpdate(BaseModel):
@@ -244,7 +244,7 @@ class TokenPackUpdate(BaseModel):
     expires_on: Optional[str] = None
     clear_expires_on: bool = False
     audience: Optional[Literal["all", "free"]] = None
-    min_month_spend: Optional[int] = Field(None, ge=0)
+    min_recent_spend: Optional[int] = Field(None, ge=0)
 
 
 class TokenPurchaseRequest(BaseModel):
@@ -1133,9 +1133,10 @@ async def list_token_packs(
         p for p in packs
         if (is_free_member or p["audience"] != "free") and not is_expired(p["expires_on"])
     ]
-    # 이번 달 충전 조건이 있는 상품은 숨기지 않고 잠긴 상태로 보여준다
-    spent = await TokenManager(conn).month_spend(current_user["username"]) if any(p["min_month_spend"] for p in visible) else 0
-    return [{**p, "locked": p["min_month_spend"] > spent, "month_spend": spent} for p in visible]
+    # 충전 조건이 있는 상품은 잠긴 상태(locked)로 내려보낸다
+    tokens = TokenManager(conn)
+    spent = await tokens.recent_spend(current_user["username"], await tokens.spend_window_months()) if any(p["min_recent_spend"] for p in visible) else 0
+    return [{**p, "locked": p["min_recent_spend"] > spent} for p in visible]
 
 
 @app.get("/tokens/me")
@@ -1220,7 +1221,7 @@ async def admin_create_token_pack(
     ok, message = await TokenManager(conn).create_pack(
         data.name, data.price_won, data.tokens,
         auto_confirm=data.auto_confirm, expires_on=data.expires_on, audience=data.audience,
-        min_month_spend=data.min_month_spend,
+        min_recent_spend=data.min_recent_spend,
     )
     if ok:
         return {"status": "success", "message": message}
@@ -1245,7 +1246,7 @@ async def admin_update_token_pack(
         expires_on=data.expires_on,
         clear_expires_on=data.clear_expires_on,
         audience=data.audience,
-        min_month_spend=data.min_month_spend,
+        min_recent_spend=data.min_recent_spend,
     )
     if ok:
         return {"status": "success", "message": message}
