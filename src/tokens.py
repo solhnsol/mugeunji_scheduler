@@ -134,6 +134,7 @@ class TokenManager:
             "auto_confirm": bool(row["auto_confirm"]),
             "expires_on": row["expires_on"],
             "audience": row["audience"],
+            "min_recent_spend": row["min_recent_spend"],
         }
 
     async def list_packs(self, active_only: bool = True) -> List[Dict]:
@@ -151,7 +152,8 @@ class TokenManager:
 
     @staticmethod
     def _validate_pack(
-        name: str, price_won: int, tokens: int, auto_confirm: bool = False, audience: str = "all"
+        name: str, price_won: int, tokens: int, auto_confirm: bool = False, audience: str = "all",
+        min_recent_spend: int = 0,
     ) -> Optional[str]:
         name = (name or "").strip()
         if not name or len(name) > 30:
@@ -160,6 +162,8 @@ class TokenManager:
             return "결제 금액은 1원 이상이어야 해요. (무료 상품은 '바로 지급'을 켜야 0원으로 만들 수 있어요)"
         if audience not in PACK_AUDIENCES:
             return "대상은 전체 또는 자유이용 회원이어야 해요."
+        if min_recent_spend < 0 or min_recent_spend > 10_000_000:
+            return "충전 조건은 0원 이상 1,000만원 이하로 입력해주세요."
         if tokens < 1 or tokens > MAX_PACK_TOKENS:
             return f"토큰은 1 이상 {MAX_PACK_TOKENS} 이하의 정수여야 해요."
         return None
@@ -174,8 +178,9 @@ class TokenManager:
         auto_confirm: bool = False,
         expires_on: Optional[str] = None,
         audience: str = "all",
+        min_recent_spend: int = 0,
     ) -> Tuple[bool, str]:
-        error = self._validate_pack(name, price_won, tokens, auto_confirm, audience)
+        error = self._validate_pack(name, price_won, tokens, auto_confirm, audience, min_recent_spend)
         if error:
             return False, error
         try:
@@ -187,9 +192,9 @@ class TokenManager:
                 async with self.conn.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM token_packs") as cursor:
                     sort_order = (await cursor.fetchone())[0]
             await self.conn.execute(
-                """INSERT INTO token_packs (name, price_won, tokens, sort_order, active, created_at, auto_confirm, expires_on, audience)
-                   VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)""",
-                (name.strip(), price_won, tokens, sort_order, _now(), int(auto_confirm), expires_on, audience),
+                """INSERT INTO token_packs (name, price_won, tokens, sort_order, active, created_at, auto_confirm, expires_on, audience, min_recent_spend)
+                   VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)""",
+                (name.strip(), price_won, tokens, sort_order, _now(), int(auto_confirm), expires_on, audience, min_recent_spend),
             )
             await self.conn.commit()
             return True, "상품을 추가했어요."
@@ -210,6 +215,7 @@ class TokenManager:
         expires_on: Optional[str] = None,
         clear_expires_on: bool = False,
         audience: Optional[str] = None,
+        min_recent_spend: Optional[int] = None,
     ) -> Tuple[bool, str]:
         pack = await self.get_pack(pack_id)
         if not pack:
@@ -219,7 +225,8 @@ class TokenManager:
         new_tokens = pack["tokens"] if tokens is None else tokens
         new_auto = pack["auto_confirm"] if auto_confirm is None else auto_confirm
         new_audience = pack["audience"] if audience is None else audience
-        error = self._validate_pack(new_name, new_price, new_tokens, new_auto, new_audience)
+        new_min_spend = pack["min_recent_spend"] if min_recent_spend is None else min_recent_spend
+        error = self._validate_pack(new_name, new_price, new_tokens, new_auto, new_audience, new_min_spend)
         if error:
             return False, error
         try:
@@ -230,7 +237,7 @@ class TokenManager:
             await self.conn.execute(
                 """UPDATE token_packs
                    SET name = ?, price_won = ?, tokens = ?, sort_order = ?, active = ?,
-                       auto_confirm = ?, expires_on = ?, audience = ?
+                       auto_confirm = ?, expires_on = ?, audience = ?, min_recent_spend = ?
                    WHERE id = ?""",
                 (
                     new_name.strip(),
@@ -241,6 +248,7 @@ class TokenManager:
                     int(new_auto),
                     new_expires_on,
                     new_audience,
+                    new_min_spend,
                     pack_id,
                 ),
             )
@@ -467,6 +475,25 @@ class TokenManager:
             "deposit_name": row["deposit_name"],
         }
 
+    async def spend_window_months(self) -> int:
+        """조건부 상품의 구매 이력을 보는 기간. 토큰을 쓸 수 있는 기간(소멸 개월 수)과 같다."""
+        async with self.conn.execute("SELECT value FROM system_settings WHERE key = 'token_expiry_months'") as cursor:
+            row = await cursor.fetchone()
+        try:
+            months = int(row["value"]) if row and row["value"] else DEFAULT_EXPIRY_MONTHS
+        except (TypeError, ValueError):
+            months = DEFAULT_EXPIRY_MONTHS
+        return max(months, 1)
+
+    async def recent_spend(self, username: str, months: int) -> int:
+        """최근 months개월 안에 입금이 확인된 충전 금액 합계. 확인 전 요청은 취소될 수 있어 넣지 않는다."""
+        since = add_months(datetime.now(KST), -months).isoformat()
+        async with self.conn.execute(
+            "SELECT COALESCE(SUM(price_won), 0) FROM token_purchases WHERE username = ? AND status = 'confirmed' AND confirmed_at >= ?",
+            (username, since),
+        ) as cursor:
+            return (await cursor.fetchone())[0]
+
     async def request_purchase(self, username: str, pack_id: int) -> Tuple[bool, str]:
         pack = await self.get_pack(pack_id)
         if not pack or not pack["active"]:
@@ -479,6 +506,11 @@ class TokenManager:
             return False, "자유이용 회원만 받을 수 있는 상품이에요."
         if user and user["role"] == "admin":
             pack = admin_pack(pack)
+        elif pack["min_recent_spend"] > 0:
+            months = await self.spend_window_months()
+            spent = await self.recent_spend(username, months)
+            if spent < pack["min_recent_spend"]:
+                return False, f"{pack['min_recent_spend']:,}원 이상 충전한 뒤에 살 수 있어요. 최근 {months}개월 동안 {spent:,}원 충전했어요."
         if not pack["auto_confirm"]:
             async with self.conn.execute(
                 "SELECT COUNT(*) FROM token_purchases WHERE username = ? AND status = 'pending'", (username,)

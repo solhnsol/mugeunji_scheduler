@@ -47,13 +47,19 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
 
   const hasInstantPacks = !!packs?.some((p) => p.auto_confirm);
   const hasPaidPacks = !!packs?.some((p) => !p.auto_confirm);
-  const bigPacks = packs?.filter((p) => p.price_won >= BIG_PACK_WON) ?? [];
-  const foldBig = bigPacks.length > 0 && bigPacks.length < (packs?.length ?? 0) && !showBig;
+  // 잠긴 상품(첫 충전 전의 소액 상품)은 보이지 않는다. 조건을 채운 회원에게는 추가 충전 상품을 먼저 보여주고 일반 묶음은 접는다
+  const open = (packs ?? []).filter((p) => !p.locked);
+  const lockedMin = Math.min(...(packs ?? []).filter((p) => p.locked).map((p) => p.min_recent_spend));
+  const qualified = open.some((p) => p.min_recent_spend > 0);
+  // 접어둘 묶음: 자격을 채웠으면 일반 묶음, 아니면 10만원 이상 묶음(가격 부담을 줄이려고)
+  const isFolded = (p: TokenPack) => (qualified ? p.min_recent_spend === 0 : p.price_won >= BIG_PACK_WON);
+  const foldedCount = open.filter(isFolded).length;
+  const foldBig = foldedCount > 0 && foldedCount < open.length && !showBig;
   // 토큰당 가격이 가장 비싼 유료 묶음을 기준으로 할인율을 보여준다
   const perToken = (p: TokenPack) => p.price_won / p.tokens;
   const paidPacks = (packs ?? []).filter((p) => p.price_won > 0 && p.tokens > 0);
   const basePerToken = Math.max(0, ...paidPacks.map(perToken));
-  const shownPacks = foldBig ? (packs ?? []).filter((p) => p.price_won < BIG_PACK_WON) : packs ?? [];
+  const shownPacks = foldBig ? open.filter((p) => !isFolded(p)) : open;
   const pending = mine?.purchases.filter((p) => p.status === 'pending') ?? [];
   const history = mine?.purchases.filter((p) => p.status !== 'pending') ?? [];
   // 일주일 안에 사라지는 토큰이 있으면 그만큼, 없으면 한 달 안에 사라지는 만큼만 알려준다
@@ -243,18 +249,22 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                     </li>
                   );
                 })}
-                {foldBig && (
+                {foldedCount > 0 && foldedCount < open.length && (
                   <li>
                     <button
                       type="button"
-                      onClick={() => setShowBig(true)}
+                      aria-expanded={showBig}
+                      onClick={() => setShowBig((v) => !v)}
                       className="w-full min-h-[48px] px-4 py-3 text-sm text-ink-muted text-center transition-colors hover:bg-sage-muted/30 active:bg-sage-muted/50"
                     >
-                      더 많이 충전하기
+                      {showBig ? '접기' : '더 보기'}
                     </button>
                   </li>
                 )}
               </ul>
+            )}
+            {Number.isFinite(lockedMin) && (
+              <p className="text-xs text-ink-faint mt-2">{formatPrice(lockedMin)} 이상 충전하면 적은 양도 추가로 충전할 수 있어요.</p>
             )}
           </section>
 

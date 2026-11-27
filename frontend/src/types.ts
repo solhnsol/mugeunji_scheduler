@@ -200,6 +200,10 @@ export interface TokenPack {
   /** 이 날짜(YYYY-MM-DD) 끝에 소멸. 없으면 충전 후 기본 기간(3개월) */
   expires_on: string | null;
   audience: 'all' | 'free';
+  /** 최근 토큰 유효기간 안에 입금이 확인된 충전액이 이 이상일 때만 살 수 있다 (0이면 제한 없음) */
+  min_recent_spend: number;
+  /** 회원 목록에서만: 조건을 아직 못 채웠다 (화면에서는 숨긴다) */
+  locked?: boolean;
 }
 
 export interface TokenLot {

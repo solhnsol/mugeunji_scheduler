@@ -285,6 +285,7 @@ export function AdminTokensTab({
                     {!pack.active && <span className="badge badge-closed ml-2">판매 중지</span>}
                     {pack.auto_confirm && <span className="badge ml-2">바로 지급</span>}
                     {pack.audience === 'free' && <span className="badge ml-2">자유이용 회원</span>}
+                    {pack.min_recent_spend > 0 && <span className="badge ml-2">충전 {formatPrice(pack.min_recent_spend)} 이상 회원만</span>}
                   </p>
                   <p className="text-sm text-ink-muted tabular-nums">
                     {pack.price_won === 0 ? '무료' : formatPrice(pack.price_won)} → {formatTokens(pack.tokens)}토큰
@@ -477,6 +478,7 @@ function PackModal({
     expires_on?: string | null;
     clear_expires_on?: boolean;
     audience: 'all' | 'free';
+    min_recent_spend: number;
   }) => Promise<void>;
 }) {
   const rules = useTokenRules();
@@ -487,6 +489,7 @@ function PackModal({
   const [autoConfirm, setAutoConfirm] = useState(pack?.auto_confirm ?? false);
   const [expiresOn, setExpiresOn] = useState(pack?.expires_on ?? '');
   const [freeOnly, setFreeOnly] = useState(pack?.audience === 'free');
+  const [minSpend, setMinSpend] = useState(pack?.min_recent_spend ? String(pack.min_recent_spend) : '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -498,6 +501,8 @@ function PackModal({
       return setError(autoConfirm ? '결제 금액은 0원 이상이어야 해요.' : '결제 금액을 1원 이상으로 입력해주세요. (무료는 "바로 지급"을 켜세요)');
     }
     if (!Number.isInteger(tokenNum) || tokenNum < 1) return setError('토큰은 1 이상의 정수로 입력해주세요.');
+    const minSpendNum = minSpend === '' ? 0 : Number(minSpend);
+    if (!Number.isInteger(minSpendNum) || minSpendNum < 0) return setError('충전 조건은 0원 이상으로 입력해주세요.');
     setBusy(true);
     try {
       await onSubmit({
@@ -506,6 +511,7 @@ function PackModal({
         tokens: tokenNum,
         auto_confirm: autoConfirm,
         audience: freeOnly ? 'free' : 'all',
+        min_recent_spend: minSpendNum,
         ...(expiresOn ? { expires_on: expiresOn } : { clear_expires_on: true }),
         ...(pack ? { active } : {}),
       });
@@ -530,6 +536,11 @@ function PackModal({
             <label className="label" htmlFor="pack-tokens">부여 토큰</label>
             <input id="pack-tokens" className="input" type="number" min={1} step={1} inputMode="numeric" value={tokens} onChange={(e) => setTokens(e.target.value)} />
           </div>
+        </div>
+        <div>
+          <label className="label" htmlFor="pack-min-spend">충전 조건(원)</label>
+          <input id="pack-min-spend" className="input" type="number" min={0} inputMode="numeric" value={minSpend} onChange={(e) => setMinSpend(e.target.value)} placeholder="없음" />
+          <p className="text-xs text-ink-faint mt-1.5">토큰 유효기간 동안 이 금액 이상 충전한 회원에게만 보여요. 비워 두면 모두에게 보여요.</p>
         </div>
         <ExpiryInput token={token} id="pack-expires" value={expiresOn} onChange={setExpiresOn} hint={`비워 두면 충전한 날부터 ${expiryPhrase(rules)} 뒤 사라져요. 11월 한정 무료분은 12월 예약이 열리는 시각으로 정하세요.`} />
         <label className="flex items-center gap-3 rounded-2xl border border-line p-4 cursor-pointer">
