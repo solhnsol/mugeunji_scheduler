@@ -389,7 +389,11 @@ def test_scheduled_switch_keeps_monthly_and_closes_free_packs(client, admin, mak
     day = client.get("/bookings/range", headers=booker_h, params={"start": "2026-12-10", "days": 1}).json()["days"][0]
     assert {x["hour"]: x for x in day["slots"]}[15]["status"] == "taken"
     assert _book(client, booker_h, ("2026-12-10", 15)).status_code == 400
-    packs = [p for p in client.get("/admin/token-packs", headers=admin).json() if p["name"] == "베타 무료"]
-    assert packs and not packs[0]["active"]
+    packs = client.get("/admin/token-packs", headers=admin).json()
+    assert not [p for p in packs if p["name"] == "베타 무료" and p["active"]]
+    active = sorted((p["tokens"], p["price_won"], p["min_recent_spend"]) for p in packs if p["active"])
+    assert active == [(10, 8000, 0), (20, 16000, 30000), (40, 32000, 0), (80, 56000, 0), (160, 100000, 0)]
+    cfg = client.get("/bookings/config", headers=booker_h).json()
+    assert cfg["price_bands"][0] == {"start": 0, "end": 2, "cost": 2} and cfg["refund_tiers"][0] == {"hours_before": 48, "percent": 100}
     client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "legacy"})
     client.post("/admin/reservations/delete", headers=admin, json={"reservations": [{"day": "Thursday", "time_index": 15}]})

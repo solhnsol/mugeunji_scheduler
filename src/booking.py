@@ -42,6 +42,9 @@ DEFAULT_PRICE_BANDS = [
     {"start": 16, "end": 24, "cost": 4},
 ]
 
+# 정식 출시 상품: (토큰, 가격, 충전 조건). 전환할 때 이 목록에 맞춘다.
+LAUNCH_PACKS = [(10, 8000, 0), (20, 16000, 30000), (40, 32000, 0), (80, 56000, 0), (160, 100000, 0)]
+
 # 기본 환불 정책: 48시간 전 100%, 24시간 전 80%, 3시간 전 50%, 그 뒤 0%
 DEFAULT_REFUND_TIERS = [
     {"hours_before": 48, "percent": 100},
@@ -226,14 +229,30 @@ class BookingManager:
                         kept += cursor.rowcount
                     day += timedelta(days=1)
 
-        # 베타용 무료 충전 상품은 닫는다 (이후 무료 지급은 관리자가 직접)
-        cursor = await self.conn.execute("UPDATE token_packs SET active = 0 WHERE active = 1 AND price_won = 0")
-        closed = cursor.rowcount
+        # 베타용 무료 충전 상품과 정식 가격이 아닌 옛 상품은 닫고, 정식 상품이 없으면 만든다
+        closed = 0
+        keep = {(t, p) for t, p, _ in LAUNCH_PACKS}
+        for pack in await self.tokens.list_packs(active_only=True):
+            if (pack["tokens"], pack["price_won"]) not in keep:
+                await self.tokens.update_pack(pack["id"], active=False)
+                closed += 1
+        for tokens, price, min_spend in LAUNCH_PACKS:
+            match = next((p for p in await self.tokens.list_packs(active_only=True) if (p["tokens"], p["price_won"]) == (tokens, price)), None)
+            if match is None:
+                await self.tokens.create_pack(f"{tokens}토큰", price, tokens, min_recent_spend=min_spend)
+            elif match["min_recent_spend"] != min_spend or match["audience"] != "all":
+                await self.tokens.update_pack(match["id"], min_recent_spend=min_spend, audience="all")
+        # 가격표·환불 정책·다음 달 예약 오픈(매달 말일 21:00)도 정식 값으로 맞춘다
+        await SettingsManager(self.conn).upsert_settings({
+            SETTING_PRICE_BANDS: json.dumps(validate_price_bands(DEFAULT_PRICE_BANDS)),
+            SETTING_REFUND_TIERS: json.dumps(validate_refund_tiers(DEFAULT_REFUND_TIERS)),
+            "auto_monthly_open_enabled": "true", "monthly_open_hour": "21", "monthly_open_minute": "0",
+        })
         await self.conn.commit()
 
         await self.set_mode(MODE_TOKEN)
         await SettingsManager(self.conn).upsert_settings({SETTING_SWITCH_AT: ""})
-        return {"kept_monthly_slots": kept, "closed_free_packs": closed}
+        return {"kept_monthly_slots": kept, "closed_packs": closed}
 
     @staticmethod
     def _parse_month(raw: str) -> str:
