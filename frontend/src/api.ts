@@ -217,11 +217,11 @@ export const api = {
     return parseResponse<import('./types').MyBooking[]>(res);
   },
 
-  async createBookings(token: string, slots: { date: string; hour: number }[]) {
+  async createBookings(token: string, slots: { date: string; hour: number }[], skipTaken = false) {
     const res = await fetch('/bookings', {
       method: 'POST',
       headers: authHeaders(token),
-      body: JSON.stringify({ slots }),
+      body: JSON.stringify({ slots, skip_taken: skipTaken }),
     });
     return parseResponse<{ message: string; count: number; spent: number }>(res);
   },

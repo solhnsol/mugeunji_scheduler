@@ -398,3 +398,19 @@ def test_scheduled_switch_keeps_monthly_and_closes_free_packs(client, admin, mak
     assert cfg["price_bands"][0] == {"start": 0, "end": 2, "cost": 2} and cfg["refund_tiers"][0] == {"hours_before": 48, "percent": 100}
     client.put("/admin/booking-settings", headers=admin, json={"reservation_mode": "legacy"})
     client.post("/admin/reservations/delete", headers=admin, json={"reservations": [{"day": "Thursday", "time_index": 15}]})
+
+
+def test_bulk_skips_taken_slots(client, admin, make_user, token_mode):
+    a, a_h = make_user("선점")
+    b, b_h = make_user("일괄")
+    _give(client, admin, a, 10)
+    _give(client, admin, b, 20)
+    assert _book(client, a_h, ("2026-12-16", 16)).status_code == 200
+    slots = [{"date": "2026-12-16", "hour": 16}, {"date": "2026-12-16", "hour": 17}]
+    # 기본은 통째로 거절, skip_taken이면 잡힌 칸만 빼고 예약 (토큰도 예약된 칸만큼만)
+    assert client.post("/bookings", headers=b_h, json={"slots": slots}).status_code == 400
+    r = client.post("/bookings", headers=b_h, json={"slots": slots, "skip_taken": True})
+    assert r.status_code == 200 and r.json()["count"] == 1 and r.json()["skipped"] == 1 and r.json()["spent"] == 4
+    assert _balance(client, b_h) == 16
+    r = client.post("/bookings", headers=b_h, json={"slots": slots, "skip_taken": True})
+    assert r.status_code == 400 and "이미 예약" in r.json()["detail"]

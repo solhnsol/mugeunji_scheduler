@@ -325,6 +325,7 @@ class BookingSlot(BaseModel):
 
 class BookingCreateRequest(BaseModel):
     slots: List[BookingSlot] = Field(..., min_length=1, max_length=168)
+    skip_taken: bool = False  # 일괄 예약: 이미 예약된 칸은 빼고 나머지만 예약
 
 
 class BookingCancelRequest(BaseModel):
@@ -1520,13 +1521,15 @@ async def create_booking(
     await _require_token_mode(conn, current_user)
     try:
         result = await BookingManager(conn).create_bookings(
-            current_user["username"], current_user["role"], [slot.model_dump() for slot in data.slots]
+            current_user["username"], current_user["role"], [slot.model_dump() for slot in data.slots],
+            skip_taken=data.skip_taken,
         )
     except BookingError as e:
         raise _booking_error(e)
     await broadcast_booking_update(result["dates"])
     spent = f" (토큰 {result['spent']} 사용)" if result["spent"] else ""
-    return {"status": "success", "message": f"{result['count']}시간을 예약했어요.{spent}", **result}
+    skipped = f" 이미 예약된 {result['skipped']}시간은 빼고요." if result["skipped"] else ""
+    return {"status": "success", "message": f"{result['count']}시간을 예약했어요.{spent}{skipped}", **result}
 
 
 @app.post("/bookings/cancel")

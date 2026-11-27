@@ -100,11 +100,11 @@ export function WeeklyBookingSheet({
     setBusy(true);
     setError('');
     try {
-      const res = await api.createBookings(SESSION, slots);
+      const res = await api.createBookings(SESSION, slots, true);
       onBooked(res.message);
     } catch (e) {
-      // 그사이 다른 분이 가져간 시간이 있으면 서버가 통째로 되돌린다: 현황을 새로 받아 다시 고르게 한다
-      setError(e instanceof ApiError && e.message.includes('이미 예약') ? '그사이 다른 분이 예약했어요. 다시 골라주세요' : '예약하지 못했어요. 다시 시도해주세요');
+      // 그사이 다른 분이 가져간 칸은 서버가 빼고 예약한다. 전부 가져갔으면 현황을 새로 받아 다시 고르게 한다
+      setError(e instanceof ApiError && e.message.includes('이미 예약') ? '그사이 다른 분이 모두 예약했어요. 다시 골라주세요' : '예약하지 못했어요. 다시 시도해주세요');
       await load().catch(() => undefined);
     } finally {
       setBusy(false);

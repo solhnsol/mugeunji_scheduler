@@ -437,7 +437,8 @@ class BookingManager:
         return day, hour
 
     async def create_bookings(
-        self, username: str, role: str, raw_slots: List[Dict], *, force_by: Optional[str] = None
+        self, username: str, role: str, raw_slots: List[Dict], *, force_by: Optional[str] = None,
+        skip_taken: bool = False,
     ) -> Dict:
         """예약 생성. force_by(관리자 아이디)가 있으면 범위·권한·토큰을 따지지 않는 강제 등록.
 
@@ -450,6 +451,23 @@ class BookingManager:
 
         settings = await self._settings()
         slots = sorted({self._parse_slot(s) for s in raw_slots})
+        skipped = 0
+        if skip_taken:
+            # 일괄 예약: 그사이 다른 사람이 가져간 칸은 빼고 나머지만 예약한다
+            legacy = await self._legacy_map(settings)
+            free_slots = []
+            for day, hour in slots:
+                async with self.conn.execute(
+                    "SELECT 1 FROM bookings WHERE booking_date = ? AND hour = ? AND status = 'active'", (day.isoformat(), hour)
+                ) as cursor:
+                    taken = await cursor.fetchone()
+                if taken or self._legacy_owner(legacy, day, hour):
+                    skipped += 1
+                else:
+                    free_slots.append((day, hour))
+            if not free_slots:
+                raise BookingError("고른 시간이 모두 이미 예약됐어요.")
+            slots = free_slots
         now = now_kst()
         # 관리자도 회원 화면에서는 회원과 같은 규칙(기간·중지·새벽·토큰). 관리자 화면의 강제 등록(force_by)만 예외
         exempt = force_by is not None
@@ -519,7 +537,7 @@ class BookingManager:
         except Exception:
             await self.conn.rollback()
             raise
-        return {"ids": ids, "count": len(ids), "spent": total, "dates": sorted({d.isoformat() for d, _ in slots})}
+        return {"ids": ids, "count": len(ids), "spent": total, "skipped": skipped, "dates": sorted({d.isoformat() for d, _ in slots})}
 
     async def cancel_bookings(
         self,

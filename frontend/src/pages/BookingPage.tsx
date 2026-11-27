@@ -339,7 +339,7 @@ export default function BookingPage({
     if (!config || config.next_month_open || !config.next_month_open_at) return;
     const left = new Date(config.next_month_open_at).getTime() - new Date(config.server_now).getTime();
     if (left > 24 * 3_600_000) return;
-    const timer = setTimeout(() => void refresh(), Math.max(left, 0) + 1500);
+    const timer = setTimeout(() => void refresh(), left > 0 ? left + 200 : 1000);
     return () => clearTimeout(timer);
   }, [config, refresh]);
 
