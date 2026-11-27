@@ -249,14 +249,15 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                     </li>
                   );
                 })}
-                {foldBig && (
+                {foldedCount > 0 && foldedCount < open.length && (
                   <li>
                     <button
                       type="button"
-                      onClick={() => setShowBig(true)}
+                      aria-expanded={showBig}
+                      onClick={() => setShowBig((v) => !v)}
                       className="w-full min-h-[48px] px-4 py-3 text-sm text-ink-muted text-center transition-colors hover:bg-sage-muted/30 active:bg-sage-muted/50"
                     >
-                      {qualified ? '큰 묶음 더 보기' : '더 많이 충전하기'}
+                      {showBig ? '접기' : qualified ? '큰 묶음 더 보기' : '더 많이 충전하기'}
                     </button>
                   </li>
                 )}
