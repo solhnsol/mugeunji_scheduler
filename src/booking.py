@@ -413,6 +413,7 @@ class BookingManager:
             "reservation_enabled": settings.get("reservation_enabled") != "false",
             "price_bands": self._bands_from(settings),
             "refund_tiers": self._tiers_from(settings),
+            "server_now": now.isoformat(),  # 화면이 기기 시계 대신 서버 시각으로 오픈까지 남은 시간을 잰다
             "bookable_from": window["start"].isoformat(),
             "bookable_until": window["end"].isoformat(),
             "next_month_open_at": window["next_month_open_at"].isoformat() if window["next_month_open_at"] else None,

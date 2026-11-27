@@ -286,6 +286,7 @@ export interface BookingConfig {
   reservation_enabled: boolean;
   price_bands: PriceBand[];
   refund_tiers: RefundTier[];
+  server_now: string;
   bookable_from: string;
   bookable_until: string;
   next_month_open_at: string | null;

@@ -50,6 +50,7 @@ def test_config_defaults(client, make_user):
     ]
     assert cfg["bookable_from"] == "2026-12-10" and cfg["bookable_until"] == "2026-12-31"
     assert cfg["next_month_open"] is False and cfg["next_month_open_at"].startswith("2026-12-31T21:00")
+    assert cfg["server_now"].startswith("2026-12-10T12:00")
     assert cfg["dawn_allowed"] is True and cfg["balance"] == 0
 
 
