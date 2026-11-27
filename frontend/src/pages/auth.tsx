@@ -132,6 +132,11 @@ export function RegisterPage() {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [tokenMode, setTokenMode] = useState(false);
+  const [quizQuestion, setQuizQuestion] = useState('');
+
+  useEffect(() => {
+    api.getSignupQuiz().then((q) => setQuizQuestion(q.question)).catch(() => undefined);
+  }, []);
 
   // 토큰 예약으로 전환된 뒤에는 요금제가 아니라 토큰 충전·예약 순서를 안내한다
   useEffect(() => {
@@ -156,6 +161,7 @@ export function RegisterPage() {
         password,
         name: String(fd.get('name')),
         phone: phone.replace(/\D/g, ''),
+        quiz_answer: String(fd.get('quiz_answer') ?? ''),
       });
       markOnboardingPending(String(fd.get('username')));
       showToast(data.message, 'success');
@@ -218,6 +224,13 @@ export function RegisterPage() {
           />
           {passwordError && <p className="text-xs text-danger-ink mt-1" role="alert">{passwordError}</p>}
         </div>
+        {quizQuestion && (
+          <div>
+            <label className="label" htmlFor="quiz_answer">{quizQuestion}</label>
+            <input className="input" id="quiz_answer" name="quiz_answer" required autoComplete="off" />
+            <p className="text-xs text-ink-faint mt-1">동아리 분인지 확인하는 질문이에요</p>
+          </div>
+        )}
         <button type="submit" className="btn-primary" disabled={busy}>{busy ? '가입 중…' : '가입하기'}</button>
         <div className="rounded-2xl bg-cream-dark/60 px-4 py-3 text-xs text-ink-muted leading-relaxed">
           <p className="font-medium text-ink mb-1">가입 후 이렇게 진행돼요</p>

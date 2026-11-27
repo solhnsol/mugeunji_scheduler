@@ -62,11 +62,31 @@ export const api = {
     password: string;
     name: string;
     phone: string;
+    quiz_answer?: string;
   }) {
     const res = await fetch('/register', {
       method: 'POST',
       headers: authHeaders(null),
       body: JSON.stringify(body),
+    });
+    return parseResponse<{ message: string }>(res);
+  },
+
+  async getSignupQuiz() {
+    const res = await fetch('/signup-quiz');
+    return parseResponse<{ question: string }>(res);
+  },
+
+  async adminGetSignupQuiz(token: string) {
+    const res = await fetch('/admin/signup-quiz', { headers: authHeaders(token) });
+    return parseResponse<{ question: string; answer: string }>(res);
+  },
+
+  async adminUpdateSignupQuiz(token: string, question: string, answer: string) {
+    const res = await fetch('/admin/signup-quiz', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ question, answer }),
     });
     return parseResponse<{ message: string }>(res);
   },
