@@ -207,10 +207,13 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
                 <ol className="space-y-1.5 text-sm text-ink-muted list-decimal list-inside">
                   <li>아래에서 상품을 골라 충전을 요청해요</li>
                   <li>요청한 금액을 입금해요. 입금자명은 가입한 이름으로 해주세요</li>
-                  <li>입금이 확인되면 토큰이 바로 들어와요</li>
+                  <li>입금하면 바로 토큰이 충전돼요</li>
                 </ol>
                 {paymentGuide && (
-                  <p className="text-sm font-medium text-ink leading-relaxed whitespace-pre-line border-t border-line/60 pt-3">{paymentGuide}</p>
+                  <div className="rounded-xl bg-cream-dark/60 px-3 py-2.5 select-text">
+                    <p className="text-xs text-ink-faint mb-0.5">입금 계좌</p>
+                    <p className="text-sm font-semibold text-ink leading-relaxed whitespace-pre-line">{paymentGuide}</p>
+                  </div>
                 )}
               </div>
             )}
