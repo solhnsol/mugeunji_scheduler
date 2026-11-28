@@ -711,5 +711,5 @@ async def claim_deposit(conn: aiosqlite.Connection, purchase_id: int) -> None:
     rows = await deposits_for_purchase(conn, p["price_won"], p["created_at"] or "")
     pick = next((r for r in rows if r["depositor"] == p["name"]), rows[0] if rows else None)
     if pick:
-        await conn.execute("UPDATE deposit_notifications SET result = ? WHERE id = ?", (f"manual:{purchase_id}", pick["id"]))
+        await conn.execute("UPDATE deposit_notifications SET result = result || ? WHERE id = ?", (f">manual:{purchase_id}", pick["id"]))
         await conn.commit()
