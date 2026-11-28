@@ -671,10 +671,10 @@ def _norm_name(name: Optional[str]) -> str:
 
 
 async def auto_confirm_deposit(conn: aiosqlite.Connection, amount: int, depositor: str) -> str:
-    """금액과 입금자명(회원 이름)이 같은 대기 요청이 한 회원 것일 때만 자동 확인하고, 아니면 관리자가 직접 확인하게 둔다.
+    """금액과 입금자명(회원 이름, 이름이 비어 있으면 아이디)이 같은 대기 요청이 한 회원 것일 때만 자동 확인하고, 아니면 관리자가 직접 확인하게 둔다.
     같은 회원이 같은 금액을 여러 번 요청해 둔 경우에는 가장 먼저 요청한 건을 확인한다."""
     async with conn.execute(
-        "SELECT p.id, p.username, COALESCE(p.deposit_name, u.name) AS who FROM token_purchases p "
+        "SELECT p.id, p.username, COALESCE(p.deposit_name, NULLIF(u.name, ''), u.username) AS who FROM token_purchases p "
         "JOIN users u ON u.username = p.username WHERE p.status = 'pending' AND p.price_won = ? ORDER BY p.id",
         (amount,),
     ) as cur:
@@ -703,7 +703,7 @@ async def deposits_for_purchase(conn: aiosqlite.Connection, price_won: int, sinc
 async def claim_deposit(conn: aiosqlite.Connection, purchase_id: int) -> None:
     """관리자가 직접 확인한 요청의 입금 알림을 처리된 것으로 표시한다. 입금자명이 같은 알림을 우선, 없으면 가장 오래된 것."""
     async with conn.execute(
-        "SELECT p.price_won, p.created_at, COALESCE(p.deposit_name, u.name) AS name FROM token_purchases p LEFT JOIN users u ON u.username = p.username WHERE p.id = ?",
+        "SELECT p.price_won, p.created_at, COALESCE(p.deposit_name, NULLIF(u.name, ''), u.username) AS name FROM token_purchases p LEFT JOIN users u ON u.username = p.username WHERE p.id = ?",
         (purchase_id,),
     ) as cur:
         p = await cur.fetchone()

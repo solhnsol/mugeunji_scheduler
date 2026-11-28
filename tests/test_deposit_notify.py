@@ -148,3 +148,21 @@ def test_real_bytes_over_http(client, admin, make_user, monkeypatch):
     assert row["depositor"] == "정한솔" and row["amount"] == 8000 and row["raw_hex"] == REAL_8000_HEX
     assert row["depositor_hex"] == "정한솔".encode().hex()
     assert row["purchase_user"] == "정한솔"
+
+
+def test_member_without_name_matches_by_username(client, admin, monkeypatch):
+    """CSV 등으로 만든 계정은 이름이 비어 있다. 아이디가 입금자명과 같으면 자동 확인한다."""
+    import os
+    import sqlite3
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "이름없음", 7777, 2)
+    uid = "무명회원"
+    client.post("/register", json={"username": uid, "password": "password1", "name": "임시이름", "phone": "01055550001"})
+    r = client.post("/login", json={"username": uid, "password": "password1"})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    client.post("/tokens/purchases", headers=h, json={"pack_id": pack["id"]})
+    # 이름 칸을 비우는 API가 없어 DB를 직접 고친다
+    con = sqlite3.connect(os.environ["DB_PATH"]); con.execute("UPDATE users SET name = NULL WHERE username = ?", (uid,)); con.commit(); con.close()
+    assert _notice(client, 7777, uid).startswith("confirmed:")
