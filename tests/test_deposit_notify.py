@@ -68,7 +68,7 @@ def test_ambiguous_shows_notice_to_admin(client, admin, make_user, monkeypatch):
     assert client.post(f"/admin/token-purchases/{pid}/confirm", headers=admin).status_code == 200
     assert _notice(client, 23456, "가족이름") == "no_match"
     # 수동 확인 때 알림 하나가 처리됨으로 표시돼, 남은 건 새로 온 알림 1건뿐
-    assert client.get("/admin/deposit-notifications", headers=admin).json()[1]["result"] == f"manual:{pid}"
+    assert client.get("/admin/deposit-notifications", headers=admin).json()[1]["result"] == f"no_match>manual:{pid}"  # 원래 자동 처리 결과는 남긴다
 
 
 def test_same_name_gets_distinct_deposit_name(client, admin, make_user, monkeypatch):
@@ -100,3 +100,26 @@ def test_same_name_different_amount_needs_no_deposit_name(client, admin, make_us
     client.post("/tokens/purchases", headers=first, json={"pack_id": a["id"]})
     client.post("/tokens/purchases", headers=second, json={"pack_id": b["id"]})
     assert client.get("/tokens/me", headers=second).json()["purchases"][0]["deposit_name"] is None
+
+
+def test_same_member_repeat_requests_and_name_forms(client, admin, make_user, monkeypatch):
+    import unicodedata
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "반복테스트", 56789, 3)
+    _, member = make_user("최반복")
+    for _i in range(2):  # 같은 회원이 같은 상품을 두 번 요청
+        client.post("/tokens/purchases", headers=member, json={"pack_id": pack["id"]})
+    first_id = min(p["id"] for p in client.get("/tokens/me", headers=member).json()["purchases"])
+    # 한글 자모 분리(NFD) + 앞뒤 공백으로 와도 같은 이름으로 본다
+    assert _notice(client, 56789, " \u200b" + unicodedata.normalize("NFD", "최반복")) == f"confirmed:{first_id}"
+    assert client.get("/tokens/me", headers=member).json()["balance"] == 3
+
+
+def test_parse_real_toss_notification():
+    from src.tokens import parse_deposit
+    body = bytes.fromhex(
+        "7b227469746c65223a2233322c303030ec9b9020ec9e85eab888222c22626f6479223a22eca095ed959cec869420e2869220eb82b420ebacb5ec9d80eca78020ec9e91ec9785ec8ba420ebaaa8ec9e84ed86b5ec9ea5227d"
+    ).decode("utf-8")
+    assert parse_deposit(body) == (32000, "정한솔")  # 실제 수신 알림 (쉼표 금액 포함)
