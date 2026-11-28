@@ -10,7 +10,7 @@ import { formatDateTime, formatExpiresOn, formatExpiry, formatPrice, formatToken
 import { PageSkeleton } from '../components/Skeleton';
 
 const STATUS_LABEL: Record<TokenPurchase['status'], { text: string; cls: string }> = {
-  pending: { text: '관리자 확인 대기', cls: 'text-amber-700' },
+  pending: { text: '입금 확인 중', cls: 'text-amber-700' },
   confirmed: { text: '충전 완료', cls: 'text-sage font-medium' },
   cancelled: { text: '취소됨', cls: 'text-ink-faint' },
 };

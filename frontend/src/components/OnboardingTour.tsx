@@ -70,7 +70,7 @@ function tokenSteps(expiry: string): Step[] {
   return [
     {
       title: '토큰을 충전해요',
-      body: '작업실은 토큰으로 예약해요. 충전 상품을 골라 요청하면 관리자가 확인한 뒤 등록한 연락처로 입금 방법을 알려드려요. 입금이 확인되면 토큰이 들어와요.',
+      body: '작업실은 토큰으로 예약해요. 충전 상품을 골라 요청하면 입금할 계좌와 금액이 바로 보여요. 가입한 이름으로 입금하면 토큰이 자동으로 들어와요.',
       where: '홈의 "토큰 충전" 또는 메뉴의 "토큰"',
       art: (
         <div className="w-48 rounded-2xl bg-gradient-to-br from-sage to-sage-light text-white p-4">
