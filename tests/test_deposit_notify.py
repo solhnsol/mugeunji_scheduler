@@ -147,3 +147,4 @@ def test_real_bytes_over_http(client, admin, make_user, monkeypatch):
     row = res.json()[0]
     assert row["depositor"] == "정한솔" and row["amount"] == 8000 and row["raw_hex"] == REAL_8000_HEX
     assert row["depositor_hex"] == "정한솔".encode().hex()
+    assert row["purchase_user"] == "정한솔"

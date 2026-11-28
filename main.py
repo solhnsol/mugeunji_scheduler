@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 import asyncio
 import os
@@ -2406,6 +2407,14 @@ async def admin_list_deposit_notifications(
     for r in rows:
         r["raw_hex"] = r["raw_body"].encode("utf-8").hex()
         r["depositor_hex"] = (r["depositor"] or "").encode("utf-8").hex()
+        m = re.search(r"(?:confirmed|manual):(\d+)$", r["result"] or "")
+        if m:  # 지급된 요청의 회원 (화면에 "누구에게 지급"을 보여 주기 위함)
+            async with conn.execute(
+                "SELECT COALESCE(u.name, p.username) AS who FROM token_purchases p "
+                "LEFT JOIN users u ON u.username = p.username WHERE p.id = ?", (int(m.group(1)),),
+            ) as cur:
+                row = await cur.fetchone()
+            r["purchase_user"] = row["who"] if row else None
         if r["result"] in ("no_match", "ambiguous", "confirm_failed") and r["amount"]:
             async with conn.execute(
                 "SELECT p.id, COALESCE(p.deposit_name, u.name) AS who FROM token_purchases p "

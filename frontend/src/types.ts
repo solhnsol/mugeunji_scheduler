@@ -391,3 +391,16 @@ export interface BookingStats {
   by_weekday: number[];
   top_members: { name: string; hours: number; spent: number }[];
 }
+
+export interface DepositNotification {
+  id: number;
+  received_at: string;
+  amount: number | null;
+  depositor: string | null;
+  result: string | null;
+  /** 지급된 요청의 회원 이름 */
+  purchase_user?: string | null;
+  depositor_hex: string;
+  /** 같은 금액의 대기 요청 (미처리 알림에만) */
+  pending_same_amount?: { purchase_id: number; who: string | null; who_hex: string }[];
+}
