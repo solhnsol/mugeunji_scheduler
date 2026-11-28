@@ -113,7 +113,7 @@ def test_same_member_repeat_requests_and_name_forms(client, admin, make_user, mo
         client.post("/tokens/purchases", headers=member, json={"pack_id": pack["id"]})
     first_id = min(p["id"] for p in client.get("/tokens/me", headers=member).json()["purchases"])
     # 한글 자모 분리(NFD) + 앞뒤 공백으로 와도 같은 이름으로 본다
-    assert _notice(client, 56789, " " + unicodedata.normalize("NFD", "최반복")) == f"confirmed:{first_id}"
+    assert _notice(client, 56789, " \u200b" + unicodedata.normalize("NFD", "최반복")) == f"confirmed:{first_id}"
     assert client.get("/tokens/me", headers=member).json()["balance"] == 3
 
 

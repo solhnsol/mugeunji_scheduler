@@ -666,7 +666,8 @@ def parse_deposit(raw_body: str) -> Optional[Tuple[int, str]]:
 
 def _norm_name(name: Optional[str]) -> str:
     """한글 조합 방식(NFC/NFD)과 공백 차이를 무시하고 이름을 비교하기 위한 정규화."""
-    return "".join(unicodedata.normalize("NFC", name or "").split())
+    text = unicodedata.normalize("NFKC", name or "")  # NFKC: 자모 분리·전각 문자까지 같은 글자로
+    return "".join(c for c in text if not c.isspace() and unicodedata.category(c) != "Cf")  # 공백·보이지 않는 문자 제거
 
 
 async def auto_confirm_deposit(conn: aiosqlite.Connection, amount: int, depositor: str) -> str:
