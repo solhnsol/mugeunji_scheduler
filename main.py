@@ -38,7 +38,7 @@ from src.settings import SettingsManager
 from src.notices import NoticeError, NoticeManager
 from src import reports
 from src.booking import MODE_BETA, MODE_LEGACY, MODE_TOKEN, BookingError, BookingManager
-from src.tokens import TokenManager, admin_pack, auto_confirm_deposit, claim_deposit, deposits_for_purchase, is_expired, parse_deposit
+from src.tokens import TokenManager, auto_confirm_deposit, claim_deposit, deposits_for_purchase, is_expired, parse_deposit
 from src.write_lock import writing
 
 load_dotenv()
@@ -1200,10 +1200,6 @@ async def list_token_packs(
 ):
     await _require_token_charge_open(conn, current_user)
     packs = await TokenManager(conn).list_packs(active_only=True)
-    async with conn.execute("SELECT role FROM users WHERE username = ?", (current_user["username"],)) as cursor:
-        is_admin_account = (await cursor.fetchone())["role"] == "admin"
-    if is_admin_account:
-        return [{**admin_pack(p), "locked": False} for p in packs if not is_expired(p["expires_on"])]
     is_free_member = current_user["role"] in ("free", "admin")
     visible = [
         p for p in packs

@@ -94,8 +94,6 @@ def test_pack_requires_recent_spend(client, admin, make_user):
     assert client.post(f"/admin/token-purchases/{purchase_id}/confirm", headers=admin).status_code == 200
     assert find("소액")["locked"] is False
     assert client.post("/tokens/purchases", headers=member, json={"pack_id": small["id"]}).status_code == 200
-    # 관리자는 조건과 상관없이 쓸 수 있다
-    assert [p for p in client.get("/tokens/packs", headers=admin).json() if p["name"] == "소액"][0]["locked"] is False
 
 
 def test_undo_blocked_when_tokens_were_used(client, admin, make_user):

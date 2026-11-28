@@ -112,11 +112,6 @@ def replay_lots(rows, now: datetime) -> Tuple[List[Dict], Dict]:
     return remaining, spend_expiry
 
 
-def admin_pack(pack: Dict) -> Dict:
-    """관리자 계정(일반 로그인)은 모든 상품을 무료로 바로 받는다."""
-    return {**pack, "price_won": 0, "auto_confirm": True}
-
-
 class TokenManager:
     def __init__(self, conn: aiosqlite.Connection):
         self.conn = conn
@@ -504,9 +499,7 @@ class TokenManager:
             user = await cursor.fetchone()
         if pack["audience"] == "free" and (not user or user["role"] not in ("free", "admin")):
             return False, "자유이용 회원만 받을 수 있는 상품이에요."
-        if user and user["role"] == "admin":
-            pack = admin_pack(pack)
-        elif pack["min_recent_spend"] > 0:
+        if pack["min_recent_spend"] > 0:
             months = await self.spend_window_months()
             spent = await self.recent_spend(username, months)
             if spent < pack["min_recent_spend"]:

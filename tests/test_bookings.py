@@ -354,8 +354,11 @@ def test_admin_pays_tokens_like_members(client, admin, token_mode):
     assert pack.status_code == 200, pack.text
     pack_id = next(p["id"] for p in client.get("/tokens/packs", headers=admin).json() if p["name"] == "관리자 예약팩")
     before = _balance(client, admin)
-    # 관리자 로그인 상태에서도 충전은 무료로 바로 받고, 예약하면 토큰이 빠진다
+    # 관리자 계정도 충전은 회원처럼 입금 확인 뒤에 들어오고, 예약하면 토큰이 빠진다
     assert client.post("/tokens/purchases", headers=admin, json={"pack_id": pack_id}).status_code == 200
+    assert _balance(client, admin) == before
+    purchase_id = client.get("/tokens/me", headers=admin).json()["purchases"][0]["id"]
+    assert client.post(f"/admin/token-purchases/{purchase_id}/confirm", headers=admin).status_code == 200
     assert _balance(client, admin) == before + 4
     r = _book(client, admin, ("2026-12-27", 16))
     assert r.status_code == 200 and r.json()["spent"] == 4 and _balance(client, admin) == before
