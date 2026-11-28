@@ -8,6 +8,7 @@ import { useToast } from '../hooks/useToast';
 import { MyTokens, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiresOn, formatExpiry, formatPrice, formatTokens } from '../utils';
 import { PageSkeleton } from '../components/Skeleton';
+import { ModalOverlay } from '../components/Modal';
 
 const STATUS_LABEL: Record<TokenPurchase['status'], { text: string; cls: string }> = {
   pending: { text: '입금 확인 중', cls: 'text-amber-700' },
@@ -25,6 +26,8 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [showBig, setShowBig] = useState(false);
+  // 충전 요청을 마친 직후 보여주는 입금 안내 (입금자명은 동명이인이 있을 때만 따로 지정된다)
+  const [requested, setRequested] = useState<{ pack: TokenPack; depositName: string | null } | null>(null);
   const rules = useTokenRules();
   const { toast, show } = useToast();
   const { confirm, dialog } = useConfirm();
@@ -36,9 +39,11 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
       setMine(m);
       api.getSettings().then((st) => setPaymentGuide(st.payment_guide ?? null)).catch(() => undefined);
       setError('');
+      return m;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '불러오지 못했어요');
     }
+    return null;
   }, []);
 
   useEffect(() => {
@@ -89,8 +94,13 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
     setBusy(true);
     try {
       const res = await api.requestTokenPurchase(SESSION, pack.id);
-      show(res.message, 'success');
-      await load();
+      const m = await load();
+      if (pack.auto_confirm) {
+        show(res.message, 'success');
+      } else {
+        const latest = (m?.purchases ?? []).filter((p) => p.status === 'pending' && p.pack_id === pack.id).sort((a, b) => b.id - a.id)[0];
+        setRequested({ pack, depositName: latest?.deposit_name ?? null });
+      }
     } catch (e) {
       show(e instanceof ApiError ? e.message : '요청하지 못했어요', 'error');
     } finally {
@@ -324,6 +334,36 @@ export default function TokensPage({ onLogout }: { onLogout?: () => void }) {
         </div>
       )}
       {dialog}
+      {requested && (
+        <ModalOverlay onClose={() => setRequested(null)} className="z-[70] items-end sm:items-center p-4" labelledBy="requested-title">
+          <div className="card w-full max-w-sm p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 id="requested-title" className="font-semibold text-ink">충전을 요청했어요</h3>
+            <p className="text-sm text-ink-muted mt-2 leading-relaxed">아래 계좌로 입금하면 토큰이 자동으로 들어와요.</p>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div>
+                <dt className="text-xs text-ink-faint">입금액</dt>
+                <dd className="font-semibold text-ink tabular-nums">{formatPrice(requested.pack.price_won)}</dd>
+              </div>
+              {paymentGuide && (
+                <div className="rounded-xl bg-cream-dark/60 px-3 py-2.5 select-text">
+                  <dt className="text-xs text-ink-faint mb-0.5">입금 계좌</dt>
+                  <dd className="font-semibold text-ink leading-relaxed whitespace-pre-line">{paymentGuide}</dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-xs text-ink-faint">입금자명</dt>
+                <dd className="font-semibold text-ink">{requested.depositName ?? '가입한 이름'}</dd>
+                <dd className="text-xs text-ink-muted mt-0.5">
+                  {requested.depositName ? '같은 이름의 회원이 있어서 이 이름으로 입금해야 구분돼요.' : '가입한 이름으로 입금해주세요.'}
+                </dd>
+              </div>
+            </dl>
+            <button type="button" autoFocus className="btn-primary w-full mt-5" onClick={() => setRequested(null)}>
+              확인
+            </button>
+          </div>
+        </ModalOverlay>
+      )}
       <Toast message={toast.message} type={toast.type} />
     </AppShell>
   );

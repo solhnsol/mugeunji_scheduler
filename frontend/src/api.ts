@@ -337,6 +337,11 @@ export const api = {
     return parseResponse<{ message: string }>(res);
   },
 
+  async adminListDepositNotifications(token: string) {
+    const res = await fetch('/admin/deposit-notifications', { headers: authHeaders(token) });
+    return parseResponse<import('./types').DepositNotification[]>(res);
+  },
+
   async adminListTokenPurchases(token: string, status?: 'pending' | 'confirmed' | 'cancelled') {
     const qs = status ? `?status_filter=${status}` : '';
     const res = await fetch(`/admin/token-purchases${qs}`, { headers: authHeaders(token) });

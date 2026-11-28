@@ -1,5 +1,6 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import AdminDepositsSection from './AdminDepositsSection';
 import { api, ApiError } from '../api';
 import { TokenBalance, TokenLedgerEntry, TokenPack, TokenPurchase } from '../types';
 import { formatDateTime, formatExpiresOn, formatExpiry, formatPhone, formatPrice, formatTokens } from '../utils';
@@ -265,6 +266,8 @@ export function AdminTokensTab({
           </ul>
         )}
       </section>
+
+      <AdminDepositsSection token={token} refreshKey={purchases} />
 
       <section className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">

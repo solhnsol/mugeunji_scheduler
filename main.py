@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 import asyncio
 import os
@@ -2402,7 +2403,27 @@ async def admin_list_deposit_notifications(
 ):
     async with conn.execute("SELECT * FROM deposit_notifications ORDER BY id DESC LIMIT 50") as cur:
         rows = [dict(r) for r in await cur.fetchall()]
-    # 브라우저가 글자 인코딩을 잘못 추측해 한글이 깨져 보이는지, 실제 저장이 깨졌는지 구분하는 용도 (ASCII라 화면 영향 없음)
+    # 화면 인코딩과 무관하게 비교할 수 있도록 입금자명·대기 요청 이름을 16진수로도 내려준다 (ASCII라 깨지지 않음)
     for r in rows:
         r["raw_hex"] = r["raw_body"].encode("utf-8").hex()
-    return rows
+        r["depositor_hex"] = (r["depositor"] or "").encode("utf-8").hex()
+        m = re.search(r"(?:confirmed|manual):(\d+)$", r["result"] or "")
+        if m:  # 지급된 요청의 회원 (화면에 "누구에게 지급"을 보여 주기 위함)
+            async with conn.execute(
+                "SELECT COALESCE(u.name, p.username) AS who FROM token_purchases p "
+                "LEFT JOIN users u ON u.username = p.username WHERE p.id = ?", (int(m.group(1)),),
+            ) as cur:
+                row = await cur.fetchone()
+            r["purchase_user"] = row["who"] if row else None
+        if r["result"] in ("no_match", "ambiguous", "confirm_failed") and r["amount"]:
+            async with conn.execute(
+                "SELECT p.id, COALESCE(p.deposit_name, u.name) AS who FROM token_purchases p "
+                "JOIN users u ON u.username = p.username WHERE p.status = 'pending' AND p.price_won = ?",
+                (r["amount"],),
+            ) as cur:
+                r["pending_same_amount"] = [
+                    {"purchase_id": q["id"], "who": q["who"], "who_hex": (q["who"] or "").encode("utf-8").hex()}
+                    for q in await cur.fetchall()
+                ]
+    # 브라우저가 글자 인코딩을 잘못 추측해 한글이 깨져 보이지 않도록 charset을 명시한다
+    return JSONResponse(rows, media_type="application/json; charset=utf-8")
