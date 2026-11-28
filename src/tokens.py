@@ -8,6 +8,7 @@
 import json
 import logging
 import re
+import unicodedata
 import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -663,18 +664,26 @@ def parse_deposit(raw_body: str) -> Optional[Tuple[int, str]]:
         return None
 
 
+def _norm_name(name: Optional[str]) -> str:
+    """한글 조합 방식(NFC/NFD)과 공백 차이를 무시하고 이름을 비교하기 위한 정규화."""
+    return "".join(unicodedata.normalize("NFC", name or "").split())
+
+
 async def auto_confirm_deposit(conn: aiosqlite.Connection, amount: int, depositor: str) -> str:
-    """금액과 입금자명(회원 이름)이 같은 대기 중 충전 요청이 정확히 1건일 때만 자동 확인하고, 아니면 관리자가 직접 확인하게 둔다."""
+    """금액과 입금자명(회원 이름)이 같은 대기 요청이 한 회원 것일 때만 자동 확인하고, 아니면 관리자가 직접 확인하게 둔다.
+    같은 회원이 같은 금액을 여러 번 요청해 둔 경우에는 가장 먼저 요청한 건을 확인한다."""
     async with conn.execute(
-        "SELECT p.id FROM token_purchases p JOIN users u ON u.username = p.username "
-        "WHERE p.status = 'pending' AND p.price_won = ? AND COALESCE(p.deposit_name, u.name) = ?",
-        (amount, depositor),
+        "SELECT p.id, p.username, COALESCE(p.deposit_name, u.name) AS who FROM token_purchases p "
+        "JOIN users u ON u.username = p.username WHERE p.status = 'pending' AND p.price_won = ? ORDER BY p.id",
+        (amount,),
     ) as cur:
-        ids = [r["id"] for r in await cur.fetchall()]
-    if len(ids) != 1:
-        return "no_match" if not ids else "ambiguous"
-    ok, _ = await TokenManager(conn).confirm_purchase(ids[0], "auto")
-    return f"confirmed:{ids[0]}" if ok else "confirm_failed"
+        rows = [r for r in await cur.fetchall() if _norm_name(r["who"]) == _norm_name(depositor)]
+    if not rows:
+        return "no_match"
+    if len({r["username"] for r in rows}) > 1:
+        return "ambiguous"
+    ok, _ = await TokenManager(conn).confirm_purchase(rows[0]["id"], "auto")
+    return f"confirmed:{rows[0]['id']}" if ok else "confirm_failed"
 
 
 _UNMATCHED = "result IN ('no_match', 'ambiguous', 'confirm_failed')"

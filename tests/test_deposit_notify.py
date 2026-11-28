@@ -100,3 +100,18 @@ def test_same_name_different_amount_needs_no_deposit_name(client, admin, make_us
     client.post("/tokens/purchases", headers=first, json={"pack_id": a["id"]})
     client.post("/tokens/purchases", headers=second, json={"pack_id": b["id"]})
     assert client.get("/tokens/me", headers=second).json()["purchases"][0]["deposit_name"] is None
+
+
+def test_same_member_repeat_requests_and_name_forms(client, admin, make_user, monkeypatch):
+    import unicodedata
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "반복테스트", 56789, 3)
+    _, member = make_user("최반복")
+    for _i in range(2):  # 같은 회원이 같은 상품을 두 번 요청
+        client.post("/tokens/purchases", headers=member, json={"pack_id": pack["id"]})
+    first_id = min(p["id"] for p in client.get("/tokens/me", headers=member).json()["purchases"])
+    # 한글 자모 분리(NFD) + 앞뒤 공백으로 와도 같은 이름으로 본다
+    assert _notice(client, 56789, " " + unicodedata.normalize("NFD", "최반복")) == f"confirmed:{first_id}"
+    assert client.get("/tokens/me", headers=member).json()["balance"] == 3
