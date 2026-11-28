@@ -123,3 +123,27 @@ def test_parse_real_toss_notification():
         "7b227469746c65223a2233322c303030ec9b9020ec9e85eab888222c22626f6479223a22eca095ed959cec869420e2869220eb82b420ebacb5ec9d80eca78020ec9e91ec9785ec8ba420ebaaa8ec9e84ed86b5ec9ea5227d"
     ).decode("utf-8")
     assert parse_deposit(body) == (32000, "정한솔")  # 실제 수신 알림 (쉼표 금액 포함)
+
+
+REAL_8000_HEX = (
+    "7b227375627469746c65223a22222c22617070223a22ed86a0ec8aa4222c226173736f73696361746564223a22222c227469746c65223a22382c303030ec9b9020ec9e85eab888222c22726177223a22382c303030ec9b9020ec9e85eab8885c6eeca095ed959cec869420e2869220eb82b420ebacb5ec9d80eca78020ec9e91ec9785ec8ba420ebaaa8ec9e84ed86b5ec9ea5222c22626f6479223a22eca095ed959cec869420e2869220eb82b420ebacb5ec9d80eca78020ec9e91ec9785ec8ba420ebaaa8ec9e84ed86b5ec9ea5222c2274696d657374616d70223a22323032362e2031312e2032382e20ec98a4ed9b8420323a34393a3033227d"
+)
+
+
+def test_real_bytes_over_http(client, admin, make_user, monkeypatch):
+    """실제로 받은 알림 바이트를 HTTP 엔드포인트로 보내, 저장·파싱·자동 확인·조회 응답까지 확인한다."""
+    from tests.test_tokens import _add_pack, _enable
+    monkeypatch.setenv("DEPOSIT_WEBHOOK_TOKEN", "s3cret")
+    _enable(client, admin)
+    pack = _add_pack(client, admin, "실제바이트", 8000, 5)
+    _, member = make_user("정한솔")
+    client.post("/tokens/purchases", headers=member, json={"pack_id": pack["id"]})
+    # 단축어는 charset 없는 application/json으로 보낸다
+    r = client.post("/api/deposit-notify", content=bytes.fromhex(REAL_8000_HEX),
+                    headers={"X-Deposit-Token": "s3cret", "Content-Type": "application/json"})
+    assert r.json()["result"].startswith("confirmed:"), r.text
+    res = client.get("/admin/deposit-notifications", headers=admin)
+    assert "charset=utf-8" in res.headers["content-type"]
+    row = res.json()[0]
+    assert row["depositor"] == "정한솔" and row["amount"] == 8000 and row["raw_hex"] == REAL_8000_HEX
+    assert row["depositor_hex"] == "정한솔".encode().hex()
