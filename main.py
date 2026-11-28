@@ -2417,7 +2417,7 @@ async def admin_list_deposit_notifications(
             r["purchase_user"] = row["who"] if row else None
         if r["result"] in ("no_match", "ambiguous", "confirm_failed") and r["amount"]:
             async with conn.execute(
-                "SELECT p.id, COALESCE(p.deposit_name, u.name) AS who FROM token_purchases p "
+                "SELECT p.id, COALESCE(p.deposit_name, NULLIF(u.name, ''), u.username) AS who FROM token_purchases p "
                 "JOIN users u ON u.username = p.username WHERE p.status = 'pending' AND p.price_won = ?",
                 (r["amount"],),
             ) as cur:
