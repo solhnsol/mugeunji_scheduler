@@ -23,6 +23,8 @@ export default function AdminDepositsSection({ token, refreshKey }: { token: str
   const [rows, setRows] = useState<DepositNotification[] | null>(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<number | null>(null);
+  // 알림이 계속 쌓이므로 접어 두고, 확인이 필요한 건수만 머리글에 보여준다
+  const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -37,14 +39,29 @@ export default function AdminDepositsSection({ token, refreshKey }: { token: str
     void load();
   }, [load, refreshKey]);
 
+  const needsCheck = (rows ?? []).filter((n) => n.pending_same_amount).length;
+
   return (
     <section className="card p-5">
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <h2 className="font-semibold text-ink">입금 알림</h2>
-        <button type="button" className="text-xs text-ink-muted min-h-[36px] px-2" onClick={() => void load()}>
-          새로고침
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          className="flex-1 min-h-[44px] flex items-center gap-2 text-left"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <h2 className="font-semibold text-ink">입금 알림</h2>
+          {needsCheck > 0 && <span className="badge tabular-nums">확인 필요 {needsCheck}</span>}
+          <span className="ml-auto text-xs text-ink-faint">{expanded ? '접기' : '펼치기'}</span>
         </button>
+        {expanded && (
+          <button type="button" className="text-xs text-ink-muted min-h-[44px] px-2" onClick={() => void load()}>
+            새로고침
+          </button>
+        )}
       </div>
+      {expanded && (
+        <div className="mt-3">
       {error ? (
         <p className="text-sm text-danger-ink">{error}</p>
       ) : rows === null ? (
@@ -97,6 +114,8 @@ export default function AdminDepositsSection({ token, refreshKey }: { token: str
             );
           })}
         </ul>
+      )}
+        </div>
       )}
     </section>
   );
